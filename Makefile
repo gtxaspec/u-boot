@@ -1354,7 +1354,13 @@ quiet_cmd_pad_cat = CAT     $@
 cmd_pad_cat = $(cmd_objcopy) && $(append) || { rm -f $@; false; }
 
 quiet_cmd_lzma = LZMA    $@
-cmd_lzma = lzma -c -z -k -9 $< > $@
+# Use lzma-utils preset -3: it writes the *known* uncompressed size in
+# the .lzma header (U-Boot's LzmaTools rejects xz's "unknown size"
+# streams) and uses only a 512 KiB dictionary, so the SPL LZMA
+# decoder's malloc(dictSize) stays small. -3 is within 0.01x of -9's
+# ratio for a U-Boot-sized image. (Plain 'lzma -9' would declare a
+# 64 MiB dict and OOM the SPL heap.)
+cmd_lzma = lzma -c -z -k -3 $< > $@
 
 cfg: u-boot.cfg
 

@@ -19,6 +19,7 @@
 #include <mach/t31.h>
 #include <mach/t31-ddr.h>
 
+
 #define ddr_writel(v, reg)	writel((v), (void __iomem *)(DDRC_BASE + (reg)))
 #define ddr_readl(reg)		readl((void __iomem *)(DDRC_BASE + (reg)))
 #define phy_writel(v, reg)	writel((v), (void __iomem *)(DDR_PHY_BASE + (reg)))
@@ -49,8 +50,10 @@ static void reset_dll(void)
 /*
  * DDR clock divider: replicate the DDR branch of the vendor
  * clk_set_rate(). Source is MPLL (1200 MHz), target 600 MHz, so
- * cdr = (pll_rate / rate - 1) & 0xff = 1. CPM_DDRCDR ce/busy bits
- * are 29/30 (cgu_clk_sel[DDR]).
+ * cdr = (pll_rate / rate - 1) & 0xff = 1. From vendor
+ * cgu_clk_sel[DDR] = {en, CPM_DDRCDR, sel_bit=30, MPLL, sel[],
+ * ce=29, busy=28, stop=27}: change-enable is bit 29, the busy bit
+ * to poll is bit 28 (bit 30 is the PLL-select bit and stays set).
  */
 static void ddr_clk_set_rate(void)
 {
@@ -70,9 +73,9 @@ static void ddr_clk_set_rate(void)
 
 	/* DDR path: clear divider (low 4 bits) and the 0x3f<<24 field */
 	regval &= ~(0xf | (0x3f << 24));
-	regval |= ((1 << 29) | cdr);
+	regval |= ((1 << 29) | cdr);		/* ce = bit 29 */
 	cpm_writel(regval, CPM_DDRCDR);
-	while (cpm_readl(CPM_DDRCDR) & (1 << 30))
+	while (cpm_readl(CPM_DDRCDR) & (1 << 28))	/* busy = bit 28 */
 		;
 }
 

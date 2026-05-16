@@ -57,15 +57,15 @@
 #define CPM_CPVPCR	0xe0	/* VPLL */
 
 /*
- * MSCnCDR layout: [31:30] source select (0 APLL, 1 MPLL, 2 VPLL,
- * read from MSC0CDR for both controllers), [29] CE (apply), [28] BUSY,
- * [27] STOP (gate divided clock), [7:0] div; rate = src / ((div+1)*2).
+ * MSCnCDR layout: [31:30] source select (0 APLL, 1 MPLL, 2 VPLL),
+ * [29] CE (apply, left set by the vendor), [28] BUSY, [27] STOP,
+ * [7:0] div; rate = src / ((div+1)*2). The vendor clk_set_rate clears
+ * (3 << stop) | div, ORs in (1 << ce) | cdr, then waits BUSY.
  */
-#define MSCCDR_SRC_MPLL	(1u << 30)
-#define MSCCDR_CE	BIT(29)
-#define MSCCDR_BUSY	BIT(28)
-#define MSCCDR_STOP	BIT(27)
-#define MSCCDR_DIV_MASK	0xff
+#define MSCCDR_CE		BIT(29)
+#define MSCCDR_BUSY		BIT(28)
+#define MSCCDR_STOP_SHIFT	27
+#define MSCCDR_DIV_MASK		0xffu
 
 /* CLKGR0 gate bits */
 #define CPM_CLKGR0_DDR		BIT(31)

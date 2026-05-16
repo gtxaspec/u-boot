@@ -21,6 +21,7 @@
 #include <dm/device_compat.h>
 #include <linux/err.h>
 #include <linux/delay.h>
+#include <wait_bit.h>
 #include <asm-generic/gpio.h>
 
 #define INGENIC_ETH_SEL_MASK		0x7
@@ -64,7 +65,7 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 	return designware_eth_of_to_plat(dev);
 }
 
-static void t31_macphy_clk_init(struct dwmac_ingenic_plat *pdata)
+static int t31_macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 {
 	void __iomem *cpm = (void __iomem *)T31_CPM_BASE;
 	u32 div, v;
@@ -76,14 +77,19 @@ static void t31_macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 	 * MAC-PHY clock from MPLL. Vendor clk_set_rate (non-MSC):
 	 * cdr = pll/rate - 1. RMII wants 50 MHz -> 1200/50 - 1 = 23.
 	 * Same CE/BUSY dance as the MSC clock; leave CE set.
+	 *
+	 * The poll is bounded: on a board where the MAC-PHY clock can't
+	 * lock, an unbounded wait would hang U-Boot forever at "Net:".
+	 * Time out instead so the boot continues without ethernet.
 	 */
 	div = (T31_MPLL_HZ / pdata->macphy_rate) - 1;
 	v = readl(cpm + T31_CPM_MACCDR);
 	v &= ~((3u << 30) | (3u << MACCDR_STOP_SHIFT) | MACCDR_DIV_MASK);
 	v |= MACCDR_SRC_MPLL | MACCDR_CE | (div & MACCDR_DIV_MASK);
 	writel(v, cpm + T31_CPM_MACCDR);
-	while (readl(cpm + T31_CPM_MACCDR) & MACCDR_BUSY)
-		;
+
+	return wait_for_bit_le32(cpm + T31_CPM_MACCDR, MACCDR_BUSY,
+				 false, 100, false);
 }
 
 static int ingenic_gmac_init(struct udevice *dev)
@@ -91,6 +97,7 @@ static int ingenic_gmac_init(struct udevice *dev)
 	struct dwmac_ingenic_plat *pdata = dev_get_plat(dev);
 	struct eth_pdata *edata = &pdata->dw_eth_pdata.eth_pdata;
 	u32 v;
+	int ret;
 
 	v = readl(pdata->cpm_phyc_reg);
 	v &= ~(INGENIC_ETH_SEL_MASK | INGENIC_ETH_SPEED_MASK);
@@ -122,7 +129,11 @@ static int ingenic_gmac_init(struct udevice *dev)
 
 	writel(v, pdata->cpm_phyc_reg);
 
-	t31_macphy_clk_init(pdata);
+	ret = t31_macphy_clk_init(pdata);
+	if (ret) {
+		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", ret);
+		return ret;
+	}
 	return 0;
 }
 

@@ -122,9 +122,23 @@ struct jz_mmc_plat {
 	struct mmc mmc;
 };
 
+/*
+ * SoC variant. The T31's MSC is a newer revision than the jz4780's:
+ * the controller reset in MSC_STRPCL is a level bit (set then clear,
+ * IS_RESETTING is not driven the jz4780 way) and a command is started
+ * without the jz4780 stop-clock / CLK_EN handshake. Everything else -
+ * register map and the whole command/response/FIFO data path - is
+ * identical, so the difference is expressed as a small quirk.
+ */
+enum jz_mmc_variant {
+	JZ_MMC_JZ4780 = 0,
+	JZ_MMC_T31,
+};
+
 struct jz_mmc_priv {
 	void __iomem		*regs;
 	u32			flags;
+	enum jz_mmc_variant	variant;
 /* priv flags */
 #define JZ_MMC_BUS_WIDTH_MASK	0x3
 #define JZ_MMC_BUS_WIDTH_1	0x0
@@ -198,12 +212,19 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 	u32 stat, mask, cmdat = 0;
 	int i, ret;
 
-	/* stop the clock */
-	writel(MSC_STRPCL_CLOCK_CONTROL_STOP, priv->regs + MSC_STRPCL);
-	ret = wait_for_bit_le32(priv->regs + MSC_STAT,
-				MSC_STAT_CLK_EN, false, 10000, false);
-	if (ret)
-		return ret;
+	/*
+	 * jz4780 stops the bus clock and waits for CLK_EN to drop before
+	 * reprogramming. The T31 MSC does not need (and does not service)
+	 * that handshake - the vendor driver just issues START_OP - so
+	 * skip it there to avoid another 10 s CLK_EN timeout.
+	 */
+	if (priv->variant != JZ_MMC_T31) {
+		writel(MSC_STRPCL_CLOCK_CONTROL_STOP, priv->regs + MSC_STRPCL);
+		ret = wait_for_bit_le32(priv->regs + MSC_STAT,
+					MSC_STAT_CLK_EN, false, 10000, false);
+		if (ret)
+			return ret;
+	}
 
 	writel(0, priv->regs + MSC_DMAC);
 
@@ -273,8 +294,11 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 	writel(0xffffffff, priv->regs + MSC_IREG);
 
 	/* start the command (& the clock) */
-	writel(MSC_STRPCL_START_OP | MSC_STRPCL_CLOCK_CONTROL_START,
-	       priv->regs + MSC_STRPCL);
+	if (priv->variant == JZ_MMC_T31)
+		writel(MSC_STRPCL_START_OP, priv->regs + MSC_STRPCL);
+	else
+		writel(MSC_STRPCL_START_OP | MSC_STRPCL_CLOCK_CONTROL_START,
+		       priv->regs + MSC_STRPCL);
 
 	/* wait for completion */
 	for (i = 0; i < 100; i++) {
@@ -350,11 +374,22 @@ static int jz_mmc_core_init(struct mmc *mmc)
 	int ret;
 
 	/* Reset */
-	writel(MSC_STRPCL_RESET, priv->regs + MSC_STRPCL);
-	ret = wait_for_bit_le32(priv->regs + MSC_STAT,
-				MSC_STAT_IS_RESETTING, false, 10000, false);
-	if (ret)
-		return ret;
+	if (priv->variant == JZ_MMC_T31) {
+		/*
+		 * T31: RESET is a level bit. Set it, then explicitly
+		 * clear it. IS_RESETTING is not driven as on the jz4780,
+		 * so polling it here would hang (10 s timeout -> -110).
+		 */
+		writel(MSC_STRPCL_RESET, priv->regs + MSC_STRPCL);
+		clrbits_le32(priv->regs + MSC_STRPCL, MSC_STRPCL_RESET);
+	} else {
+		writel(MSC_STRPCL_RESET, priv->regs + MSC_STRPCL);
+		ret = wait_for_bit_le32(priv->regs + MSC_STAT,
+					MSC_STAT_IS_RESETTING, false,
+					10000, false);
+		if (ret)
+			return ret;
+	}
 
 	/* Maximum timeouts */
 	writel(0xffff, priv->regs + MSC_RESTO);
@@ -450,6 +485,7 @@ static int jz_mmc_of_to_plat(struct udevice *dev)
 	int ret;
 
 	priv->regs = map_physmem(dev_read_addr(dev), 0x100, MAP_NOCACHE);
+	priv->variant = dev_get_driver_data(dev);
 	cfg = &plat->cfg;
 
 	cfg->name = "MSC";
@@ -489,7 +525,8 @@ static int jz_mmc_probe(struct udevice *dev)
 }
 
 static const struct udevice_id jz_mmc_ids[] = {
-	{ .compatible = "ingenic,jz4780-mmc" },
+	{ .compatible = "ingenic,jz4780-mmc", .data = JZ_MMC_JZ4780 },
+	{ .compatible = "ingenic,t31-mmc", .data = JZ_MMC_T31 },
 	{ }
 };
 

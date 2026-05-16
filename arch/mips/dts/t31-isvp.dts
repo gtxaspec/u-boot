@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+/dts-v1/;
+
+#include "t31.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t31", "ingenic,t31";
+	model = "Ingenic ISVP-T31 (DDR2 128M, SFC NOR)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x08000000>;	/* 128 MB DDR2 */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};

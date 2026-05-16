@@ -27,18 +27,28 @@ gd_t gdata __section(".bss");
 void board_init_f(ulong dummy)
 {
 	gd = &gdata;
+	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
 
-	pll_init();
+	/*
+	 * The mask ROM leaves a usable system clock, so bring the console
+	 * up before touching the PLLs: any later hang still produces output.
+	 * spl_early_init() sets up the FDT and driver model so the DM
+	 * ns16550 can bind (and set the Ingenic UART module-enable bit).
+	 */
 	clk_ungate_uart(T31_CONSOLE_UART);
 
+	if (spl_early_init())
+		hang();
+
 	preloader_console_init();
-	printf("T31 SPL: clocks up, console alive\n");
+	puts("T31 SPL: console up (pre-PLL)\n");
+
+	pll_init();
+	puts("T31 SPL: PLL configured\n");
 
 	sdram_init();
 
 	enable_caches();
-
-	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
 
 	gd->flags |= GD_FLG_SPL_INIT;
 

@@ -1,0 +1,41 @@
+menu "Ingenic XBurst1 T-series platforms"
+	depends on ARCH_XBURST
+
+config SYS_VENDOR
+	default "ingenic"
+
+config SYS_SOC
+	default "t31" if SOC_T31
+
+choice
+	prompt "Ingenic XBurst1 SoC select"
+
+config SOC_T31
+	bool "Ingenic T31"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	help
+	  Ingenic T31 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  Innophy DDR2/DDR3 PHY, SFC SPI-flash boot via on-chip mask ROM.
+
+endchoice
+
+source "arch/mips/mach-xburst/t31/Kconfig"
+
+choice
+	prompt "Board select"
+
+config TARGET_ISVP_T31
+	bool "Ingenic ISVP-T31 reference board"
+	select SOC_T31
+	help
+	  Ingenic ISVP T31 reference board, DDR2 128 MB, SFC NOR boot.
+
+endchoice
+
+source "board/ingenic/isvp-t31/Kconfig"
+
+endmenu

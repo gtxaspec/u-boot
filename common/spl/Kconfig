@@ -388,7 +388,7 @@ config SPL_SYS_MALLOC_SIMPLE
 
 config SPL_SHARES_INIT_SP_ADDR
 	bool "SPL and U-Boot use the same initial stack pointer location"
-	depends on (ARM || ARCH_JZ47XX || MICROBLAZE || RISCV) && SPL_FRAMEWORK
+	depends on (ARM || ARCH_JZ47XX || ARCH_XBURST || MICROBLAZE || RISCV) && SPL_FRAMEWORK
 	default n if ARCH_SUNXI || ARCH_MX6 || ARCH_MX7 || ARCH_SC5XX
 	default y
 	help
@@ -398,7 +398,7 @@ config SPL_SHARES_INIT_SP_ADDR
 
 config SPL_HAVE_INIT_STACK
 	bool "SPL requires a initial, fixed, stack-pointer location"
-	depends on (ARM || ARCH_JZ47XX || MICROBLAZE || RISCV) && \
+	depends on (ARM || ARCH_JZ47XX || ARCH_XBURST || MICROBLAZE || RISCV) && \
 		SPL_FRAMEWORK || ROCKCHIP_RK3036
 	depends on !SPL_SHARES_INIT_SP_ADDR
 	default y if ARCH_MX7

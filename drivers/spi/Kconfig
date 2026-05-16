@@ -388,6 +388,16 @@ config MXS_SPI
 	  Enable the MXS SPI controller driver. This driver can be used
 	  on the i.MX23 and i.MX28 SoCs.
 
+config SPI_INGENIC
+	bool "Ingenic SFC SPI-NOR controller"
+	depends on ARCH_XBURST
+	select SPI_MEM
+	help
+	  Enable the Ingenic SFC (SPI Flash Controller) driver. The SFC is
+	  the dedicated SPI-NOR controller found on the Ingenic XBurst1
+	  SoCs (T31 and related parts) and is used to boot from and store
+	  the U-Boot environment in SPI-NOR flash.
+
 config SPI_MXIC
 	bool "Macronix MX25F0A SPI controller"
 	select SPI_MEM

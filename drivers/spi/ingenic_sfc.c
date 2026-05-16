@@ -82,16 +82,11 @@ static int sfc_write_data(struct sfc_priv *sfc, const void *data, u32 len)
 	u32 tmp_buf[THRESHOLD];
 	u32 fifo_num, data_len, fifo_len = THRESHOLD * 4;
 
+	if (!len)
+		return 0;
+
 	while (len > 0) {
 		if (!(sfc_readl(sfc, SFC_SR) & TRAN_REQ)) {
-			/*
-			 * The controller may complete (or short-circuit) a
-			 * transfer without ever raising a FIFO request, e.g.
-			 * for status-only operations. If it reports the
-			 * transfer ended there is nothing left to push.
-			 */
-			if (sfc_readl(sfc, SFC_SR) & SR_END)
-				break;
 			if (timeout == 0) {
 				printf("SFC: wait TRAN_REQ timeout\n");
 				break;
@@ -123,15 +118,11 @@ static int sfc_read_data(struct sfc_priv *sfc, void *data, u32 len)
 	u32 tmp_buf[THRESHOLD];
 	u32 fifo_num, data_len, fifo_len = THRESHOLD * 4;
 
+	if (!len)
+		return 0;
+
 	while (len > 0) {
 		if (!(sfc_readl(sfc, SFC_SR) & RECE_REQ)) {
-			/*
-			 * Same as the write path: a transfer that ends
-			 * without a pending receive request has no more
-			 * data to drain.
-			 */
-			if (sfc_readl(sfc, SFC_SR) & SR_END)
-				break;
 			if (timeout == 0) {
 				printf("SFC: wait RECE_REQ timeout\n");
 				break;
@@ -186,19 +177,19 @@ static int sfc_hw_exec_op(struct sfc_priv *sfc, const struct spi_mem_op *op)
 	if (op->data.nbytes)
 		data_dir = (op->data.dir == SPI_MEM_DATA_IN) ? 0 : 1;
 
-	/* SFC_TRAN_LEN is a byte count, not a word count */
-	sfc_writel(sfc, SFC_TRAN_LEN, op->data.nbytes);
-
-	if (sfc_readl(sfc, SFC_SR) & BUSY_MSK) {
-		sfc_writel(sfc, SFC_TRIG, TRIG_STOP);
-		while (!(sfc_readl(sfc, SFC_SR) & SR_END)) {
-			if (timeout == 0)
-				break;
-			timeout--;
-		}
-	}
+	/*
+	 * Quiesce the controller before every op. The vendor sfc_read()
+	 * issues STOP+FLUSH per transaction; without it a prior transfer
+	 * can leave the RX FIFO/state machine wedged so the next op never
+	 * sees RECE_REQ.
+	 */
+	sfc_writel(sfc, SFC_TRIG, TRIG_STOP);
+	sfc_writel(sfc, SFC_TRIG, TRIG_FLUSH);
 	sfc_writel(sfc, SFC_SCR, CLR_END | CLR_TREQ | CLR_RREQ |
 				 CLR_OVER | CLR_UNDER);
+
+	/* SFC_TRAN_LEN is a byte count, not a word count */
+	sfc_writel(sfc, SFC_TRAN_LEN, op->data.nbytes);
 
 	reg.b32 = sfc_readl(sfc, SFC_GLB0);
 	reg.sfc_glb0.phase_num = 1;

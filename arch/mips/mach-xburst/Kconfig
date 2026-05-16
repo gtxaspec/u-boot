@@ -17,6 +17,7 @@ config SOC_T31
 	select SUPPORTS_CPU_MIPS32_R2
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
 	help
 	  Ingenic T31 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
 	  Innophy DDR2/DDR3 PHY, SFC SPI-flash boot via on-chip mask ROM.

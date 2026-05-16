@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T31 SFC-NOR boot.
+ *
+ * The T31 mask ROM boots from SPI-NOR by reading a headered SPL at
+ * flash offset 0, which then loads U-Boot proper from a fixed offset.
+ * This builds both pieces with 'make':
+ *
+ *   u-boot-spl-t31.bin : SPL with the finalized SFC-NOR boot header
+ *                        (CRC7 + image length), bootable on its own
+ *                        and equivalent to tools/mkt31spl.c output.
+ *   u-boot-t31.bin     : 16 MB flash image, headered SPL at offset 0
+ *                        and u-boot.bin at CONFIG_UBOOT_OFFSET
+ *                        (0x10000, see arch/mips/mach-xburst/t31/sfc.c).
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	/*
+	 * Standalone headered SPL: take the freshly built
+	 * spl/u-boot-spl.bin through the T31 boot-header finalizer.
+	 */
+	u-boot-spl-t31 {
+		filename = "u-boot-spl-t31.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	/*
+	 * Combined 16 MB SFC-NOR flash image: headered SPL at offset 0,
+	 * U-Boot proper at 0x10000. Erased flash reads as 0xff.
+	 */
+	flash {
+		filename = "u-boot-t31.bin";
+		pad-byte = <0xff>;
+		size = <0x1000000>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t31.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot.bin";
+		};
+	};
+};

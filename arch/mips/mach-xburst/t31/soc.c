@@ -22,6 +22,7 @@ void clk_ungate_uart(unsigned int idx);
 void t31_spl_serial_init(void);
 void t31_spl_puts(const char *s);
 void t31_spl_putc(char c);
+void t31_spl_load_uboot(void);
 void __weak sdram_init(void) { }
 
 #ifdef CONFIG_XPL_BUILD
@@ -98,11 +99,10 @@ void board_init_f(ulong dummy)
 	if (dram_verify() == 0)
 		t31_spl_puts("T31 SPL: DDR OK\n");
 
-	/*
-	 * TODO: load U-Boot proper from SFC and jump to it once the SFC
-	 * driver lands (task: SFC storage).
-	 */
-	t31_spl_puts("T31 SPL: SFC not yet implemented, halting\n");
+	/* Load U-Boot proper from SPI-NOR into DRAM and jump (no return). */
+	t31_spl_puts("T31 SPL: loading U-Boot...\n");
+	t31_spl_load_uboot();
+	/* no return */
 	for (;;)
 		;
 }

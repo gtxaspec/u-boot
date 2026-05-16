@@ -36,6 +36,36 @@ _start:
 	.space 500, 0
 	.space 1536, 0
 
+	/*
+	 * T31 boot pin mux / drive-strength setup, required before the
+	 * console: the mask ROM does not mux the UART (and other) pads,
+	 * so without this the SPL runs but produces no UART output on
+	 * real silicon. Faithful transliteration of the vendor T31 SPL
+	 * start.S (isvp_t31_sfcnor_ddr128M, CONFIG_NET_GMAC path) - do
+	 * not remove or "tidy"; order and values are board-critical.
+	 */
+	la	t8, 0xffffffff
+	la	t9, 0xb0010138
+	sw	t8, 0(t9)
+	la	t8, 0xffffffff
+	la	t9, 0xb0010148
+	sw	t8, 0(t9)
+	la	t8, 0x55555555
+	la	t9, 0xb0010134
+	sw	t8, 0(t9)
+	la	t8, 0x55555555
+	la	t9, 0xb0010144
+	sw	t8, 0(t9)
+	la	t8, 0xFCFFF000
+	la	t9, 0xb0011138
+	sw	t8, 0(t9)
+	la	t8, 0x55559555
+	la	t9, 0xb0011134
+	sw	t8, 0(t9)
+	la	t8, 0x55555555
+	la	t9, 0xb0011144
+	sw	t8, 0(t9)
+
 	/* Invalidate BTB */
 	mfc0	t0, CP0_CONFIG, 7
 	nop
@@ -51,8 +81,13 @@ _start:
 	li	t1, 0x00800000
 	mtc0	t1, CP0_CAUSE
 
-	/* Set up the stack */
-	li	sp, CONFIG_SPL_STACK
+	/*
+	 * Keep the stack the mask ROM set up. The T31 bootrom enters the
+	 * SPL with a plain call (no sp setup), so sp already points into
+	 * valid on-chip SRAM. Overriding it with a guessed address faults
+	 * on real silicon (the boot SRAM is small); the vendor SPL also
+	 * leaves the bootrom-provided sp untouched.
+	 */
 
 	b	board_init_f
 	 nop

@@ -51,8 +51,21 @@
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
 #define CPM_DDRCDR	0x2c
+#define CPM_MSC0CDR	0x68	/* MSC0 clock divider (also MSC src sel) */
+#define CPM_MSC1CDR	0xa4	/* MSC1 clock divider */
 #define CPM_CPCSR	0xd4
 #define CPM_CPVPCR	0xe0	/* VPLL */
+
+/*
+ * MSCnCDR layout: [31:30] source select (0 APLL, 1 MPLL, 2 VPLL,
+ * read from MSC0CDR for both controllers), [29] CE (apply), [28] BUSY,
+ * [27] STOP (gate divided clock), [7:0] div; rate = src / ((div+1)*2).
+ */
+#define MSCCDR_SRC_MPLL	(1u << 30)
+#define MSCCDR_CE	BIT(29)
+#define MSCCDR_BUSY	BIT(28)
+#define MSCCDR_STOP	BIT(27)
+#define MSCCDR_DIV_MASK	0xff
 
 /* CLKGR0 gate bits */
 #define CPM_CLKGR0_DDR		BIT(31)

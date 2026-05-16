@@ -120,4 +120,20 @@
 		gpio-bank-name = "PD";
 		ngpios = <32>;
 	};
+
+	/*
+	 * GMAC: Synopsys DesignWare MAC. ingenic,mode-reg is the CPM
+	 * GMAC-PHY-control register (CPM 0xb0000000 + 0xe8) used to
+	 * select the PHY interface and speed; the glue also ungates the
+	 * GMAC clock and programs CPM_MACCDR for the MAC-PHY rate.
+	 */
+	gmac: ethernet@134b0000 {
+		compatible = "ingenic,t31-gmac";
+		reg = <0x134b0000 0x2000>;
+		phy-mode = "rmii";
+		max-speed = <100>;
+		macphy-rate = <50000000>;
+		ingenic,mode-reg = <0x100000e8>;
+		status = "disabled";
+	};
 };

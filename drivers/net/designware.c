@@ -946,7 +946,15 @@ int designware_eth_probe(struct udevice *dev)
 	}
 
 	debug("%s, iobase=%pa, priv=%p\n", __func__, &iobase, priv);
-	ioaddr = phys_to_virt(iobase);
+	/*
+	 * Map the register window uncached. On MIPS phys_to_virt() returns a
+	 * cached KSEG0 pointer and MMIO through it bus-stalls on real silicon
+	 * (it only appears to work under emulators that don't model the cache);
+	 * map_physmem(MAP_NOCACHE) yields the uncached KSEG1 mapping there and
+	 * is an identity map on architectures where phys_to_virt was fine.
+	 */
+	ioaddr = map_physmem(iobase, DW_DMA_BASE_OFFSET + sizeof(struct eth_dma_regs),
+			     MAP_NOCACHE);
 	priv->mac_regs_p = (struct eth_mac_regs *)ioaddr;
 	priv->dma_regs_p = (struct eth_dma_regs *)(ioaddr + DW_DMA_BASE_OFFSET);
 	priv->interface = pdata->phy_interface;

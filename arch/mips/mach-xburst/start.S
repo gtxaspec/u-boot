@@ -73,6 +73,14 @@ _start:
 	mtc0	t0, CP0_CONFIG, 7
 	nop
 
+	/* XBurst CP0 $12,2: clear bit 31 (faithful to vendor T31 start.S) */
+	mfc0	t0, $12, 2
+	nop
+	li	t1, 0x7fffffff
+	and	t0, t0, t1
+	mtc0	t0, $12, 2
+	nop
+
 	/* CU0=UM=EXL=IE=0, BEV=ERL=1, IP2~7=1 */
 	li	t0, 0x0040FC04
 	mtc0	t0, CP0_STATUS

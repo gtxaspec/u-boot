@@ -79,4 +79,45 @@
 		cap-sd-highspeed;
 		status = "disabled";
 	};
+
+	/*
+	 * GPIO ports PA..PD. Always available (no board gating) so the
+	 * gpio command can drive board-specific pins - e.g. an SD/MMC
+	 * power-enable that varies per device and is not hardcoded.
+	 */
+	gpa: gpio@10010000 {
+		compatible = "ingenic,t31-gpio";
+		reg = <0x10010000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-bank-name = "PA";
+		ngpios = <32>;
+	};
+
+	gpb: gpio@10011000 {
+		compatible = "ingenic,t31-gpio";
+		reg = <0x10011000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-bank-name = "PB";
+		ngpios = <32>;
+	};
+
+	gpc: gpio@10012000 {
+		compatible = "ingenic,t31-gpio";
+		reg = <0x10012000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-bank-name = "PC";
+		ngpios = <32>;
+	};
+
+	gpd: gpio@10013000 {
+		compatible = "ingenic,t31-gpio";
+		reg = <0x10013000 0x1000>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		gpio-bank-name = "PD";
+		ngpios = <32>;
+	};
 };

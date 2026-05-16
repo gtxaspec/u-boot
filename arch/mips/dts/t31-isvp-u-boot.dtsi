@@ -9,9 +9,13 @@
  *   u-boot-spl-t31.bin : SPL with the finalized SFC-NOR boot header
  *                        (CRC7 + image length), bootable on its own
  *                        and equivalent to tools/mkt31spl.c output.
- *   u-boot-t31.bin     : 16 MB flash image, headered SPL at offset 0
- *                        and u-boot.bin at CONFIG_UBOOT_OFFSET
- *                        (0x10000, see arch/mips/mach-xburst/t31/sfc.c).
+ *   u-boot-t31.bin     : full 16 MB flash image, headered SPL at
+ *                        offset 0 and the LZMA U-Boot at 0x10000,
+ *                        0xff-padded to the chip size.
+ *   u-boot-t31-min.bin : same layout but trimmed to the end of the
+ *                        U-Boot blob (~270 KB) - flash this at
+ *                        offset 0 and leave the rest of the chip
+ *                        untouched (erased flash already reads 0xff).
  */
 
 / {
@@ -53,6 +57,28 @@
 		 * header; the SPL parses the header and decompresses to
 		 * CONFIG_TEXT_BASE. ~3.5x smaller than raw u-boot.bin.
 		 */
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+
+	/*
+	 * Trimmed flashable image: identical layout (headered SPL @ 0,
+	 * LZMA U-Boot @ 0x10000) but no chip-size padding - binman sizes
+	 * it to the end of the last entry (~270 KB). Flash at offset 0.
+	 */
+	flash-min {
+		filename = "u-boot-t31-min.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t31.bin";
+		};
+
 		u-boot {
 			type = "blob";
 			offset = <0x10000>;

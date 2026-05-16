@@ -14,10 +14,18 @@ DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * MSC0 (microSD) is wired to GPIO port B pins PB0..PB5 in device
- * function 0 (CLK, CMD, D0..D3). The jz_mmc driver assumes a 24 MHz
- * functional clock (jz_mmc_clock_rate()), so divide MPLL (1200 MHz)
- * by 2*(24+1) = 50. The SPL never touches MSC, so set it up here
- * before the driver model probes the controller.
+ * function 0 (CLK, CMD, D0..D3). The SPL never touches MSC, so set up
+ * its pinmux and functional clock here before the driver model probes.
+ *
+ * The clock setup is a faithful transliteration of the vendor
+ * clk_set_rate(MSC, 24 MHz): MSC source is APLL (CONFIG_CPU_SEL_PLL),
+ * which is index 0 of {APLL,MPLL,VPLL} so the [31:30] select is 0;
+ * cdr = ((apll/rate)/2 - 1) = ((1392/24)/2 - 1) = 28; set CE and the
+ * divider and wait for BUSY to clear. Critically the vendor does NOT
+ * clear CE afterwards - doing so leaves the MSC unclocked on real
+ * silicon (the controller reset never completes, jz_mmc probe times
+ * out -110), even though QEMU's MSC model tolerates it. jz_mmc assumes
+ * a 24 MHz functional clock; 1392/(2*(28+1)) = 24 MHz exactly.
  */
 #define GPIO_PORTB_BASE		0xb0011000	/* GPIO_BASE + port B * 0x1000 */
 #define G_PXINTC		0x18
@@ -27,7 +35,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #define G_PXPUENC		0x118
 #define G_PXPDENC		0x128
 #define MSC0_PINS		((0x3u << 4) | (0xfu << 0))	/* PB0..PB5 */
-#define MSC0_DIV		24				/* 1200/(2*25) = 24 MHz */
+#define MSC0_CDR		28	/* ((APLL 1392 / 24) / 2) - 1 */
 
 static void t31_msc0_init(void)
 {
@@ -46,12 +54,16 @@ static void t31_msc0_init(void)
 	/* Ungate the MSC0 functional clock. */
 	writel(readl(cpm + CPM_CLKGR0) & ~CPM_CLKGR0_MSC0, cpm + CPM_CLKGR0);
 
-	/* MSC0 clock = MPLL / (2 * (MSC0_DIV + 1)) = 24 MHz. */
-	v = MSCCDR_SRC_MPLL | (MSC0_DIV & MSCCDR_DIV_MASK);
-	writel(v | MSCCDR_CE, cpm + CPM_MSC0CDR);
+	/*
+	 * Source = APLL (sel 0), clear src/stop/divider, set CE + cdr,
+	 * wait BUSY. Leave CE set, exactly like the vendor.
+	 */
+	v = readl(cpm + CPM_MSC0CDR);
+	v &= ~((3u << 30) | (3u << MSCCDR_STOP_SHIFT) | MSCCDR_DIV_MASK);
+	v |= MSCCDR_CE | MSC0_CDR;
+	writel(v, cpm + CPM_MSC0CDR);
 	while (readl(cpm + CPM_MSC0CDR) & MSCCDR_BUSY)
 		;
-	writel(readl(cpm + CPM_MSC0CDR) & ~MSCCDR_CE, cpm + CPM_MSC0CDR);
 }
 
 int dram_init(void)

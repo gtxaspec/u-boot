@@ -39,12 +39,13 @@
 /*
  * The SPL copies a fixed window of NOR into DRAM and jumps to it, so
  * this MUST be >= the size of u-boot.bin or U-Boot proper is loaded
- * truncated and hangs before its console comes up. Upper bound is the
- * environment at CONFIG_ENV_OFFSET (0x60000): 0x10000 + 0x50000 ends
- * exactly at the env, so the read never pulls env bytes. Reading past
- * the actual image (NOR 0xff padding) into DRAM is harmless.
+ * truncated and hangs before its console comes up. The environment
+ * lives at CONFIG_ENV_OFFSET (0x100000); 0x10000 + 0x80000 = 0x90000
+ * stays well below it, so the read never pulls env bytes and there is
+ * ~190 KB of headroom for U-Boot to grow. Reading past the actual
+ * image (NOR 0xff padding) into DRAM is harmless.
  */
-#define T31_UBOOT_MONITOR_LEN	0x50000
+#define T31_UBOOT_MONITOR_LEN	0x80000
 
 /* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
 #define T31_SSI_RATE		70000000U

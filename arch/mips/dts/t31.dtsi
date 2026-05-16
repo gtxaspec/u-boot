@@ -29,11 +29,33 @@
 		clock-frequency = <24000000>;
 	};
 
+	/*
+	 * SFC source clock. The SPL programs the SSI/SFC clock divider
+	 * to 70 MHz before handing off to U-Boot proper, which inherits
+	 * the running clock. Model it as a fixed-clock so the SFC driver
+	 * can resolve its "clocks" phandle without a full CGU driver.
+	 */
+	sfc_clk: sfc_clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <70000000>;
+	};
+
 	uart1: serial@10031000 {
 		compatible = "ingenic,jz4780-uart";
 		reg = <0x10031000 0x100>;
 		reg-shift = <2>;
 		clock-frequency = <24000000>;
+		status = "disabled";
+	};
+
+	sfc: spi@13440000 {
+		compatible = "ingenic,t31-sfc";
+		reg = <0x13440000 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&sfc_clk>;
+		spi-max-frequency = <50000000>;
 		status = "disabled";
 	};
 };

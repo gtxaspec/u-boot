@@ -49,6 +49,18 @@
 		status = "disabled";
 	};
 
+	/*
+	 * MSC functional clock. board_init() programs CPM_MSC0CDR so the
+	 * MSC0 clock runs at 24 MHz (the rate jz_mmc assumes); model it as
+	 * a fixed-clock so the node's "clocks" phandle resolves without a
+	 * full CGU driver.
+	 */
+	msc_clk: msc_clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+
 	sfc: spi@13440000 {
 		compatible = "ingenic,t31-sfc";
 		reg = <0x13440000 0x10000>;
@@ -56,6 +68,15 @@
 		#size-cells = <0>;
 		clocks = <&sfc_clk>;
 		spi-max-frequency = <50000000>;
+		status = "disabled";
+	};
+
+	msc0: mmc@13450000 {
+		compatible = "ingenic,jz4780-mmc";
+		reg = <0x13450000 0x1000>;
+		clocks = <&msc_clk>;
+		clock-names = "mmc";
+		cap-sd-highspeed;
 		status = "disabled";
 	};
 };

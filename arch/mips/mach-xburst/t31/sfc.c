@@ -11,9 +11,14 @@
  *
  * The register write order, bit fields and poll loops are reproduced
  * exactly from the vendor source: do not hand-roll, reorder or guess.
- * The non-LZOP path is used; the image-header parse and LZOP decompress
- * are dropped because the lean SPL has no spl_parse_image_header(): we
- * issue a raw sfc_nor_load(UBOOT_OFFSET, len, 0x80100000) and jump.
+ *
+ * U-Boot proper is stored LZMA-compressed inside a 64-byte legacy
+ * mkimage header (Makefile u-boot-lzma.img). The SPL reads the
+ * header, SFC-reads the exact compressed payload and LZMA-decompresses
+ * it to CONFIG_TEXT_BASE, then jumps. Reading the exact size from the
+ * header (not a fixed window) retires the old truncation landmine.
+ * The Makefile caps the LZMA dictionary at 1 MiB so the decoder's
+ * dictionary malloc fits the SPL heap.
  *
  * DRAM is already up (sdram_init() ran) so 0x80100000 is valid.
  *
@@ -21,8 +26,13 @@
  */
 
 #include <asm/io.h>
+#include <asm/global_data.h>
+#include <lzma/LzmaTools.h>
+#include <malloc.h>
 #include <mach/t31.h>
 #include <mach/t31-sfc.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * Flash layout for the isvp_t31_sfcnor_ddr128M profile:
@@ -37,15 +47,18 @@
 #define T31_UBOOT_OFFSET	0x10000		/* CONFIG_UBOOT_OFFSET */
 #define T31_UBOOT_LOAD_ADDR	0x80100000	/* CONFIG_SYS_TEXT_BASE */
 /*
- * The SPL copies a fixed window of NOR into DRAM and jumps to it, so
- * this MUST be >= the size of u-boot.bin or U-Boot proper is loaded
- * truncated and hangs before its console comes up. The environment
- * lives at CONFIG_ENV_OFFSET (0x100000); 0x10000 + 0x80000 = 0x90000
- * stays well below it, so the read never pulls env bytes and there is
- * ~190 KB of headroom for U-Boot to grow. Reading past the actual
- * image (NOR 0xff padding) into DRAM is harmless.
+ * U-Boot proper is a gzip payload wrapped in a 64-byte legacy mkimage
+ * header at T31_UBOOT_OFFSET. Read the header for the exact compressed
+ * size into a DRAM scratch, gunzip to the load address. Heap is in
+ * DRAM (up by now); all regions are disjoint: U-Boot 0x80100000.., a
+ * gunzip heap at 0x80a00000, compressed scratch at 0x81000000.
  */
-#define T31_UBOOT_MONITOR_LEN	0x80000
+#define T31_IH_MAGIC		0x27051956
+#define T31_IH_HDR_LEN		64
+#define T31_UBOOT_SCRATCH	0x81000000	/* compressed image in DRAM */
+#define T31_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
+#define T31_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
+#define T31_UBOOT_MAX		0x00800000	/* decompressed size bound */
 
 /* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
 #define T31_SSI_RATE		70000000U
@@ -254,14 +267,61 @@ static void sfc_nor_load(unsigned int src_addr, unsigned int count,
 		 words_of_spl);
 }
 
+extern void t31_spl_puts(const char *s);
+
+static u32 hdr_be32(const u8 *p)
+{
+	return ((u32)p[0] << 24) | ((u32)p[1] << 16) |
+	       ((u32)p[2] << 8) | (u32)p[3];
+}
+
 /*
- * Entry point used by board_init_f(): load U-Boot proper from NOR and
- * jump to it (no return). DRAM is already initialised by this point.
+ * Entry point used by board_init_f(): read the LZMA-compressed,
+ * mkimage-wrapped U-Boot proper from NOR, decompress to its load
+ * address and jump (no return). DRAM is already initialised.
  */
 void t31_spl_load_uboot(void)
 {
-	sfc_nor_load(T31_UBOOT_OFFSET, T31_UBOOT_MONITOR_LEN,
-		     T31_UBOOT_LOAD_ADDR);
+	u8 *scratch = (u8 *)T31_UBOOT_SCRATCH;
+	u32 ih_magic, ih_size, ih_load;
+	SizeT out_len;
+	int ret;
 
-	((void (*)(void))T31_UBOOT_LOAD_ADDR)();
+	/* Legacy mkimage header (64 bytes, big-endian fields). */
+	sfc_nor_load(T31_UBOOT_OFFSET, T31_IH_HDR_LEN, T31_UBOOT_SCRATCH);
+	ih_magic = hdr_be32(scratch + 0);
+	ih_size  = hdr_be32(scratch + 12);
+	ih_load  = hdr_be32(scratch + 16);
+	if (ih_magic != T31_IH_MAGIC) {
+		t31_spl_puts("SPL: bad U-Boot image magic\n");
+		return;
+	}
+
+	/* Header + gzip payload into DRAM scratch. */
+	sfc_nor_load(T31_UBOOT_OFFSET, T31_IH_HDR_LEN + ih_size,
+		     T31_UBOOT_SCRATCH);
+
+	/*
+	 * The lean SPL has no heap until here; DRAM is up. This custom
+	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
+	 * ourselves or malloc() stays on the tiny malloc_simple arena
+	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
+	 */
+	mem_malloc_init(T31_SPL_HEAP_BASE, T31_SPL_HEAP_SIZE);
+	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
+
+	out_len = T31_UBOOT_MAX;
+	ret = lzmaBuffToBuffDecompress((unsigned char *)(uintptr_t)ih_load,
+				       &out_len, scratch + T31_IH_HDR_LEN,
+				       (SizeT)ih_size);
+	if (ret) {
+		char m[2] = { (char)('0' + (ret & 7)), 0 };
+		t31_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
+		t31_spl_puts(m);
+		t31_spl_puts("\n");
+		return;
+	}
+
+	/* Jump to the load address (== entry for a -T standalone image). */
+	((void (*)(void))(uintptr_t)ih_load)();
 }

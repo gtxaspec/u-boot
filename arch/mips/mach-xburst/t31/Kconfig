@@ -1,0 +1,18 @@
+if SOC_T31
+
+config SYS_SOC
+	default "t31"
+
+config SYS_DCACHE_SIZE
+	default 32768
+
+config SYS_ICACHE_SIZE
+	default 32768
+
+config SYS_DCACHE_LINE_SIZE
+	default 32
+
+config SYS_ICACHE_LINE_SIZE
+	default 32
+
+endif

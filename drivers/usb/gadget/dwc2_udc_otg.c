@@ -42,7 +42,9 @@
 #include <asm/unaligned.h>
 #include <asm/io.h>
 
-#include <asm/mach-types.h>
+#ifdef CONFIG_ARM
+#include <asm/mach-types.h>	/* unused here; ARM-only header */
+#endif
 
 #include <power/regulator.h>
 

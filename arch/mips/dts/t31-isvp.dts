@@ -49,3 +49,7 @@
 	 * exact pin varies per board; override per device as needed. */
 	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
 };
+
+&otg {
+	status = "okay";
+};

@@ -72,7 +72,7 @@
 	};
 
 	msc0: mmc@13450000 {
-		compatible = "ingenic,jz4780-mmc";
+		compatible = "ingenic,t31-mmc";
 		reg = <0x13450000 0x1000>;
 		clocks = <&msc_clk>;
 		clock-names = "mmc";

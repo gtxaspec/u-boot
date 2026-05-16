@@ -11,6 +11,15 @@
 
 #include <asm/sgidefs.h>
 
+/*
+ * These are MIPS symbolic register-name aliases ($0 etc). They are
+ * only meaningful in assembly; leaking them into C poisons ordinary
+ * identifiers such as a struct member named "zero", "fp" or "sp"
+ * (e.g. struct usb_request.zero in the USB gadget stack). Restrict
+ * them to assembly.
+ */
+#ifdef __ASSEMBLY__
+
 #if _MIPS_SIM == _MIPS_SIM_ABI32
 
 /*
@@ -99,5 +108,7 @@
 #define ra	$31	/* return address */
 
 #endif /* _MIPS_SIM == _MIPS_SIM_ABI64 || _MIPS_SIM == _MIPS_SIM_NABI32 */
+
+#endif /* __ASSEMBLY__ */
 
 #endif /* _ASM_REGDEF_H */

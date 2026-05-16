@@ -8,6 +8,7 @@
 #include <config.h>
 #include <init.h>
 #include <hang.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
 #include <linux/string.h>
@@ -30,6 +31,9 @@ void board_init_f(ulong dummy)
 	pll_init();
 	clk_ungate_uart(T31_CONSOLE_UART);
 
+	preloader_console_init();
+	printf("T31 SPL: clocks up, console alive\n");
+
 	sdram_init();
 
 	enable_caches();
@@ -39,10 +43,10 @@ void board_init_f(ulong dummy)
 	gd->flags |= GD_FLG_SPL_INIT;
 
 	/*
-	 * TODO: bring up the serial console, then load U-Boot proper from
-	 * SFC and jump to it once the SFC driver and DDR init land
-	 * (tasks: serial console, DDR Innophy, SFC storage).
+	 * TODO: load U-Boot proper from SFC and jump to it once the SFC
+	 * driver and DDR init land (tasks: DDR Innophy, SFC storage).
 	 */
+	puts("T31 SPL: DDR/SFC not yet implemented, halting\n");
 	hang();
 }
 #endif /* CONFIG_XPL_BUILD */

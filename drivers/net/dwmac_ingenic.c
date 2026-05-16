@@ -24,11 +24,12 @@
 #include <wait_bit.h>
 #include <asm-generic/gpio.h>
 
+/* CPM GMAC-PHY-control (CPM_GMACPHYC, our DT ingenic,mode-reg):
+ * the vendor T31 net driver only selects the PHY interface here
+ * (clear [2:0], RMII = 0x4) - it does NOT program any speed bits
+ * (those are T33-era; "T31 delete"). Keep it faithful. */
 #define INGENIC_ETH_SEL_MASK		0x7
 #define INGENIC_ETH_SEL_RMII		0x4
-#define INGENIC_ETH_SPEED_MASK		(0x3 << 29)
-#define INGENIC_ETH_SPEED_10M		(0x2 << 29)
-#define INGENIC_ETH_SPEED_100M		(0x3 << 29)
 
 /* CPM (0xb0000000): GMAC gate in CLKGR1, MAC clock divider MACCDR. */
 #define T31_CPM_BASE			0xb0000000
@@ -41,6 +42,22 @@
 #define MACCDR_STOP_SHIFT		27
 #define MACCDR_DIV_MASK			0xffu
 #define T31_MPLL_HZ			1200000000u	/* see mach-xburst t31 pll.c */
+
+/*
+ * GMAC RMII pins on GPIO port B, device function 0 (vendor
+ * gpio_set_func(GPIO_PORT_B, GPIO_FUNC_0, 0x1EFC0)). Without this the
+ * RMII REFCLK/data pins are not routed, the GMAC MAC clock domain has
+ * no clock and the first MAC register access bus-stalls. Same FUNC_0
+ * sequence as the UART/MSC pinmux (clear INT/MSK/PAT1/PAT0 + pulls).
+ */
+#define T31_GPIO_PORTB_BASE		0xb0011000
+#define G_PXINTC			0x18
+#define G_PXMSKC			0x28
+#define G_PXPAT1C			0x38
+#define G_PXPAT0C			0x48
+#define G_PXPUENC			0x118
+#define G_PXPDENC			0x128
+#define T31_GMAC_PB_PINS		0x1EFC0
 
 struct dwmac_ingenic_plat {
 	struct dw_eth_pdata dw_eth_pdata;
@@ -92,6 +109,19 @@ static int t31_macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 				 false, 100, false);
 }
 
+/* Mux the GMAC RMII pins to device function 0 on GPIO port B. */
+static void t31_gmac_pinmux(void)
+{
+	void __iomem *gpb = (void __iomem *)T31_GPIO_PORTB_BASE;
+
+	writel(T31_GMAC_PB_PINS, gpb + G_PXINTC);
+	writel(T31_GMAC_PB_PINS, gpb + G_PXMSKC);
+	writel(T31_GMAC_PB_PINS, gpb + G_PXPAT1C);
+	writel(T31_GMAC_PB_PINS, gpb + G_PXPAT0C);
+	writel(T31_GMAC_PB_PINS, gpb + G_PXPUENC);
+	writel(T31_GMAC_PB_PINS, gpb + G_PXPDENC);
+}
+
 static int ingenic_gmac_init(struct udevice *dev)
 {
 	struct dwmac_ingenic_plat *pdata = dev_get_plat(dev);
@@ -99,41 +129,29 @@ static int ingenic_gmac_init(struct udevice *dev)
 	u32 v;
 	int ret;
 
-	v = readl(pdata->cpm_phyc_reg);
-	v &= ~(INGENIC_ETH_SEL_MASK | INGENIC_ETH_SPEED_MASK);
-
-	switch (edata->phy_interface) {
-	case PHY_INTERFACE_MODE_MII:
-	case PHY_INTERFACE_MODE_GMII:
-	case PHY_INTERFACE_MODE_RGMII:
-		break;
-	case PHY_INTERFACE_MODE_RMII:
-		v |= INGENIC_ETH_SEL_RMII;
-		break;
-	default:
-		dev_err(dev, "unsupported PHY mode %d\n", edata->phy_interface);
+	if (edata->phy_interface != PHY_INTERFACE_MODE_RMII) {
+		dev_err(dev, "only RMII supported on T31 (mode %d)\n",
+			edata->phy_interface);
 		return -EINVAL;
 	}
 
-	switch (pdata->max_speed) {
-	case 10:
-		v |= INGENIC_ETH_SPEED_10M;
-		break;
-	case 100:
-		v |= INGENIC_ETH_SPEED_100M;
-		break;
-	default:
-		dev_err(dev, "unsupported speed %u\n", pdata->max_speed);
-		return -EINVAL;
-	}
-
-	writel(v, pdata->cpm_phyc_reg);
-
+	/* Vendor jz_net_initialize order: clk_set_rate(MACPHY,50M),
+	 * 50 ms settle, mux the RMII pins, then select RMII in the CPM
+	 * GMAC-PHY-control register. */
 	ret = t31_macphy_clk_init(pdata);
 	if (ret) {
 		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", ret);
 		return ret;
 	}
+	udelay(50000);
+
+	t31_gmac_pinmux();
+
+	v = readl(pdata->cpm_phyc_reg);
+	v &= ~INGENIC_ETH_SEL_MASK;
+	v |= INGENIC_ETH_SEL_RMII;
+	writel(v, pdata->cpm_phyc_reg);
+
 	return 0;
 }
 
@@ -151,9 +169,15 @@ static int ingenic_gmac_setphy(struct udevice *dev)
 		return ret;
 	}
 
-	/* Pulse reset then release; DT carries the line polarity. */
-	dm_gpio_set_value(&pdata->reset_gpio, 1);
+	/*
+	 * Vendor IP101G reset: deassert, then assert for 50 ms, then
+	 * deassert and wait 10 ms. DT carries the line polarity, so
+	 * value 1 = asserted (in reset), 0 = released.
+	 */
+	dm_gpio_set_value(&pdata->reset_gpio, 0);
 	mdelay(10);
+	dm_gpio_set_value(&pdata->reset_gpio, 1);
+	mdelay(50);
 	dm_gpio_set_value(&pdata->reset_gpio, 0);
 	mdelay(10);
 	return 0;

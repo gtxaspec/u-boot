@@ -48,10 +48,15 @@
 			filename = "u-boot-spl-t31.bin";
 		};
 
+		/*
+		 * LZMA-compressed U-Boot proper inside a legacy mkimage
+		 * header; the SPL parses the header and decompresses to
+		 * CONFIG_TEXT_BASE. ~3.5x smaller than raw u-boot.bin.
+		 */
 		u-boot {
 			type = "blob";
 			offset = <0x10000>;
-			filename = "u-boot.bin";
+			filename = "u-boot-lzma.img";
 		};
 	};
 };

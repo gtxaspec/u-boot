@@ -95,6 +95,18 @@ config ARCH_JZ47XX
 	select OF_CONTROL
 	select DM
 
+config ARCH_XBURST
+	bool "Support Ingenic XBurst1 T-series"
+	select SUPPORT_SPL
+	select HAS_FIXED_TIMER_FREQUENCY
+	select OF_CONTROL
+	select DM
+	select SPL_DM if SPL
+	help
+	  Support for Ingenic XBurst1 T-series SoCs (T10/T20/T21/T23/T30/T31).
+	  These are camera/IoT SoCs with an Innophy DDR PHY and an SFC SPI
+	  flash controller, booting via an on-chip mask ROM.
+
 config ARCH_OCTEON
 	bool "Support Marvell Octeon CN7xxx platforms"
 	select ARCH_EARLY_INIT_R
@@ -200,6 +212,7 @@ source "arch/mips/mach-ath79/Kconfig"
 source "arch/mips/mach-mscc/Kconfig"
 source "arch/mips/mach-bmips/Kconfig"
 source "arch/mips/mach-jz47xx/Kconfig"
+source "arch/mips/mach-xburst/Kconfig"
 source "arch/mips/mach-pic32/Kconfig"
 source "arch/mips/mach-mtmips/Kconfig"
 source "arch/mips/mach-octeon/Kconfig"

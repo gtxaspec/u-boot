@@ -2,6 +2,7 @@
 
 /dts-v1/;
 
+#include <dt-bindings/gpio/gpio.h>
 #include "t31.dtsi"
 
 / {
@@ -40,4 +41,11 @@
 	status = "okay";
 	bus-width = <4>;
 	broken-cd;	/* no card-detect line wired on the ISVP board */
+};
+
+&gmac {
+	status = "okay";
+	/* IP101G PHY reset (ISVP reference default = GPIO PB28). The
+	 * exact pin varies per board; override per device as needed. */
+	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
 };

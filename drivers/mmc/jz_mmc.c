@@ -14,7 +14,9 @@
 #include <dm/device_compat.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
-#include <mach/jz4780.h>
+#if !CONFIG_IS_ENABLED(DM_MMC)
+#include <mach/jz4780.h>	/* MSC0_BASE / jz_mmc_init() - legacy path only */
+#endif
 #include <wait_bit.h>
 
 /* Registers */

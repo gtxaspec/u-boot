@@ -8,6 +8,7 @@
 #include <init.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
+#include <linux/delay.h>
 #include <mach/t31.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -66,6 +67,43 @@ static void t31_msc0_init(void)
 		;
 }
 
+/*
+ * Bring up the USB OTG PHY for dual-role (host + gadget). Faithful
+ * transliteration of the vendor otg_phy_init() OTG/host path with a
+ * 24 MHz EXTAL reference: program the ref-clock in USBPCR1, put the
+ * PHY in OTG mode in USBPCR, assert OPCR SPENDN0 (without which the
+ * PHY stays suspended on real silicon), pulse POR, then ungate the
+ * OTG clock. Host (dwc2) and gadget (dwc2_udc_otg) share this PHY.
+ */
+static void t31_usb_phy_init(void)
+{
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	u32 v;
+
+	v = readl(cpm + CPM_USBPCR1);
+	v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
+	v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
+	     USBPCR1_REFCLKDIV_24M;
+	writel(v, cpm + CPM_USBPCR1);
+
+	/* OTG mode (same bits as host): USB_MODE_ORG set, VBUS ext /
+	 * OTG_DISABLE cleared. */
+	v = readl(cpm + CPM_USBPCR);
+	v |= USBPCR_USB_MODE_ORG;
+	v &= ~(USBPCR_VBUSVLDEXTSEL | USBPCR_VBUSVLDEXT | USBPCR_OTG_DISABLE);
+	writel(v, cpm + CPM_USBPCR);
+
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+
+	/* PHY power-on reset pulse. */
+	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(30);
+	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(300);
+
+	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+}
+
 int dram_init(void)
 {
 	/* DDR2 128 MB; TODO: derive from the DDR controller once it is up */
@@ -76,5 +114,6 @@ int dram_init(void)
 int board_init(void)
 {
 	t31_msc0_init();
+	t31_usb_phy_init();
 	return 0;
 }

@@ -49,10 +49,42 @@ static u8 u_rb(unsigned int off)
 	return readb((void __iomem *)(UART1_BASE + off));
 }
 
+/*
+ * Mux UART1 (PB23 TX, PB24 RX) to device function 0. The T31 GPIO
+ * port stride is 0x1000 (CONFIG_SYS_UART_CONTROLLER_STEP), so port B
+ * is at GPIO_BASE + 0x1000. This is the vendor gpio_set_func()
+ * sequence for FUNC_0: clear INT, MASK, PAT1, PAT0 (device mode,
+ * function 0) and disable pulls. Without this the SPL runs but the
+ * UART pads are not routed - silent on real silicon, masked by QEMU
+ * (no pad/pinmux model).
+ */
+#define GPIO_PORTB_BASE	0xb0011000	/* 0xb0010000 + port B (1) * 0x1000 */
+#define G_PXINTC	0x18
+#define G_PXMSKC	0x28
+#define G_PXPAT1C	0x38
+#define G_PXPAT0C	0x48
+#define G_PXPUENC	0x118
+#define G_PXPDENC	0x128
+#define UART1_PINS	(0x3u << 23)	/* PB23 + PB24 */
+
+static void t31_uart1_pinmux(void)
+{
+	void __iomem *b = (void __iomem *)GPIO_PORTB_BASE;
+
+	writel(UART1_PINS, b + G_PXINTC);
+	writel(UART1_PINS, b + G_PXMSKC);
+	writel(UART1_PINS, b + G_PXPAT1C);
+	writel(UART1_PINS, b + G_PXPAT0C);
+	writel(UART1_PINS, b + G_PXPUENC);
+	writel(UART1_PINS, b + G_PXPDENC);
+}
+
 void t31_spl_serial_init(void)
 {
 	unsigned int div = T31_UART1_CLK / 16 / T31_UART1_BAUD;
 	u8 lcr;
+
+	t31_uart1_pinmux();
 
 	u_wb(0, U_IER_DLH);				/* disable interrupts */
 	u_wb((u8)~FCR_UUE, U_FCR);			/* disable UART unit */

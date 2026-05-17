@@ -12,6 +12,8 @@
 
 #include <init.h>
 #include <stdio.h>
+#include <dm/ofnode.h>
+#include <linux/usb/otg.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -31,51 +33,89 @@ int dram_init(void)
 }
 
 /*
- * USB PHY bring-up, transliterated from the vendor T23
- * otg_phy_init() (arch/mips/cpu/xburst/t23/clk.c). The CPM USB PHY
- * block is the same XBurst1 IP as T31; the sequence is the vendor's
- * exact one for T23 with the 24 MHz EXTAL ref clock.
+ * USB PHY bring-up. Same XBurst1 USB PHY as T31, so the host path
+ * is the HW-proven T31 t31_usb_phy_init() sequence (vendor isvp_t31
+ * usb_init.c board_usb_init): SRBC core reset, USBPCR1 word-IF /
+ * ref-clk, clear USBVBFIL, USBRDT VBFIL-load, the vendor USBPCR
+ * host seed then RMW, POR + UTMI_RST wrapped in an SRBC pulse with
+ * the exact delays - the minimal vendor-T23 clk.c sequence brought
+ * the controller + root hub up but downstream devices would not
+ * enumerate; this fuller sequence is the one proven on this PHY.
  *
- * board_init() runs the OTG/host path (for "usb start"). The
- * dwc2_udc_otg gadget weak-hook otg_phy_init() below re-runs the
- * vendor DEVICE_ONLY_MODE path so DFU/g_dnl enumerates - on T23
- * device mode sets OTG_DISABLE and forces external VBUS-valid (the
- * board has no OTG VBUS sense), unlike the host path.
+ * board_init() runs the host path (for "usb start" / USB-NIC). The
+ * dwc2_udc_otg gadget weak-hook otg_phy_init() runs the vendor
+ * DEVICE_ONLY_MODE path (HW-validated for DFU): USB_MODE_ORG
+ * cleared, OTG disabled, external VBUS-valid forced (no OTG VBUS
+ * sense on this board).
  */
 static void t23_usb_phy_init(bool device)
 {
 	void __iomem *cpm = (void __iomem *)CPM_BASE;
 	u32 v;
 
-	/* USBPCR1: PHY ref clock = core, 16/30-bit word IF, /24 MHz. */
-	v = readl(cpm + CPM_USBPCR1);
-	v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
-	v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
-	     USBPCR1_REFCLKDIV_24M;
-	writel(v, cpm + CPM_USBPCR1);
-
-	v = readl(cpm + CPM_USBPCR);
 	if (device) {
+		v = readl(cpm + CPM_USBPCR1);
+		v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
+		v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
+		     USBPCR1_REFCLKDIV_24M;
+		writel(v, cpm + CPM_USBPCR1);
+
+		v = readl(cpm + CPM_USBPCR);
 		v &= ~USBPCR_USB_MODE_ORG;
 		v |= USBPCR_VBUSVLDEXTSEL | USBPCR_VBUSVLDEXT |
 		     USBPCR_OTG_DISABLE;
-	} else {
-		v |= USBPCR_USB_MODE_ORG;
-		v &= ~(USBPCR_VBUSVLDEXTSEL | USBPCR_VBUSVLDEXT |
-		       USBPCR_OTG_DISABLE);
+		writel(v, cpm + CPM_USBPCR);
+
+		setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+		setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+		udelay(30);
+		clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+		udelay(300);
+		clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+		return;
 	}
+
+	/* Host path: HW-proven T31 sequence (same USB PHY). */
+	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+	mdelay(100);
+
+	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	udelay(40);
+	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+
+	setbits_le32(cpm + CPM_USBPCR1,
+		     BIT(8) | BIT(9) | BIT(28) | BIT(29) | BIT(30));
+	clrbits_le32(cpm + CPM_USBPCR1, BIT(19));	/* WORD_IF0 */
+	v = readl(cpm + CPM_USBPCR1);
+	v &= ~(0x7u << 23);
+	v |= (5u << 23);
+	writel(v, cpm + CPM_USBPCR1);
+
+	writel(0, cpm + CPM_USBVBFIL);
+	writel(0x96, cpm + CPM_USBRDT);
+	setbits_le32(cpm + CPM_USBRDT, USBRDT_VBFIL_LD_EN);
+
+	writel(0x8380385a, cpm + CPM_USBPCR);
+	v = readl(cpm + CPM_USBPCR);
+	v |= USBPCR_USB_MODE_ORG | USBPCR_COMMONONN;
+	v &= ~(USBPCR_OTG_DISABLE | USBPCR_SIDDQ | USBPCR_IDPULLUP_MASK |
+	       USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL);
 	writel(v, cpm + CPM_USBPCR);
 
-	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
-
-	/* PHY power-on reset pulse. */
 	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	udelay(30);
+	clrbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
+	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	udelay(10);
 	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	udelay(300);
+	udelay(20);
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+	mdelay(50);
 
-	/* Ungate the OTG core clock. */
-	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+	udelay(950);
+	setbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
+	udelay(20);
+	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	mdelay(10);
 }
 
 struct dwc2_udc;
@@ -87,7 +127,19 @@ void otg_phy_init(struct dwc2_udc *dev)
 
 int board_init(void)
 {
-	t23_usb_phy_init(false);	/* OTG/host path for "usb start" */
+	ofnode otg = ofnode_path("/usb@13500000");
+
+	/*
+	 * Only the host build (dr_mode="host", t23-isvp.dts) does the
+	 * host PHY bring-up here. The DFU loader (t23-isvp-dfu.dts,
+	 * dr_mode="peripheral") must NOT run the host sequence - its
+	 * SRBC core reset / UTMI_RST staging leaves the PHY mid-host
+	 * and the gadget then fails to enumerate; the dwc2_udc_otg
+	 * weak hook otg_phy_init() does the device PHY init instead.
+	 */
+	if (ofnode_valid(otg) && usb_get_dr_mode(otg) == USB_DR_MODE_HOST)
+		t23_usb_phy_init(false);
+
 	return 0;
 }
 

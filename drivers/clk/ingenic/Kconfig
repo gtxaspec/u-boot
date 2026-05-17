@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0+
+
+config CLK_INGENIC_T31
+	bool "Ingenic T31 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T31 SoC Clock/Power Manager (CGU).
+	  Recalculates the PLL rates programmed by the SPL and provides
+	  rate/gate control for the leaf peripheral clocks (SFC, MMC,
+	  GMAC) that U-Boot drives.

@@ -17,6 +17,7 @@ obj-y += adi/
 obj-y += airoha/
 obj-y += analogbits/
 obj-$(CONFIG_MACH_IMX) += imx/
+obj-y += ingenic/
 obj-$(CONFIG_CLK_JH7110) += starfive/
 obj-y += tegra/
 obj-y += ti/

@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic XBurst1 T31 pin controller + GPIO.
+ * Ingenic XBurst1 T31/T23 pin controller + GPIO.
  *
  * Mirrors the mainline Linux ingenic pinctrl binding so one device
- * tree is valid on both: an "ingenic,t31-pinctrl" node owning the
- * 0x10010000 register block, with four "ingenic,t31-gpio" child banks
- * (PA..PD, 0x1000 stride). Consumers select a function with the
- * standard pinmux binding (a pin node with function/groups), applied
- * via pinctrl-generic.
+ * tree is valid on both: an "ingenic,t31-pinctrl" (or "ingenic,
+ * t23-pinctrl") node owning the 0x10010000 register block, with
+ * four gpio child banks (PA..PD, 0x1000 stride). Consumers select a
+ * function with the standard pinmux binding (a pin node with
+ * function/groups), applied via pinctrl-generic.
+ *
+ * T23 is XBurst1 like T31: the GPIO/pinmux register engine is
+ * identical and the boot-critical pin assignments match (UART1 on
+ * PB23/PB24 device-function 0, the shared SFC pins), so the same
+ * group/function tables and driver serve both - the T23 compatibles
+ * are added to the of_match tables rather than duplicating a
+ * near-identical chip info.
  *
  * Per-pin mode is four register pairs with set(S)/clear(C) aliases:
  *   INT  0 = device/GPIO, 1 = interrupt
@@ -197,6 +204,7 @@ static int t31_pinctrl_probe(struct udevice *dev)
 
 static const struct udevice_id t31_pinctrl_ids[] = {
 	{ .compatible = "ingenic,t31-pinctrl" },
+	{ .compatible = "ingenic,t23-pinctrl" },
 	{ }
 };
 
@@ -296,6 +304,7 @@ static int t31_gpio_probe(struct udevice *dev)
 
 static const struct udevice_id t31_gpio_ids[] = {
 	{ .compatible = "ingenic,t31-gpio" },
+	{ .compatible = "ingenic,t23-gpio" },
 	{ }
 };
 

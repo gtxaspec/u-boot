@@ -91,6 +91,8 @@
 		#size-cells = <0>;
 		clocks = <&cgu T31_CLK_SFC>;
 		spi-max-frequency = <50000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_sfc>;
 		status = "disabled";
 	};
 
@@ -100,48 +102,66 @@
 		clocks = <&cgu T31_CLK_MSC0>;
 		clock-names = "mmc";
 		cap-sd-highspeed;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mmc0>;
 		status = "disabled";
 	};
 
 	/*
-	 * GPIO ports PA..PD. Always available (no board gating) so the
-	 * gpio command can drive board-specific pins - e.g. an SD/MMC
-	 * power-enable that varies per device and is not hardcoded.
+	 * Pin controller + GPIO. Mirrors the mainline Linux
+	 * ingenic,t31-pinctrl binding: the pin-controller owns the
+	 * register block and has four ingenic,t31-gpio child banks
+	 * (PA..PD). Consumers select a function via the standard pinmux
+	 * binding (pinctrl-0 -> a node with function/groups).
 	 */
-	gpa: gpio@10010000 {
-		compatible = "ingenic,t31-gpio";
+	pinctrl: pinctrl@10010000 {
+		compatible = "ingenic,t31-pinctrl";
 		reg = <0x10010000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		gpio-bank-name = "PA";
-		ngpios = <32>;
-	};
+		#address-cells = <1>;
+		#size-cells = <0>;
 
-	gpb: gpio@10011000 {
-		compatible = "ingenic,t31-gpio";
-		reg = <0x10011000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		gpio-bank-name = "PB";
-		ngpios = <32>;
-	};
+		gpa: gpio@0 {
+			compatible = "ingenic,t31-gpio";
+			reg = <0>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
 
-	gpc: gpio@10012000 {
-		compatible = "ingenic,t31-gpio";
-		reg = <0x10012000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		gpio-bank-name = "PC";
-		ngpios = <32>;
-	};
+		gpb: gpio@1 {
+			compatible = "ingenic,t31-gpio";
+			reg = <1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
 
-	gpd: gpio@10013000 {
-		compatible = "ingenic,t31-gpio";
-		reg = <0x10013000 0x1000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		gpio-bank-name = "PD";
-		ngpios = <32>;
+		gpc: gpio@2 {
+			compatible = "ingenic,t31-gpio";
+			reg = <2>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpd: gpio@3 {
+			compatible = "ingenic,t31-gpio";
+			reg = <3>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		pins_sfc: sfc {
+			function = "sfc";
+			groups = "sfc-data";
+		};
+
+		pins_mmc0: mmc0 {
+			function = "mmc0";
+			groups = "mmc0-1bit", "mmc0-4bit";
+		};
+
+		pins_mac: mac {
+			function = "mac";
+			groups = "mac-rmii";
+		};
 	};
 
 	/*
@@ -158,6 +178,8 @@
 		macphy-rate = <50000000>;
 		clocks = <&cgu T31_CLK_GMAC>;
 		ingenic,mode-reg = <0x100000e8>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mac>;
 		status = "disabled";
 	};
 

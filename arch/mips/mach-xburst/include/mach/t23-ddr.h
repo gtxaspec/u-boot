@@ -2,20 +2,16 @@
 /*
  * Ingenic T23 DDR2 controller and Innophy PHY register map
  *
- * Profile: isvp_t23 DDR2, M14D1G1664A, 128 MB, 16-bit bus, CS0 only,
- *   DDR clock 650 MHz (MPLL 1300 MHz / 2).
+ * Profile: isvp_t23 DDR2, 16-bit bus, single CS0, DDR 600 MHz
+ *   (MPLL 1200 / 2). Standard T23/T23N = M14D5121632A 64 MB
+ *   (row13/col10/4-bank); T23DL/T23DN = M14D2561616A 32 MB
+ *   (row13/col9/4-bank). No T23 board is 128 MB.
  *
- * T23 uses the SAME Innophy DDR2 PHY + DDR2 part (M14D1G1664A) as
- * T31; only the DDR clock differs (650 vs T31's 600 MHz; MPLL 1300
- * vs 1200, but the MPLL->DDR divider is /2 in both, so cdr = 1).
- *
- * The DDRC_TIMINGn / REFCNT / MR0 values are clock-cycle counts
- * the vendor host params creator computes from the part's ns
- * timings and the DDR clock. The GOLD block below is the T31
- * 600 MHz set reused as the empirical starting point for 650 MHz
- * (same part). If dram_verify() fails on the rig these are retuned
- * to the vendor 650 MHz computed values - see
- * project_uboot_tseries_port_scope.md.
+ * T23 uses the SAME Innophy DDR2 PHY as T31 and the SAME DDR
+ * clock (600 MHz off MPLL 1200, cdr = 1). The only deltas vs the
+ * T31 128 MB profile are geometry: 4-bank (BANK8=0) and the
+ * smaller part size, which change DDRC_CFG/MMAP only (computed
+ * below from the vendor encoder, validated against the T31 GOLD).
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -78,28 +74,63 @@
 #define CPM_DRCG		0xd0
 #define CPM_DDRCDR		0x2c
 
-/* Chip geometry from include/ddr/chips/DDR2_M14D1G1664A.h (DW32=0) */
-#define DDR_ROW			13
-#define DDR_COL			10
-#define DDR_BANK8		1
+/*
+ * Chip geometry. Standard T23/T23N use DDR2 M14D5121632A (64 MB:
+ * row 13, col 10, 4-bank). T23DL/T23DN use M14D2561616A (32 MB:
+ * row 13, col 9, 4-bank). Both are 16-bit, single CS0, DW32=0,
+ * 4-bank (BANK8=0) - unlike T31's 128 MB M14D1G1664A which is
+ * 8-bank. No T23 board is 128 MB.
+ */
 #define CONFIG_DDR_DW32		0
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
+#define DDR_BANK8		0
 
-/* Clock targets for this profile: T23 MPLL 1300 MHz, DDR 650 MHz */
-#define DDR_MPLL_RATE		1300000000U
-#define DDR_TARGET_RATE		650000000U
+#if defined(CONFIG_T23_DRAM_32M)
+#define DDR_ROW			13
+#define DDR_COL			9
+#define DDR_CHIP_0_SIZE		33554432	/* 32 MB */
+#else
+#define DDR_ROW			13
+#define DDR_COL			10
+#define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
+#endif
 
 /*
- * GOLD register values. Reused from the T31 600 MHz known-good build
- * (same M14D1G1664A part / same Innophy DDR2 path) as the empirical
- * first shot at 650 MHz. Retune here to the vendor 650 MHz computed
- * set if dram_verify() reports a failure.
+ * Clock targets. The vendor standard T23N/T23DL profile is
+ * APLL 1188 / MPLL 1200 / DDR 600 MHz (DDR_600M) - the SAME DDR
+ * clock as T31, off the same MPLL 1200 (MNOD 100,1,2,1, set in
+ * t23/pll.c). MPLL/DDR divider is /2 (cdr = 1), as on T31.
  */
-#define DDRC_CFG_VALUE		0x0aa88a42
+#define DDR_MPLL_RATE		1200000000U
+#define DDR_TARGET_RATE		600000000U
+
+/*
+ * DDRC_CFG / MMAP0 / MMAP1 are the exact vendor ddr_params_creator
+ * output for the T23 geometry (CFG bitfields ROW0/COL0/BA0/CS/DW/
+ * TYPE=DDR2/BSL/MISPE; MMAP base 0x20 << 8 | size mask). The
+ * encoder was reproduced and validated bit-for-bit against the T31
+ * 128 MB GOLD (0x0aa88a42 / 0x000020f8 / 0x00002800) before
+ * deriving these.
+ *
+ * The CTRL / REFCNT / TIMINGn / MR0 set is the T31 600 MHz GOLD.
+ * T23N runs DDR at the same 600 MHz off the same MPLL 1200, so
+ * these are exact for T23N (not merely conservative). The 64/32
+ * Mb parts also have tighter tRP/tRCD/tRFC than the 128 Mb part
+ * the GOLD was tuned for, so the values have margin to spare.
+ * HW-verified on the 64 MB T23N rig.
+ */
+#if defined(CONFIG_T23_DRAM_32M)
+#define DDRC_CFG_VALUE		0x09288940	/* row13 col9 4-bank 32M */
+#define DDRC_MMAP0_VALUE	0x000020fe
+#define DDRC_MMAP1_VALUE	0x00002200
+#else
+#define DDRC_CFG_VALUE		0x0a288a40	/* row13 col10 4-bank 64M */
+#define DDRC_MMAP0_VALUE	0x000020fc
+#define DDRC_MMAP1_VALUE	0x00002400
+#endif
+
 #define DDRC_CTRL_VALUE		0x0000d91e
-#define DDRC_MMAP0_VALUE	0x000020f8
-#define DDRC_MMAP1_VALUE	0x00002800
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06
 #define DDRC_TIMING2_VALUE	0x021c0a07
@@ -108,8 +139,6 @@
 #define DDRC_TIMING5_VALUE	0xff060405
 #define DDRC_TIMING6_VALUE	0x321c0505
 #define DDRP_MR0_VALUE		0x00000f73
-
-#define DDR_CHIP_0_SIZE		134217728	/* 128 MB */
 #define DDR_CHIP_1_SIZE		0
 
 #endif /* __T23_DDR_H__ */

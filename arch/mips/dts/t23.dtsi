@@ -1,0 +1,201 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+#include <dt-bindings/clock/ingenic,t23-cgu.h>
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "ingenic,t23";
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "ingenic,xburst", "mips,mips32r2";
+			reg = <0>;
+		};
+	};
+
+	cpuintc: interrupt-controller {
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+		compatible = "mti,cpu-interrupt-controller";
+	};
+
+	exclk: exclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+
+	rtclk: rtclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+	};
+
+	/*
+	 * CGU (Clock/Power Manager). Same XBurst1 model as T31 minus the
+	 * VPLL; the SPL programs the PLLs and the CPU/DDR/bus dividers,
+	 * this driver runs in U-Boot proper and recalculates PLL rates and
+	 * provides rate/gate control for the leaf clocks (SFC, MMC, GMAC).
+	 * Binding (ingenic,t23-cgu) mirrors the Linux convention; the
+	 * driver accesses the CPM block via KSEG1.
+	 */
+	cgu: clock-controller@10000000 {
+		compatible = "ingenic,t23-cgu", "simple-mfd";
+		reg = <0x10000000 0x1000>;
+		#clock-cells = <1>;
+		clocks = <&exclk>, <&rtclk>;
+		clock-names = "ext", "rtc";
+		u-boot,dm-pre-reloc;
+	};
+
+	/*
+	 * TCU (timer/counter unit) container; U-Boot only needs the
+	 * watchdog (for sysreset). The generic jz4760-tcu / jz4780-
+	 * watchdog fallbacks bind on T23 (same IP as T31). The watchdog
+	 * self-clocks from the 32 kHz RTC.
+	 */
+	tcu: timer@10002000 {
+		compatible = "ingenic,t23-tcu", "ingenic,jz4760-tcu",
+			     "simple-mfd";
+		reg = <0x10002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x10002000 0x1000>;
+
+		watchdog: watchdog@0 {
+			compatible = "ingenic,t23-watchdog",
+				     "ingenic,jz4780-watchdog";
+			reg = <0x0 0x10>;
+		};
+	};
+
+	uart1: serial@10031000 {
+		compatible = "ingenic,jz4780-uart";
+		reg = <0x10031000 0x100>;
+		reg-shift = <2>;
+		clock-frequency = <24000000>;
+		status = "disabled";
+	};
+
+	/*
+	 * SFC SPI-NOR controller - identical IP to T31; the in-tree
+	 * ingenic_sfc driver matches "ingenic,t31-sfc" (kept as the
+	 * compatible here since that is the only match string; the
+	 * block and register map are the same on T23).
+	 */
+	sfc: spi@13440000 {
+		compatible = "ingenic,t31-sfc";
+		reg = <0x13440000 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&cgu T23_CLK_SFC>;
+		spi-max-frequency = <50000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_sfc>;
+		status = "disabled";
+	};
+
+	msc0: mmc@13450000 {
+		compatible = "ingenic,t31-mmc";
+		reg = <0x13450000 0x1000>;
+		clocks = <&cgu T23_CLK_MSC0>;
+		clock-names = "mmc";
+		cap-sd-highspeed;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mmc0>;
+		status = "disabled";
+	};
+
+	/*
+	 * Pin controller + GPIO. Same XBurst1 engine as T31 (PA..PD,
+	 * 0x1000 stride); the ingenic,t23-pinctrl/-gpio compatibles are
+	 * handled by the shared pinctrl-ingenic driver.
+	 */
+	pinctrl: pinctrl@10010000 {
+		compatible = "ingenic,t23-pinctrl";
+		reg = <0x10010000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		gpa: gpio@0 {
+			compatible = "ingenic,t23-gpio";
+			reg = <0>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpb: gpio@1 {
+			compatible = "ingenic,t23-gpio";
+			reg = <1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpc: gpio@2 {
+			compatible = "ingenic,t23-gpio";
+			reg = <2>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpd: gpio@3 {
+			compatible = "ingenic,t23-gpio";
+			reg = <3>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		pins_sfc: sfc {
+			function = "sfc";
+			groups = "sfc-data";
+		};
+
+		pins_mmc0: mmc0 {
+			function = "mmc0";
+			groups = "mmc0-1bit", "mmc0-4bit";
+		};
+
+		pins_mac: mac {
+			function = "mac";
+			groups = "mac-rmii";
+		};
+	};
+
+	/*
+	 * GMAC: Synopsys DesignWare MAC. ingenic,mode-reg is the CPM
+	 * GMAC-PHY-control register (CPM + 0xe8). Same glue as T31.
+	 */
+	gmac: ethernet@134b0000 {
+		compatible = "ingenic,t31-gmac";
+		reg = <0x134b0000 0x2000>;
+		phy-mode = "rmii";
+		max-speed = <100>;
+		macphy-rate = <50000000>;
+		clocks = <&cgu T23_CLK_GMAC>;
+		ingenic,mode-reg = <0x100000e8>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mac>;
+		status = "disabled";
+	};
+
+	/*
+	 * DWC2 USB OTG. One controller, one DM bind: host OR gadget.
+	 * Production default is host.
+	 */
+	otg: usb@13500000 {
+		compatible = "snps,dwc2";
+		reg = <0x13500000 0x40000>;
+		dr_mode = "host";
+		clocks = <&cgu T23_CLK_OTG>;
+		g-rx-fifo-size = <512>;
+		g-np-tx-fifo-size = <16>;
+		g-tx-fifo-size = <256 256 16 16 16>;
+		status = "disabled";
+	};
+};

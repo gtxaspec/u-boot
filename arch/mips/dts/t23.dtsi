@@ -185,13 +185,15 @@
 	};
 
 	/*
-	 * DWC2 USB OTG. One controller, one DM bind: host OR gadget.
-	 * Production default is host.
+	 * DWC2 USB OTG. dr_mode = "otg" so both binds are valid: the
+	 * dwc2 host driver ("usb start" -> USB-NIC/storage) and the
+	 * dwc2_udc_otg gadget (DFU/g_dnl). dwc2_udc_otg_bind() rejects
+	 * "host"; "otg" is accepted by host and gadget alike.
 	 */
 	otg: usb@13500000 {
 		compatible = "snps,dwc2";
 		reg = <0x13500000 0x40000>;
-		dr_mode = "host";
+		dr_mode = "otg";
 		clocks = <&cgu T23_CLK_OTG>;
 		g-rx-fifo-size = <512>;
 		g-np-tx-fifo-size = <16>;

@@ -56,13 +56,24 @@ struct dwc2_usbotg_phy {
 #define EXYNOS4X12_CLK_SEL_12MHZ	(0x02 << 0)
 #define EXYNOS4X12_CLK_SEL_24MHZ	(0x05 << 0)
 
-/* Masks definitions */
+/*
+ * Masks definitions. RXFLVL (RX-FIFO non-empty) is unmasked because the
+ * T31 DWC2 runs in slave/PIO mode (see GAHBCFG_INIT): SETUP and OUT data
+ * are pulled from the RX FIFO in the RXFLVL handler, not DMA'd.
+ */
 #define GINTMSK_INIT	(GINTSTS_WKUPINT | GINTSTS_OEPINT | GINTSTS_IEPINT | GINTSTS_ENUMDONE | \
-			 GINTSTS_USBRST | GINTSTS_USBSUSP | GINTSTS_OTGINT)
+			 GINTSTS_USBRST | GINTSTS_USBSUSP | GINTSTS_OTGINT | GINTSTS_RXFLVL)
 #define DOEPMSK_INIT	(DOEPMSK_SETUPMSK | DOEPMSK_AHBERRMSK | DOEPMSK_XFERCOMPLMSK)
 #define DIEPMSK_INIT	(DIEPMSK_TIMEOUTMSK | DIEPMSK_AHBERRMSK | DIEPMSK_XFERCOMPLMSK)
-#define GAHBCFG_INIT	(GAHBCFG_DMA_EN | \
-			 FIELD_PREP(GAHBCFG_HBSTLEN_MASK, GAHBCFG_HBSTLEN_INCR4) | \
-			 GAHBCFG_GLBL_INTR_EN)
+/*
+ * T31 DWC2: device-mode buffered DMA is non-functional on this silicon
+ * (the core reports TX/RX done but the SETUP buffer is never written and
+ * the host reset-loops on GET_DESCRIPTOR). Both proven references on this
+ * exact chip - the mask ROM and the vendor U-Boot jz_dwc2_udc - use
+ * slave/PIO instead, never DMA. Run slave mode: GlblIntr enable +
+ * Non-Periodic TxFIFO-empty level (the vendor writes BIT(7) then BIT(0)),
+ * DMAEn cleared. Data moves via the RX-FIFO pop / TX-FIFO push paths.
+ */
+#define GAHBCFG_INIT	(GAHBCFG_NP_TXF_EMP_LVL | GAHBCFG_GLBL_INTR_EN)
 
 #endif

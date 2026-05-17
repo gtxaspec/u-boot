@@ -104,6 +104,53 @@ static void t31_usb_phy_init(void)
 	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
 }
 
+/*
+ * dwc2_udc_otg weak-hook override, called from udc_enable() (gadget
+ * .udc_start, i.e. when "dfu"/g_dnl starts) just before the DWC2 core
+ * soft-reset. t31_usb_phy_init() above configures the PHY for host/OTG
+ * (USB_MODE_ORG set, VBUS-valid select cleared) - correct for "usb
+ * start" but wrong for the gadget: the device core then never sees
+ * session-valid and EP0 never answers (host enumeration times out,
+ * -110). Configure the PHY for device mode instead, mirroring the
+ * mask-ROM USB-device setup (bootrom: USBPCR &= ~USB_MODE_ORG;
+ * |= VBUSVLDEXT|VBUSVLDEXTSEL; POR pulse) - it is a proven USB device
+ * on this exact PHY. dev is unused.
+ */
+struct dwc2_udc;
+void otg_phy_init(struct dwc2_udc *dev)
+{
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	u32 v;
+
+	(void)dev;
+
+	v = readl(cpm + CPM_USBPCR1);
+	v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
+	v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
+	     USBPCR1_REFCLKDIV_24M;
+	writel(v, cpm + CPM_USBPCR1);
+
+	/*
+	 * Device mode: USB_MODE_ORG cleared, OTG block enabled, and the
+	 * external VBUS-valid forced on (this board has no OTG VBUS
+	 * sense) so the device core sees session-valid.
+	 */
+	v = readl(cpm + CPM_USBPCR);
+	v &= ~(USBPCR_USB_MODE_ORG | USBPCR_OTG_DISABLE);
+	v |= USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL;
+	writel(v, cpm + CPM_USBPCR);
+
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+
+	/* PHY power-on reset pulse. */
+	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(30);
+	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(300);
+
+	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+}
+
 int dram_init(void)
 {
 	/* DDR2 128 MB; TODO: derive from the DDR controller once it is up */

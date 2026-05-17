@@ -29,6 +29,60 @@ int clear_feature_flag;
 #define GET_MAX_LUN_REQUEST	0xFE
 #define BOT_RESET_REQUEST	0xFF
 
+/*
+ * DOEPTSIZ0.SUPCnt (bits 30:29): number of back-to-back SETUP packets
+ * the control OUT endpoint can receive. Required for correct EP0
+ * SETUP/status sequencing in DMA mode (T21 PM 25.6.1.57). Mainline
+ * left this 0, so the host's control transfers never complete and it
+ * reset-loops; the vendor jz_dwc2_udc programs SUPCNT=3 + room for 3
+ * SETUP packets. Match that.
+ */
+#define DOEPTSIZ0_SUPCNT_3	(0x3 << 29)
+#define EP0_SETUP_XFERSZ	(3 * sizeof(struct usb_ctrlrequest))
+
+/*
+ * Slave/PIO FIFO access (T31 DWC2: device-mode DMA is dead, see
+ * dwc2_udc_otg_regs.h). The DWC2 EP-n FIFO data window is
+ * reg->ep_fifo[n] (== vendor EP_FIFO(n) = (n+1)*0x1000). The receive
+ * FIFO is shared and read through an EP DFIFO window; the dedicated
+ * TX FIFO of an IN endpoint is written through that EP's window.
+ *
+ * DTXFSTS(n) (free IN-FIFO space, in 32-bit words) lives at
+ * in_endp[n] + 0x18, which the mainline reg struct names "reserved2".
+ */
+#define DWC2_DTXFSTS(n)		(&reg->device_regs.in_endp[(n)].reserved2)
+
+static void pio_write_fifo(u8 ep_num, const u8 *buf, u32 len)
+{
+	u32 __iomem *fifo = (u32 __iomem *)&reg->ep_fifo[ep_num][0];
+	u32 words = (len + 3) / 4;
+	const u32 *p = (const u32 *)buf;
+
+	while (words--) {
+		writel(get_unaligned(p), fifo);
+		p++;
+	}
+}
+
+static void pio_read_fifo(u8 ep_num, u8 *buf, u32 len)
+{
+	u32 __iomem *fifo = (u32 __iomem *)&reg->ep_fifo[ep_num][0];
+	u32 words = len / 4;
+	u32 *p = (u32 *)buf;
+	u32 tail;
+
+	while (words--) {
+		put_unaligned(readl(fifo), p);
+		p++;
+	}
+
+	/* tail bytes: the core still pops a whole word from the FIFO */
+	if (len & 3) {
+		tail = readl(fifo);
+		memcpy(p, &tail, len & 3);
+	}
+}
+
 static inline void dwc2_udc_ep0_zlp(struct dwc2_udc *dev)
 {
 	writel(phys_to_bus((unsigned long)usb_ctrl_dma_addr),
@@ -47,7 +101,8 @@ static void dwc2_udc_pre_setup(void)
 	debug_cond(DEBUG_IN_EP,
 		   "%s : Prepare Setup packets.\n", __func__);
 
-	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, 1) | sizeof(struct usb_ctrlrequest),
+	writel(DOEPTSIZ0_SUPCNT_3 | FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, 1) |
+	       EP0_SETUP_XFERSZ,
 	       &reg->device_regs.out_endp[EP0_CON].doeptsiz);
 	writel(phys_to_bus((unsigned long)usb_ctrl_dma_addr),
 	       &reg->device_regs.out_endp[EP0_CON].doepdma);
@@ -70,7 +125,15 @@ static inline void dwc2_ep0_complete_out(void)
 	debug_cond(DEBUG_IN_EP,
 		"%s : Prepare Complete Out packet.\n", __func__);
 
-	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, 1) | sizeof(struct usb_ctrlrequest),
+	/*
+	 * Control-read STATUS stage: this is a single zero-length OUT
+	 * data packet, NOT a SETUP. Arm a plain OUT (PKTCNT=1, XferSize
+	 * = EP0 max packet, no SUPCnt) so the host's status handshake
+	 * ACKs and the control transfer completes. Arming it with SUPCnt
+	 * (SETUP semantics) makes the core mis-handle the status, so the
+	 * host's GET_DESCRIPTOR never finishes and it reset-loops.
+	 */
+	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, 1) | 64,
 	       &reg->device_regs.out_endp[EP0_CON].doeptsiz);
 	writel(phys_to_bus((unsigned long)usb_ctrl_dma_addr),
 	       &reg->device_regs.out_endp[EP0_CON].doepdma);
@@ -83,6 +146,13 @@ static inline void dwc2_ep0_complete_out(void)
 		__func__, readl(&reg->device_regs.out_endp[EP0_CON].doepctl));
 }
 
+/*
+ * Slave/PIO RX arm. We do not DMA: just enable the OUT EP (with the
+ * expected PKTCNT/XferSize) so the core ACKs the OUT tokens and pushes
+ * the data into the shared RX FIFO. The bytes are pulled out of the
+ * FIFO into req->req.buf by process_rx_fifo() on the RXFLVL interrupt,
+ * which also advances req->req.actual. complete_rx() then finalises.
+ */
 static int setdma_rx(struct dwc2_ep *ep, struct dwc2_request *req)
 {
 	u32 *buf, ctrl;
@@ -95,6 +165,7 @@ static int setdma_rx(struct dwc2_ep *ep, struct dwc2_request *req)
 
 	ep->len = length;
 	ep->dma_buf = buf;
+	ep->pio_short = 0;
 
 	if (ep_num == EP0_CON || length == 0)
 		pktcnt = 1;
@@ -103,32 +174,31 @@ static int setdma_rx(struct dwc2_ep *ep, struct dwc2_request *req)
 
 	ctrl =  readl(&reg->device_regs.out_endp[ep_num].doepctl);
 
-	invalidate_dcache_range((unsigned long) ep->dma_buf,
-				(unsigned long) ep->dma_buf +
-				ROUND(ep->len, CONFIG_SYS_CACHELINE_SIZE));
-
-	writel(phys_to_bus((unsigned long)ep->dma_buf), &reg->device_regs.out_endp[ep_num].doepdma);
 	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, pktcnt) |
 	       FIELD_PREP(DXEPTSIZ_XFERSIZE_MASK, length),
 	       &reg->device_regs.out_endp[ep_num].doeptsiz);
 	writel(DXEPCTL_EPENA | DXEPCTL_CNAK | ctrl, &reg->device_regs.out_endp[ep_num].doepctl);
 
 	debug_cond(DEBUG_OUT_EP != 0,
-		   "%s: EP%d RX DMA start : DOEPDMA = 0x%x,"
-		   "DOEPTSIZ = 0x%x, DOEPCTL = 0x%x\n"
+		   "%s: EP%d RX PIO arm : DOEPTSIZ = 0x%x, DOEPCTL = 0x%x\n"
 		   "\tbuf = 0x%p, pktcnt = %d, xfersize = %d\n",
 		   __func__, ep_num,
-		   readl(&reg->device_regs.out_endp[ep_num].doepdma),
 		   readl(&reg->device_regs.out_endp[ep_num].doeptsiz),
 		   readl(&reg->device_regs.out_endp[ep_num].doepctl),
 		   buf, pktcnt, length);
 	return 0;
 }
 
+/*
+ * Slave/PIO TX. Program the IN EP for the whole queued chunk, enable
+ * it, then push the data into that EP's dedicated TX FIFO packet by
+ * packet, waiting on DTXFSTS for FIFO space. The core streams it to
+ * the host and raises DIEPINT.XFERCOMPL, which complete_tx() handles.
+ */
 static int setdma_tx(struct dwc2_ep *ep, struct dwc2_request *req)
 {
-	u32 *buf;
-	u32 length, pktcnt;
+	u8 *buf;
+	u32 length, pktcnt, sent;
 	u32 ep_num = ep_index(ep);
 
 	buf = req->req.buf + req->req.actual;
@@ -140,10 +210,6 @@ static int setdma_tx(struct dwc2_ep *ep, struct dwc2_request *req)
 	ep->len = length;
 	ep->dma_buf = buf;
 
-	flush_dcache_range((unsigned long) ep->dma_buf,
-			   (unsigned long) ep->dma_buf +
-			   ROUND(ep->len, CONFIG_SYS_CACHELINE_SIZE));
-
 	if (length == 0)
 		pktcnt = 1;
 	else
@@ -152,7 +218,6 @@ static int setdma_tx(struct dwc2_ep *ep, struct dwc2_request *req)
 	/* Flush the endpoint's Tx FIFO */
 	dwc2_flush_tx_fifo(reg, ep->fifo_num);
 
-	writel(phys_to_bus((unsigned long)ep->dma_buf), &reg->device_regs.in_endp[ep_num].diepdma);
 	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, pktcnt) |
 	       FIELD_PREP(DXEPTSIZ_XFERSIZE_MASK, length),
 	       &reg->device_regs.in_endp[ep_num].dieptsiz);
@@ -162,12 +227,25 @@ static int setdma_tx(struct dwc2_ep *ep, struct dwc2_request *req)
 			FIELD_PREP(DXEPCTL_TXFNUM_MASK, ep->fifo_num) |
 			DXEPCTL_EPENA | DXEPCTL_CNAK);
 
+	/* Push the data into the TX FIFO, packet by packet. */
+	sent = 0;
+	while (sent < length) {
+		u32 pkt = min(length - sent, (u32)ep_maxpacket(ep));
+		u32 need = (pkt + 3) / 4;
+		int spin = 100000;
+
+		while ((readl(DWC2_DTXFSTS(ep_num)) & 0xffff) < need &&
+		       --spin > 0)
+			;
+
+		pio_write_fifo(ep_num, buf + sent, pkt);
+		sent += pkt;
+	}
+
 	debug_cond(DEBUG_IN_EP,
-		"%s:EP%d TX DMA start : DIEPDMA0 = 0x%x,"
-		"DIEPTSIZ0 = 0x%x, DIEPCTL0 = 0x%x\n"
+		"%s:EP%d TX PIO : DIEPTSIZ0 = 0x%x, DIEPCTL0 = 0x%x\n"
 		"\tbuf = 0x%p, pktcnt = %d, xfersize = %d\n",
 		__func__, ep_num,
-		readl(&reg->device_regs.in_endp[ep_num].diepdma),
 		readl(&reg->device_regs.in_endp[ep_num].dieptsiz),
 		readl(&reg->device_regs.in_endp[ep_num].diepctl),
 		buf, pktcnt, length);
@@ -179,7 +257,7 @@ static void complete_rx(struct dwc2_udc *dev, u8 ep_num)
 {
 	struct dwc2_ep *ep = &dev->ep[ep_num];
 	struct dwc2_request *req = NULL;
-	u32 ep_tsr = 0, xfer_size = 0, is_short = 0;
+	u32 ep_tsr = 0, is_short = 0;
 
 	if (list_empty(&ep->queue)) {
 		debug_cond(DEBUG_OUT_EP != 0,
@@ -192,33 +270,13 @@ static void complete_rx(struct dwc2_udc *dev, u8 ep_num)
 	req = list_entry(ep->queue.next, struct dwc2_request, queue);
 	ep_tsr = readl(&reg->device_regs.out_endp[ep_num].doeptsiz);
 
-	if (ep_num == EP0_CON)
-		xfer_size = FIELD_PREP(DIEPTSIZ0_XFERSIZE_MASK, ep_tsr);
-	else
-		xfer_size = FIELD_PREP(DXEPTSIZ_XFERSIZE_MASK, ep_tsr);
-
-	xfer_size = ep->len - xfer_size;
-
 	/*
-	 * NOTE:
-	 *
-	 * Please be careful with proper buffer allocation for USB request,
-	 * which needs to be aligned to CONFIG_SYS_CACHELINE_SIZE, not only
-	 * with starting address, but also its size shall be a cache line
-	 * multiplication.
-	 *
-	 * This will prevent from corruption of data allocated immediatelly
-	 * before or after the buffer.
-	 *
-	 * For armv7, the cache_v7.c provides proper code to emit "ERROR"
-	 * message to warn users.
+	 * Slave/PIO: process_rx_fifo() already copied the OUT data into
+	 * req->req.buf and advanced req->req.actual, and recorded whether
+	 * the last packet was short. Do NOT re-derive the count from the
+	 * DOEPTSIZ residue (that is the DMA model) - just finalise here.
 	 */
-	invalidate_dcache_range((unsigned long) ep->dma_buf,
-				(unsigned long) ep->dma_buf +
-				ROUND(xfer_size, CONFIG_SYS_CACHELINE_SIZE));
-
-	req->req.actual += min(xfer_size, req->req.length - req->req.actual);
-	is_short = !!(xfer_size % ep->ep.maxpacket);
+	is_short = ep->pio_short;
 
 	debug_cond(DEBUG_OUT_EP != 0,
 		   "%s: RX DMA done : ep = %d, rx bytes = %d/%d, "
@@ -456,6 +514,74 @@ static void process_ep_out_intr(struct dwc2_udc *dev)
 }
 
 /*
+ * Slave/PIO RX-FIFO drain (RXFLVL). The DWC2 RX FIFO is shared by all
+ * OUT endpoints and EP0 SETUP. Each entry is a status word popped from
+ * GRXSTSP describing one packet; for SETUP/OUT-data we then read the
+ * payload words out of the FIFO. This replaces the device-mode DMA the
+ * T31 silicon does not support. Must run before the OUT-EP interrupt
+ * handler so the data is in the buffer before complete_rx() finalises.
+ */
+static void process_rx_fifo(struct dwc2_udc *dev)
+{
+	int guard = 64;
+
+	while ((readl(&reg->global_regs.gintsts) & GINTSTS_RXFLVL) &&
+	       --guard > 0) {
+		u32 grx = readl(&reg->global_regs.grxstsp);
+		u8 epn = FIELD_GET(GRXSTS_HCHNUM_MASK, grx);
+		u32 bcnt = FIELD_GET(GRXSTS_BYTECNT_MASK, grx);
+		u32 pktsts = FIELD_GET(GRXSTS_PKTSTS_MASK, grx);
+		struct dwc2_ep *ep = &dev->ep[epn];
+		struct dwc2_request *req;
+		u8 junk[64];
+		u32 n, space;
+
+		debug_cond(DEBUG_OUT_EP != 0,
+			   "%s: GRXSTSP=0x%x ep=%d bcnt=%d pktsts=%d\n",
+			   __func__, grx, epn, bcnt, pktsts);
+
+		switch (pktsts) {
+		case GRXSTS_PKTSTS_SETUPRX:
+			/* 8-byte SETUP -> usb_ctrl (parsed on SETUP-done) */
+			pio_read_fifo(0, (u8 *)usb_ctrl, 8);
+			break;
+
+		case GRXSTS_PKTSTS_OUTRX:
+			if (!bcnt)
+				break;
+			if (epn >= DWC2_MAX_ENDPOINTS ||
+			    list_empty(&ep->queue)) {
+				/* no consumer: drain to keep FIFO coherent */
+				while (bcnt) {
+					n = min(bcnt, (u32)sizeof(junk));
+					pio_read_fifo(epn, junk, n);
+					bcnt -= n;
+				}
+				break;
+			}
+			req = list_entry(ep->queue.next,
+					 struct dwc2_request, queue);
+			space = req->req.length - req->req.actual;
+			n = min(bcnt, space);
+			pio_read_fifo(epn,
+				      (u8 *)req->req.buf + req->req.actual, n);
+			req->req.actual += n;
+			ep->pio_short = (bcnt < ep->ep.maxpacket);
+			/* unexpected overrun: drain the rest */
+			for (bcnt -= n; bcnt; bcnt -= n) {
+				n = min(bcnt, (u32)sizeof(junk));
+				pio_read_fifo(epn, junk, n);
+			}
+			break;
+
+		default:
+			/* OUT/SETUP done, global OUT NAK: no payload */
+			break;
+		}
+	}
+}
+
+/*
  *	usb client interrupt handler.
  */
 static int dwc2_udc_irq(int irq, void *_dev)
@@ -571,6 +697,14 @@ static int dwc2_udc_irq(int irq, void *_dev)
 				   "\t\tRESET handling skipped\n");
 		}
 	}
+
+	/*
+	 * Slave/PIO: drain the RX FIFO (SETUP + OUT data) before the OUT
+	 * EP handler runs, so the payload is in the request buffer by the
+	 * time complete_rx()/dwc2_ep0_setup() look at it.
+	 */
+	if (intr_status & GINTSTS_RXFLVL)
+		process_rx_fifo(dev);
 
 	if (intr_status & GINTSTS_IEPINT)
 		process_ep_in_intr(dev);
@@ -727,12 +861,15 @@ static int write_fifo_ep0(struct dwc2_ep *ep, struct dwc2_request *req)
 
 static int dwc2_fifo_read(struct dwc2_ep *ep, void *cp, int max)
 {
-	invalidate_dcache_range((unsigned long)cp, (unsigned long)cp +
-				ROUND(max, CONFIG_SYS_CACHELINE_SIZE));
-
+	/*
+	 * Slave/PIO: the SETUP packet was already pulled out of the RX
+	 * FIFO into usb_ctrl by process_rx_fifo() (GRXSTS PKTSTS=SETUPRX)
+	 * when the RXFLVL interrupt fired, before this SETUP-phase-done
+	 * path runs. Nothing to copy here.
+	 */
 	debug_cond(DEBUG_EP0 != 0,
-		   "%s: bytes=%d, ep_index=%d 0x%p\n", __func__,
-		   max, ep_index(ep), cp);
+		   "%s: bytes=%d, ep_index=%d 0x%p (PIO: already read)\n",
+		   __func__, max, ep_index(ep), cp);
 
 	return max;
 }
@@ -909,15 +1046,12 @@ static int dwc2_udc_get_status(struct dwc2_udc *dev,
 
 	memcpy(usb_ctrl, &g_status, sizeof(g_status));
 
-	flush_dcache_range((unsigned long) usb_ctrl,
-			   (unsigned long) usb_ctrl +
-			   ROUND(sizeof(g_status), CONFIG_SYS_CACHELINE_SIZE));
-
-	writel(phys_to_bus(usb_ctrl_dma_addr), &reg->device_regs.in_endp[EP0_CON].diepdma);
+	/* Slave/PIO: arm EP0 IN then push the 2-byte status into the FIFO */
 	writel(FIELD_PREP(DXEPTSIZ_PKTCNT_MASK, 1) | FIELD_PREP(DXEPTSIZ_XFERSIZE_MASK, 2),
 	       &reg->device_regs.in_endp[EP0_CON].dieptsiz);
 
 	setbits_le32(&reg->device_regs.in_endp[EP0_CON].diepctl, DXEPCTL_EPENA | DXEPCTL_CNAK);
+	pio_write_fifo(EP0_CON, (u8 *)usb_ctrl, sizeof(g_status));
 	dev->ep0state = WAIT_FOR_NULL_COMPLETE;
 
 	return 0;

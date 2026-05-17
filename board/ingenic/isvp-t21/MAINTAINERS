@@ -1,0 +1,6 @@
+INGENIC ISVP-T21 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t21/
+F:	include/configs/isvp-t21.h
+F:	configs/isvp_t21_usbboot_defconfig

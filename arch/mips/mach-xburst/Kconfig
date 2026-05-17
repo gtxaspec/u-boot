@@ -7,6 +7,7 @@ config SYS_VENDOR
 config SYS_SOC
 	default "t31" if SOC_T31
 	default "t23" if SOC_T23
+	default "t21" if SOC_T21
 
 choice
 	prompt "Ingenic XBurst1 SoC select"
@@ -37,10 +38,25 @@ config SOC_T23
 	  ROM. Same XBurst1 base as T31; differs in clock targets and
 	  the DDR2 part.
 
+config SOC_T21
+	bool "Ingenic T21"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T21 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  Innophy DDR2 PHY (64 MB M14D5121632A like T23), SFC SPI-flash
+	  boot via on-chip mask ROM. Same XBurst1 base as T31/T23;
+	  differs in clock targets (APLL 864 / DDR 450).
+
 endchoice
 
 source "arch/mips/mach-xburst/t31/Kconfig"
 source "arch/mips/mach-xburst/t23/Kconfig"
+source "arch/mips/mach-xburst/t21/Kconfig"
 
 choice
 	prompt "Board select"
@@ -55,11 +71,18 @@ config TARGET_ISVP_T23
 	bool "Ingenic ISVP-T23 reference board"
 	select SOC_T23
 	help
-	  Ingenic ISVP T23 reference board, DDR2 128 MB, SFC NOR boot.
+	  Ingenic ISVP T23 reference board, DDR2 64 MB, SFC NOR boot.
+
+config TARGET_ISVP_T21
+	bool "Ingenic ISVP-T21 reference board"
+	select SOC_T21
+	help
+	  Ingenic ISVP T21 reference board, DDR2 64 MB, SFC NOR boot.
 
 endchoice
 
 source "board/ingenic/isvp-t31/Kconfig"
 source "board/ingenic/isvp-t23/Kconfig"
+source "board/ingenic/isvp-t21/Kconfig"
 
 endmenu

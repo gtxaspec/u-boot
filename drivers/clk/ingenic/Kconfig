@@ -27,3 +27,12 @@ config CLK_INGENIC_T21
 	  the PLL register encoding differs (cpm_cpxpcr_t). Provides
 	  rate/gate control for the leaf peripheral clocks (SFC, MMC,
 	  GMAC) that U-Boot drives.
+
+config CLK_INGENIC_T30
+	bool "Ingenic T30 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T30 SoC Clock/Power Manager (CGU).
+	  Same cpm_cpxpcr_t PLL + XBurst1 leaf-clock map as T21 (with
+	  VPLL). Provides rate/gate control for the leaf peripheral
+	  clocks (SFC, MMC, GMAC) that U-Boot drives.

@@ -6,3 +6,4 @@ obj-y				+= cpu.o
 obj-$(CONFIG_SOC_T31)		+= t31/
 obj-$(CONFIG_SOC_T23)		+= t23/
 obj-$(CONFIG_SOC_T21)		+= t21/
+obj-$(CONFIG_SOC_T30)		+= t30/

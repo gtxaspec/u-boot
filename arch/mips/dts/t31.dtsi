@@ -54,6 +54,28 @@
 		u-boot,dm-pre-reloc;
 	};
 
+	/*
+	 * TCU (timer/counter unit). Container node mirroring the mainline
+	 * Linux binding (ingenic,t31-tcu / simple-mfd) so the watchdog
+	 * child binds; U-Boot only needs the watchdog (for sysreset).
+	 * The watchdog driver self-clocks from the 32 kHz RTC, so the
+	 * TCU clock provider is not required here.
+	 */
+	tcu: timer@10002000 {
+		compatible = "ingenic,t31-tcu", "ingenic,jz4760-tcu",
+			     "simple-mfd";
+		reg = <0x10002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x10002000 0x1000>;
+
+		watchdog: watchdog@0 {
+			compatible = "ingenic,t31-watchdog",
+				     "ingenic,jz4780-watchdog";
+			reg = <0x0 0x10>;
+		};
+	};
+
 	uart1: serial@10031000 {
 		compatible = "ingenic,jz4780-uart";
 		reg = <0x10031000 0x100>;

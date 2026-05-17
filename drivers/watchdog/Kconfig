@@ -214,6 +214,15 @@ config SPL_WDT_GPIO
 	help
 	  Support for external watchdog fed by toggling a gpio in SPL.
 
+config WDT_INGENIC
+	bool "Ingenic XBurst SoC watchdog timer support"
+	depends on WDT
+	help
+	  Watchdog driver for the Ingenic XBurst SoC TCU watchdog
+	  (jz4740-style; T31 and compatible). Reboots the SoC when it
+	  expires; used with the sysreset watchdog-reboot driver to
+	  implement the `reset` command.
+
 config WDT_MAX6370
 	bool "MAX6370 watchdog timer support"
 	depends on WDT

@@ -52,7 +52,10 @@
 #define CPM_CLKGR1	0x28
 #define CPM_DDRCDR	0x2c
 #define CPM_USBPCR	0x3c	/* USB PHY control */
+#define CPM_USBRDT	0x40	/* USB reset detect timer */
+#define CPM_USBVBFIL	0x44	/* USB VBUS jitter filter */
 #define CPM_USBPCR1	0x48	/* USB PHY control 1 (ref clock) */
+#define CPM_SRBC	0xc4	/* soft reset & bus control */
 #define CPM_MSC0CDR	0x68	/* MSC0 clock divider (also MSC src sel) */
 #define CPM_MSC1CDR	0xa4	/* MSC1 clock divider */
 #define CPM_CPCSR	0xd4
@@ -88,10 +91,18 @@
  * otg_phy_init() host path. The VBUS/OTG_DISABLE bits are nops on
  * T31 but written for a faithful transliteration. */
 #define USBPCR_USB_MODE_ORG	BIT(31)
+#define USBPCR_AVLD_REG		BIT(30)
+#define USBPCR_IDPULLUP_MASK	(0x3u << 28)
+#define USBPCR_COMMONONN	BIT(25)
 #define USBPCR_VBUSVLDEXT	BIT(24)
 #define USBPCR_VBUSVLDEXTSEL	BIT(23)
 #define USBPCR_POR		BIT(22)
+#define USBPCR_SIDDQ		BIT(21)
 #define USBPCR_OTG_DISABLE	BIT(20)
+#define USBPCR_SQRXTUNE_SHIFT	11	/* GENMASK(13,11) */
+#define USBPCR_TXPREEMPHTUNE	BIT(6)
+#define USBPCR_TXRISETUNE_SHIFT	4	/* GENMASK(5,4) */
+#define USBPCR_TXVREFTUNE_SHIFT	0	/* GENMASK(3,0) */
 #define USBPCR1_REFCLKSEL_SHIFT	26
 #define USBPCR1_REFCLKSEL_MASK	(0x3u << USBPCR1_REFCLKSEL_SHIFT)
 #define USBPCR1_REFCLKSEL_CORE	(0x2u << USBPCR1_REFCLKSEL_SHIFT)
@@ -100,6 +111,9 @@
 #define USBPCR1_REFCLKDIV_24M	(0x1u << USBPCR1_REFCLKDIV_SHIFT)
 #define USBPCR1_WORD_IF0_16_30	BIT(19)
 #define OPCR_SPENDN0		BIT(7)
+#define USBRDT_UTMI_RST		BIT(27)
+#define USBRDT_VBFIL_LD_EN	BIT(25)
+#define SRBC_USB_SR		BIT(12)
 
 /* PLL control register layout (CPAPCR/CPMPCR/CPVPCR) */
 #define PLL_PLLEN	BIT(0)

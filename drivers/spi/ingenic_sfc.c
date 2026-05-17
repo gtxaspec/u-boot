@@ -37,75 +37,8 @@
 #define sfc_debug(fmt, args...)	debug(fmt, ##args)
 #endif
 
-#ifdef CONFIG_SOC_T31
-/*
- * T31 SFC clock-gate + pin mux. A SPI-NOR boot has the mask ROM do
- * this (bootrom FUN_bfc01878); a USB boot does not, and the port has
- * no pinctrl driver, so without this the SFC has no functional clock
- * and its pins are unmuxed - the JEDEC read returns 0xff. Faithful
- * transliteration of the bootrom routine: ungate CPM_CLKGR0[20] and
- * put GPIO port-A pins 23-28 (CLK/CE/DR/DT/WP/HOLD, mask 0x1f800000)
- * into device function 1 (PAT1=0 via PAT1C, PAT0=1 via PAT0S). Safe
- * to re-run when a NOR boot already did it (idempotent).
- */
-#define T31_CPM_BASE		0xb0000000
-#define T31_CPM_CLKGR0		((void __iomem *)0xb0000020)
-#define T31_CPM_CLKGR0_SFC	BIT(20)
-#define T31_CPM_SSICDR		0x74		/* SSI/SFC clock divider */
-#define SSICDR_SRC_MPLL		(1u << 30)	/* {APLL,MPLL,VPLL} idx 1 */
-#define SSICDR_CE		BIT(28)
-#define SSICDR_BUSY		BIT(27)
-#define SSICDR_STOP		BIT(26)
-#define T31_MPLL_HZ		1200000000u
-#define T31_SSI_HZ		70000000u
-#define T31_GPIO_PORTA_BASE	0xb0010000
-#define G_PXINTC		0x18
-#define G_PXMSKC		0x28
-#define G_PXPAT1C		0x38
-#define G_PXPAT0S		0x44
-#define G_PXPEN0		0x114
-#define G_PXPEN1		0x128
-#define T31_SFC_PA_PINS		0x1f800000
-
-static void t31_sfc_padconf(void)
-{
-	void __iomem *cpm = (void __iomem *)T31_CPM_BASE;
-	void __iomem *pa = (void __iomem *)T31_GPIO_PORTA_BASE;
-	unsigned int pll = T31_MPLL_HZ, rate = T31_SSI_HZ, cdr;
-	u32 v;
-
-	/*
-	 * SSI/SFC clock from MPLL. A NOR boot has the SPL do this
-	 * (cgu_clks_set selects MPLL in SSICDR[31:30]; ssi_clk_set_rate
-	 * sets the divider); the USB-boot SPL runs neither, so program
-	 * the source, divider and CE here. Rounding matches the vendor
-	 * clk_set_rate(); leave CE set (clearing it kills the clock).
-	 */
-	if (pll % rate >= rate / 2)
-		pll += rate - (pll % rate);
-	else
-		pll -= (pll % rate);
-	cdr = (pll / rate - 1) & 0xff;
-	v = readl(cpm + T31_CPM_SSICDR);
-	v &= ~((3u << 30) | SSICDR_STOP | SSICDR_BUSY | 0xff);
-	v |= SSICDR_SRC_MPLL | SSICDR_CE | cdr;
-	writel(v, cpm + T31_CPM_SSICDR);
-	while (readl(cpm + T31_CPM_SSICDR) & SSICDR_BUSY)
-		;
-
-	clrbits_le32(T31_CPM_CLKGR0, T31_CPM_CLKGR0_SFC);
-
-	writel(T31_SFC_PA_PINS, pa + G_PXINTC);
-	writel(T31_SFC_PA_PINS, pa + G_PXMSKC);
-	writel(T31_SFC_PA_PINS, pa + G_PXPAT1C);
-	writel(T31_SFC_PA_PINS, pa + G_PXPAT0S);
-	writel(T31_SFC_PA_PINS, pa + G_PXPEN0);
-	writel(T31_SFC_PA_PINS, pa + G_PXPEN1);
-}
-#else
-static inline void t31_sfc_padconf(void) { }
-#endif
-
+/* T31 SFC clock rate (SSI functional clock), sourced from MPLL. */
+#define T31_SFC_CLK_HZ		70000000
 static inline u32 sfc_readl(struct sfc_priv *sfc, unsigned int off)
 {
 	return readl(sfc->base + off);
@@ -463,20 +396,16 @@ static int sfc_probe(struct udevice *bus)
 	sfc->dev = bus;
 
 	/*
-	 * Ungate the SFC clock and mux its pins before any register
-	 * access - a USB boot leaves both unconfigured (a NOR boot does
-	 * not), which otherwise makes the flash probe read 0xff.
-	 */
-	t31_sfc_padconf();
-
-	/*
-	 * Optional: the SFC input clock is set up by the SPL. If a
-	 * clock phandle is present we enable it and refine max_freq,
-	 * but a missing clock is not fatal.
+	 * The SFC pins are muxed by the pin controller (pinctrl-0) and
+	 * the functional clock by the CGU clk driver: enable the gate
+	 * and program the SSI divider. A USB boot leaves both
+	 * unconfigured (a NOR boot does not); without DM clk/pinctrl the
+	 * flash probe would read 0xff.
 	 */
 	ret = clk_get_by_index(bus, 0, &sfc->clk);
 	if (!ret) {
 		clk_enable(&sfc->clk);
+		clk_set_rate(&sfc->clk, T31_SFC_CLK_HZ);
 		if (!sfc->max_freq) {
 			ulong rate = clk_get_rate(&sfc->clk);
 

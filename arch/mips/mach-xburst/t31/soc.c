@@ -99,11 +99,23 @@ void board_init_f(ulong dummy)
 	if (dram_verify() == 0)
 		t31_spl_puts("T31 SPL: DDR OK\n");
 
+#ifdef CONFIG_SPL_T31_USB_BOOT
+	/*
+	 * USB-boot stage1: clocks and DDR are up. Return to the mask ROM
+	 * (start.S enters with a plain branch, so $ra still holds the
+	 * bootrom's return address and this function's epilogue jr's back
+	 * into the bootrom USB loop). The host then uploads U-Boot proper
+	 * straight into DRAM and issues VR_PROGRAM_START2 - no NOR write.
+	 */
+	t31_spl_puts("T31 SPL: DDR up; returning to mask ROM (USB boot)\n");
+	return;
+#else
 	/* Load U-Boot proper from SPI-NOR into DRAM and jump (no return). */
 	t31_spl_puts("T31 SPL: loading U-Boot...\n");
 	t31_spl_load_uboot();
 	/* no return */
 	for (;;)
 		;
+#endif
 }
 #endif /* CONFIG_XPL_BUILD */

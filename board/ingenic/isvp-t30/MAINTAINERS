@@ -1,0 +1,6 @@
+INGENIC ISVP-T30 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t30/
+F:	include/configs/isvp-t30.h
+F:	configs/isvp_t30_usbboot_defconfig

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 
+#include <dt-bindings/clock/t31-cgu.h>
+
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -30,15 +32,18 @@
 	};
 
 	/*
-	 * SFC source clock. The SPL programs the SSI/SFC clock divider
-	 * to 70 MHz before handing off to U-Boot proper, which inherits
-	 * the running clock. Model it as a fixed-clock so the SFC driver
-	 * can resolve its "clocks" phandle without a full CGU driver.
+	 * CGU (Clock/Power Manager). The SPL programs the PLLs and the
+	 * CPU/DDR/bus dividers; this driver runs in U-Boot proper and
+	 * recalculates the PLL rates and provides rate/gate control for
+	 * the leaf peripheral clocks (SFC, MMC, GMAC). reg is the CPM
+	 * block; the driver accesses it through the KSEG1 window.
 	 */
-	sfc_clk: sfc_clk {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <70000000>;
+	cgu: clock-controller@10000000 {
+		compatible = "ingenic,t31-cgu";
+		reg = <0x10000000 0x1000>;
+		#clock-cells = <1>;
+		clocks = <&ext>;
+		u-boot,dm-pre-reloc;
 	};
 
 	uart1: serial@10031000 {
@@ -49,24 +54,12 @@
 		status = "disabled";
 	};
 
-	/*
-	 * MSC functional clock. board_init() programs CPM_MSC0CDR so the
-	 * MSC0 clock runs at 24 MHz (the rate jz_mmc assumes); model it as
-	 * a fixed-clock so the node's "clocks" phandle resolves without a
-	 * full CGU driver.
-	 */
-	msc_clk: msc_clk {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <24000000>;
-	};
-
 	sfc: spi@13440000 {
 		compatible = "ingenic,t31-sfc";
 		reg = <0x13440000 0x10000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		clocks = <&sfc_clk>;
+		clocks = <&cgu T31_CLK_SFC>;
 		spi-max-frequency = <50000000>;
 		status = "disabled";
 	};
@@ -74,7 +67,7 @@
 	msc0: mmc@13450000 {
 		compatible = "ingenic,t31-mmc";
 		reg = <0x13450000 0x1000>;
-		clocks = <&msc_clk>;
+		clocks = <&cgu T31_CLK_MSC0>;
 		clock-names = "mmc";
 		cap-sd-highspeed;
 		status = "disabled";
@@ -133,6 +126,7 @@
 		phy-mode = "rmii";
 		max-speed = <100>;
 		macphy-rate = <50000000>;
+		clocks = <&cgu T31_CLK_MAC>;
 		ingenic,mode-reg = <0x100000e8>;
 		status = "disabled";
 	};
@@ -146,6 +140,7 @@
 		compatible = "snps,dwc2";
 		reg = <0x13500000 0x40000>;
 		dr_mode = "otg";
+		clocks = <&cgu T31_CLK_OTG>;
 		g-rx-fifo-size = <512>;
 		g-np-tx-fifo-size = <16>;
 		g-tx-fifo-size = <256 256 16 16 16>;

@@ -23,7 +23,16 @@
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
-#include <dt-bindings/clock/t31-cgu.h>
+#include <dt-bindings/clock/ingenic,t31-cgu.h>
+
+/*
+ * Clock IDs are the canonical "ingenic,t31-cgu" binding (shared
+ * verbatim with the mainline Linux port's dt-bindings header) so a
+ * single device tree is valid on both Linux and U-Boot. The header
+ * defines IDs up to T31_CLK_CE_I2SR; U-Boot only implements the leaf
+ * clocks its drivers consume.
+ */
+#define T31_CLK_COUNT		(T31_CLK_CE_I2SR + 1)
 
 /*
  * CPM is at physical 0x10000000; access it through the uncached MIPS
@@ -64,11 +73,19 @@ struct t31_clk_desc {
 
 #define NO_GATE 0xffff
 
-static const struct t31_clk_desc t31_clks[T31_CLK_NR] = {
+/*
+ * Leaf clocks U-Boot's drivers reference by the canonical binding ID.
+ * SFC (T31_CLK_SFC) folds the SSIPLL divider (SSICDR) and the SFC
+ * gate; GMAC (T31_CLK_GMAC) folds the MAC-PHY divider (MACCDR) and
+ * the GMAC gate - the U-Boot consumers take a single clock each, so
+ * the rate/gate are combined under the ID their DT node references
+ * (matches the Linux port's per-consumer phandle).
+ */
+static const struct t31_clk_desc t31_clks[T31_CLK_COUNT] = {
 	[T31_CLK_SFC]  = { CPM_SSICDR, 28, 27, 26, CPM_CLKGR0, 20 },
 	[T31_CLK_MSC0] = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
 	[T31_CLK_MSC1] = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
-	[T31_CLK_MAC]  = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4 },
+	[T31_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4 },
 	[T31_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T31_CLK_OTG]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
 	[T31_CLK_TCU]  = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
@@ -126,9 +143,9 @@ static ulong t31_clk_get_rate(struct clk *clk)
 	const struct t31_clk_desc *d;
 
 	switch (clk->id) {
-	case T31_CLK_EXT:
+	case T31_CLK_EXCLK:
 		return EXT_RATE;
-	case T31_CLK_RTC:
+	case T31_CLK_RTCLK:
 		return RTC_RATE;
 	case T31_CLK_APLL:
 		return pll_rate(p, CPM_CPAPCR);
@@ -140,7 +157,7 @@ static ulong t31_clk_get_rate(struct clk *clk)
 		return EXT_RATE;	/* T31 UART is clocked from EXT */
 	}
 
-	if (clk->id >= T31_CLK_NR)
+	if (clk->id >= T31_CLK_COUNT)
 		return -EINVAL;
 
 	d = &t31_clks[clk->id];
@@ -158,7 +175,7 @@ static ulong t31_clk_set_rate(struct clk *clk, ulong rate)
 	ulong parent;
 	u32 div, v;
 
-	if (clk->id >= T31_CLK_NR)
+	if (clk->id >= T31_CLK_COUNT)
 		return -EINVAL;
 
 	d = &t31_clks[clk->id];
@@ -190,7 +207,7 @@ static int t31_clk_gate(struct clk *clk, bool enable)
 	struct t31_cgu_priv *p = dev_get_priv(clk->dev);
 	const struct t31_clk_desc *d;
 
-	if (clk->id >= T31_CLK_NR)
+	if (clk->id >= T31_CLK_COUNT)
 		return -EINVAL;
 
 	d = &t31_clks[clk->id];

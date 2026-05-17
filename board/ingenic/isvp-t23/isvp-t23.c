@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23 board (DDR2 128 MB, SFC NOR)
+ * Ingenic ISVP-T23 board (DDR2, SFC NOR)
  *
- * Stage 1 of the T23 port: minimal U-Boot-proper board glue. The
- * SPL (mach-xburst/t23) brings up console + PLL and returns to the
- * mask ROM (CONFIG_SPL_T23_USB_BOOT); DDR/SFC and the full board
- * bring-up land in later stages.
+ * Minimal U-Boot-proper board glue. The SPL (mach-xburst/t23)
+ * brings up console + PLL + Innophy DDR2; with CONFIG_SPL_T23_
+ * USB_BOOT it returns to the mask ROM. T23/T23N = 64 MB,
+ * T23DL/T23DN = 32 MB (CONFIG_T23_DRAM_32M); no 128 MB board.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -18,8 +18,11 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	/* DDR2 128 MB; derive from the DDR controller once it is up. */
-	gd->ram_size = 128 << 20;
+#if defined(CONFIG_T23_DRAM_32M)
+	gd->ram_size = 32 << 20;	/* T23DL/T23DN: M14D2561616A */
+#else
+	gd->ram_size = 64 << 20;	/* T23/T23N: M14D5121632A */
+#endif
 	return 0;
 }
 

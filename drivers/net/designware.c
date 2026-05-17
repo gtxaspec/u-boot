@@ -366,20 +366,93 @@ static int dw_bb_mdio_init(const char *name, struct udevice *dev)
 }
 #endif
 
+/*
+ * The descriptor ring and packet buffers live in the driver's priv
+ * structure, i.e. at a CPU virtual address. The GMAC is a separate bus
+ * master and must be programmed with the matching physical (then bus)
+ * address. On architectures where the CPU virtual address differs from
+ * the physical address (notably MIPS KSEG0) omitting this translation
+ * points the DMA engine at nonexistent memory, so no frames are sent
+ * or received even though the link is up. virt_to_phys()/phys_to_virt()
+ * are identity on the architectures where this already worked.
+ */
+static dma_addr_t dw_dma_map(struct udevice *dev, void *vaddr)
+{
+	return dev_phys_to_bus(dev, virt_to_phys(vaddr));
+}
+
+static void *dw_dma_unmap(struct udevice *dev, dma_addr_t baddr)
+{
+	return phys_to_virt(dev_bus_to_phys(dev, baddr));
+}
+
+/*
+ * The DMA descriptors are 16 bytes, so two share a 32-byte cache line.
+ * The per-descriptor flush/invalidate then also touches the neighbour,
+ * and on MIPS the GMAC's writeback of the OWN bit is never seen by the
+ * (cached) CPU read - the link is up but no frame is ever consumed.
+ * Access the descriptor ring through an uncached mapping instead, as
+ * the vendor driver does; the cache maintenance on the ring is then
+ * unnecessary and is skipped (DW_DESC_UNCACHED). The packet buffers are
+ * unaffected and keep their explicit flush/invalidate. Identity and
+ * unchanged on architectures other than MIPS.
+ */
+#ifdef CONFIG_MIPS
+#define DW_DESC_UNCACHED 1
+static inline void *dw_desc_va(void *p)
+{
+	return (void *)CKSEG1ADDR(virt_to_phys(p));
+}
+#else
+#define DW_DESC_UNCACHED 0
+static inline void *dw_desc_va(void *p)
+{
+	return p;
+}
+#endif
+
+static inline void dw_desc_inval(ulong start, ulong end)
+{
+	if (!DW_DESC_UNCACHED)
+		invalidate_dcache_range(start, end);
+}
+
+static inline void dw_desc_flush(ulong start, ulong end)
+{
+	if (!DW_DESC_UNCACHED)
+		flush_dcache_range(start, end);
+}
+
+/*
+ * priv (hence the descriptor ring) is zeroed through the cached mapping
+ * at allocation. When the ring is then used uncached, drop those stale
+ * cache lines first so a later eviction cannot write zeros back over the
+ * descriptors in DRAM. No-op where the ring stays cached.
+ */
+static inline void dw_desc_prep(ulong start, ulong end)
+{
+	if (DW_DESC_UNCACHED)
+		invalidate_dcache_range(start, end);
+}
+
 static void tx_descs_init(struct dw_eth_dev *priv)
 {
 	struct eth_dma_regs *dma_p = priv->dma_regs_p;
-	struct dmamacdescr *desc_table_p = &priv->tx_mac_descrtable[0];
+	struct dmamacdescr *desc_table_p = dw_desc_va(&priv->tx_mac_descrtable[0]);
 	char *txbuffs = &priv->txbuffs[0];
 	struct dmamacdescr *desc_p;
 	u32 idx;
 
+	dw_desc_prep((ulong)priv->tx_mac_descrtable,
+		     (ulong)priv->tx_mac_descrtable +
+		     sizeof(priv->tx_mac_descrtable));
+
 	for (idx = 0; idx < CFG_TX_DESCR_NUM; idx++) {
 		desc_p = &desc_table_p[idx];
-		desc_p->dmamac_addr = dev_phys_to_bus(priv->dev,
-				(ulong)&txbuffs[idx * CFG_ETH_BUFSIZE]);
-		desc_p->dmamac_next = dev_phys_to_bus(priv->dev,
-				(ulong)&desc_table_p[idx + 1]);
+		desc_p->dmamac_addr = dw_dma_map(priv->dev,
+				&txbuffs[idx * CFG_ETH_BUFSIZE]);
+		desc_p->dmamac_next = dw_dma_map(priv->dev,
+				&desc_table_p[idx + 1]);
 
 #if defined(CONFIG_DW_ALTDESCRIPTOR)
 		desc_p->txrx_status &= ~(DESC_TXSTS_TXINT | DESC_TXSTS_TXLAST |
@@ -397,14 +470,14 @@ static void tx_descs_init(struct dw_eth_dev *priv)
 	}
 
 	/* Correcting the last pointer of the chain */
-	desc_p->dmamac_next = dev_phys_to_bus(priv->dev, (ulong)&desc_table_p[0]);
+	desc_p->dmamac_next = dw_dma_map(priv->dev, &desc_table_p[0]);
 
 	/* Flush all Tx buffer descriptors at once */
-	flush_dcache_range((ulong)priv->tx_mac_descrtable,
-			   (ulong)priv->tx_mac_descrtable +
-			   sizeof(priv->tx_mac_descrtable));
+	dw_desc_flush((ulong)priv->tx_mac_descrtable,
+		      (ulong)priv->tx_mac_descrtable +
+		      sizeof(priv->tx_mac_descrtable));
 
-	writel(dev_phys_to_bus(priv->dev, (ulong)&desc_table_p[0]),
+	writel(dw_dma_map(priv->dev, &desc_table_p[0]),
 			&dma_p->txdesclistaddr);
 	priv->tx_currdescnum = 0;
 }
@@ -412,7 +485,7 @@ static void tx_descs_init(struct dw_eth_dev *priv)
 static void rx_descs_init(struct dw_eth_dev *priv)
 {
 	struct eth_dma_regs *dma_p = priv->dma_regs_p;
-	struct dmamacdescr *desc_table_p = &priv->rx_mac_descrtable[0];
+	struct dmamacdescr *desc_table_p = dw_desc_va(&priv->rx_mac_descrtable[0]);
 	char *rxbuffs = &priv->rxbuffs[0];
 	struct dmamacdescr *desc_p;
 	u32 idx;
@@ -425,12 +498,16 @@ static void rx_descs_init(struct dw_eth_dev *priv)
 	 * GMAC data will be corrupted. */
 	flush_dcache_range((ulong)rxbuffs, (ulong)rxbuffs + RX_TOTAL_BUFSIZE);
 
+	dw_desc_prep((ulong)priv->rx_mac_descrtable,
+		     (ulong)priv->rx_mac_descrtable +
+		     sizeof(priv->rx_mac_descrtable));
+
 	for (idx = 0; idx < CFG_RX_DESCR_NUM; idx++) {
 		desc_p = &desc_table_p[idx];
-		desc_p->dmamac_addr = dev_phys_to_bus(priv->dev,
-				(ulong)&rxbuffs[idx * CFG_ETH_BUFSIZE]);
-		desc_p->dmamac_next = dev_phys_to_bus(priv->dev,
-				(ulong)&desc_table_p[idx + 1]);
+		desc_p->dmamac_addr = dw_dma_map(priv->dev,
+				&rxbuffs[idx * CFG_ETH_BUFSIZE]);
+		desc_p->dmamac_next = dw_dma_map(priv->dev,
+				&desc_table_p[idx + 1]);
 
 		desc_p->dmamac_cntl =
 			(MAC_MAX_FRAME_SZ & DESC_RXCTRL_SIZE1MASK) |
@@ -440,14 +517,14 @@ static void rx_descs_init(struct dw_eth_dev *priv)
 	}
 
 	/* Correcting the last pointer of the chain */
-	desc_p->dmamac_next = dev_phys_to_bus(priv->dev, (ulong)&desc_table_p[0]);
+	desc_p->dmamac_next = dw_dma_map(priv->dev, &desc_table_p[0]);
 
 	/* Flush all Rx buffer descriptors at once */
-	flush_dcache_range((ulong)priv->rx_mac_descrtable,
-			   (ulong)priv->rx_mac_descrtable +
-			   sizeof(priv->rx_mac_descrtable));
+	dw_desc_flush((ulong)priv->rx_mac_descrtable,
+		      (ulong)priv->rx_mac_descrtable +
+		      sizeof(priv->rx_mac_descrtable));
 
-	writel(dev_phys_to_bus(priv->dev, (ulong)&desc_table_p[0]),
+	writel(dw_dma_map(priv->dev, &desc_table_p[0]),
 			&dma_p->rxdesclistaddr);
 	priv->rx_currdescnum = 0;
 }
@@ -624,11 +701,11 @@ static int _dw_eth_send(struct dw_eth_dev *priv, void *packet, int length)
 {
 	struct eth_dma_regs *dma_p = priv->dma_regs_p;
 	u32 desc_num = priv->tx_currdescnum;
-	struct dmamacdescr *desc_p = &priv->tx_mac_descrtable[desc_num];
+	struct dmamacdescr *desc_p = dw_desc_va(&priv->tx_mac_descrtable[desc_num]);
 	ulong desc_start = (ulong)desc_p;
 	ulong desc_end = desc_start +
 		roundup(sizeof(*desc_p), ARCH_DMA_MINALIGN);
-	ulong data_start = dev_bus_to_phys(priv->dev, desc_p->dmamac_addr);
+	ulong data_start = (ulong)dw_dma_unmap(priv->dev, desc_p->dmamac_addr);
 	ulong data_end = data_start + roundup(length, ARCH_DMA_MINALIGN);
 	/*
 	 * Strictly we only need to invalidate the "txrx_status" field
@@ -638,7 +715,7 @@ static int _dw_eth_send(struct dw_eth_dev *priv, void *packet, int length)
 	 * individual descriptors in the array are each aligned to
 	 * ARCH_DMA_MINALIGN and padded appropriately.
 	 */
-	invalidate_dcache_range(desc_start, desc_end);
+	dw_desc_inval(desc_start, desc_end);
 
 	/* Check if the descriptor is owned by CPU */
 	if (desc_p->txrx_status & DESC_TXSTS_OWNBYDMA) {
@@ -673,7 +750,7 @@ static int _dw_eth_send(struct dw_eth_dev *priv, void *packet, int length)
 #endif
 
 	/* Flush modified buffer descriptor */
-	flush_dcache_range(desc_start, desc_end);
+	dw_desc_flush(desc_start, desc_end);
 
 	/* Test the wrap-around condition. */
 	if (++desc_num >= CFG_TX_DESCR_NUM)
@@ -690,16 +767,16 @@ static int _dw_eth_send(struct dw_eth_dev *priv, void *packet, int length)
 static int _dw_eth_recv(struct dw_eth_dev *priv, uchar **packetp)
 {
 	u32 status, desc_num = priv->rx_currdescnum;
-	struct dmamacdescr *desc_p = &priv->rx_mac_descrtable[desc_num];
+	struct dmamacdescr *desc_p = dw_desc_va(&priv->rx_mac_descrtable[desc_num]);
 	int length = -EAGAIN;
 	ulong desc_start = (ulong)desc_p;
 	ulong desc_end = desc_start +
 		roundup(sizeof(*desc_p), ARCH_DMA_MINALIGN);
-	ulong data_start = dev_bus_to_phys(priv->dev, desc_p->dmamac_addr);
+	ulong data_start = (ulong)dw_dma_unmap(priv->dev, desc_p->dmamac_addr);
 	ulong data_end;
 
 	/* Invalidate entire buffer descriptor */
-	invalidate_dcache_range(desc_start, desc_end);
+	dw_desc_inval(desc_start, desc_end);
 
 	status = desc_p->txrx_status;
 
@@ -712,7 +789,7 @@ static int _dw_eth_recv(struct dw_eth_dev *priv, uchar **packetp)
 		/* Invalidate received data */
 		data_end = data_start + roundup(length, ARCH_DMA_MINALIGN);
 		invalidate_dcache_range(data_start, data_end);
-		*packetp = (uchar *)(ulong)dev_bus_to_phys(priv->dev,
+		*packetp = (uchar *)dw_dma_unmap(priv->dev,
 				desc_p->dmamac_addr);
 	}
 
@@ -722,11 +799,11 @@ static int _dw_eth_recv(struct dw_eth_dev *priv, uchar **packetp)
 static int _dw_free_pkt(struct dw_eth_dev *priv)
 {
 	u32 desc_num = priv->rx_currdescnum;
-	struct dmamacdescr *desc_p = &priv->rx_mac_descrtable[desc_num];
+	struct dmamacdescr *desc_p = dw_desc_va(&priv->rx_mac_descrtable[desc_num]);
 	ulong desc_start = (ulong)desc_p;
 	ulong desc_end = desc_start +
 		roundup(sizeof(*desc_p), ARCH_DMA_MINALIGN);
-	ulong data_start = dev_bus_to_phys(priv->dev, desc_p->dmamac_addr);
+	ulong data_start = (ulong)dw_dma_unmap(priv->dev, desc_p->dmamac_addr);
 	ulong data_end = data_start + roundup(CFG_ETH_BUFSIZE, ARCH_DMA_MINALIGN);
 
 	/* Invalidate the descriptor buffer data */
@@ -739,7 +816,7 @@ static int _dw_free_pkt(struct dw_eth_dev *priv)
 	desc_p->txrx_status |= DESC_RXSTS_OWNBYDMA;
 
 	/* Flush only status field - others weren't changed */
-	flush_dcache_range(desc_start, desc_end);
+	dw_desc_flush(desc_start, desc_end);
 
 	/* Test the wrap-around condition. */
 	if (++desc_num >= CFG_RX_DESCR_NUM)

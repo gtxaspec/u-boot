@@ -187,20 +187,15 @@ static int dwmac_ingenic_probe(struct udevice *dev)
 {
 	int ret;
 
-	printf("dwmac: init...\n");
 	ret = ingenic_gmac_init(dev);
 	if (ret)
 		return ret;
 
-	printf("dwmac: phy reset...\n");
 	ret = ingenic_gmac_setphy(dev);
 	if (ret)
 		return ret;
 
-	printf("dwmac: designware probe...\n");
-	ret = designware_eth_probe(dev);
-	printf("dwmac: probe done (%d)\n", ret);
-	return ret;
+	return designware_eth_probe(dev);
 }
 
 static const struct udevice_id dwmac_ingenic_ids[] = {

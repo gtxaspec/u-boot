@@ -175,6 +175,13 @@ config PHY_DAVICOM
 config PHY_ET1011C
 	bool "LSI TruePHY ET1011C support"
 
+config PHY_ICPLUS
+	bool "ICPlus IP101x Ethernet PHY support"
+	help
+	  Enable support for the ICPlus IP101G Ethernet PHY, including
+	  the RMII reference-clock and mode setup required for the PHY
+	  to establish a link.
+
 config PHY_LXT
 	bool "LXT971 Ethernet PHY support"
 

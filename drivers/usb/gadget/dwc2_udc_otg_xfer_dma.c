@@ -883,7 +883,14 @@ static int dwc2_fifo_read(struct dwc2_ep *ep, void *cp, int max)
  */
 static void udc_set_address(struct dwc2_udc *dev, unsigned char address)
 {
-	setbits_le32(&reg->device_regs.dcfg, FIELD_PREP(DCFG_DEVADDR_MASK, address));
+	/*
+	 * Replace the DevAddr field, do not OR into it: on a retried
+	 * SET_ADDRESS with no intervening reconfig the old address bits
+	 * would otherwise persist and corrupt the address ("device not
+	 * accepting address").
+	 */
+	clrsetbits_le32(&reg->device_regs.dcfg, DCFG_DEVADDR_MASK,
+			FIELD_PREP(DCFG_DEVADDR_MASK, address));
 
 	dwc2_udc_ep0_zlp(dev);
 

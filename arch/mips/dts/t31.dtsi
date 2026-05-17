@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#include <dt-bindings/clock/t31-cgu.h>
+#include <dt-bindings/clock/ingenic,t31-cgu.h>
 
 / {
 	#address-cells = <1>;
@@ -25,24 +25,32 @@
 		compatible = "mti,cpu-interrupt-controller";
 	};
 
-	ext: ext {
+	exclk: exclk {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <24000000>;
+	};
+
+	rtclk: rtclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
 	};
 
 	/*
 	 * CGU (Clock/Power Manager). The SPL programs the PLLs and the
 	 * CPU/DDR/bus dividers; this driver runs in U-Boot proper and
 	 * recalculates the PLL rates and provides rate/gate control for
-	 * the leaf peripheral clocks (SFC, MMC, GMAC). reg is the CPM
-	 * block; the driver accesses it through the KSEG1 window.
+	 * the leaf peripheral clocks (SFC, MMC, GMAC). Binding mirrors
+	 * the mainline Linux port (ingenic,t31-cgu) so one device tree is
+	 * valid on both. The driver accesses the CPM block via KSEG1.
 	 */
 	cgu: clock-controller@10000000 {
-		compatible = "ingenic,t31-cgu";
+		compatible = "ingenic,t31-cgu", "simple-mfd";
 		reg = <0x10000000 0x1000>;
 		#clock-cells = <1>;
-		clocks = <&ext>;
+		clocks = <&exclk>, <&rtclk>;
+		clock-names = "ext", "rtc";
 		u-boot,dm-pre-reloc;
 	};
 
@@ -126,7 +134,7 @@
 		phy-mode = "rmii";
 		max-speed = <100>;
 		macphy-rate = <50000000>;
-		clocks = <&cgu T31_CLK_MAC>;
+		clocks = <&cgu T31_CLK_GMAC>;
 		ingenic,mode-reg = <0x100000e8>;
 		status = "disabled";
 	};

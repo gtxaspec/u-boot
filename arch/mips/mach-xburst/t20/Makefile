@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0+
 #
-# T20 SPL: stage 1 = console + PLL. DWC DDR (sdram.o) + SFC NOR
-# loader (sfc.o) land with later stages. XBurst1-generic pieces
+# T20 SPL: console + PLL + Synopsys DWC DDR2. SFC NOR loader
+# (sfc.o) lands with a later stage. XBurst1-generic pieces are
 # shared from arch/mips/mach-xburst/.
 
-obj-y	+= soc.o pll.o serial.o
+obj-y	+= soc.o pll.o serial.o sdram.o

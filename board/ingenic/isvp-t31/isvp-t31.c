@@ -69,40 +69,74 @@ static void t31_msc0_init(void)
 }
 
 /*
- * Bring up the USB OTG PHY for dual-role (host + gadget). Faithful
- * transliteration of the vendor otg_phy_init() OTG/host path with a
- * 24 MHz EXTAL reference: program the ref-clock in USBPCR1, put the
- * PHY in OTG mode in USBPCR, assert OPCR SPENDN0 (without which the
- * PHY stays suspended on real silicon), pulse POR, then ungate the
- * OTG clock. Host (dwc2) and gadget (dwc2_udc_otg) share this PHY.
+ * Bring up the USB OTG PHY for host. Faithful transliteration of the
+ * vendor board/ingenic/isvp_t31/usb_init.c board_usb_init() - the
+ * board-specific sequence the working vendor U-Boot actually runs.
+ * (The generic clk.c otg_phy_init mirrored before was the wrong
+ * reference; matching every dwc2/PHY register to it still left the
+ * PHY powered but deaf - HPRT0.CONNSTS stuck 0.) Ungate the OTG
+ * clock, CPM-SRBC soft-reset the core, program the vendor USBPCR1
+ * word-interface, clear USBVBFIL, set USBRDT (VBFIL load), seed
+ * USBPCR then drop the OTG/ID/VBUS bits, and run POR + UTMI_RST
+ * wrapped in an SRBC pulse with the vendor's exact delays. Gadget
+ * mode uses the separate device-PHY weak hook
+ * otg_phy_init(struct dwc2_udc *).
  */
 static void t31_usb_phy_init(void)
 {
 	void __iomem *cpm = (void __iomem *)CPM_BASE;
 	u32 v;
 
+	/* Feed the clock to the OTG core, then let it settle. */
+	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+	mdelay(100);
+
+	/* Soft-reset the OTG core via CPM SRBC. */
+	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	udelay(40);
+	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+
+	/* USBPCR1: vendor PHY word-interface / ref-clock programming. */
+	setbits_le32(cpm + CPM_USBPCR1,
+		     BIT(8) | BIT(9) | BIT(28) | BIT(29) | BIT(30));
+	clrbits_le32(cpm + CPM_USBPCR1, BIT(19));	/* WORD_IF0 */
 	v = readl(cpm + CPM_USBPCR1);
-	v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
-	v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
-	     USBPCR1_REFCLKDIV_24M;
+	v &= ~(0x7u << 23);
+	v |= (5u << 23);
 	writel(v, cpm + CPM_USBPCR1);
 
-	/* OTG mode (same bits as host): USB_MODE_ORG set, VBUS ext /
-	 * OTG_DISABLE cleared. */
+	writel(0, cpm + CPM_USBVBFIL);
+	writel(0x96, cpm + CPM_USBRDT);
+	setbits_le32(cpm + CPM_USBRDT, USBRDT_VBFIL_LD_EN);
+
+	/*
+	 * Seed USBPCR with the vendor host value, then clear the
+	 * OTG-disable / SIDDQ / ID-pullup / external-VBUS bits. The
+	 * end state is 0x8200385a (USB mode + COMMONONN + the vendor
+	 * host signal tuning), matching the working vendor U-Boot.
+	 */
+	writel(0x8380385a, cpm + CPM_USBPCR);
 	v = readl(cpm + CPM_USBPCR);
-	v |= USBPCR_USB_MODE_ORG;
-	v &= ~(USBPCR_VBUSVLDEXTSEL | USBPCR_VBUSVLDEXT | USBPCR_OTG_DISABLE);
+	v |= USBPCR_USB_MODE_ORG | USBPCR_COMMONONN;
+	v &= ~(USBPCR_OTG_DISABLE | USBPCR_SIDDQ | USBPCR_IDPULLUP_MASK |
+	       USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL);
 	writel(v, cpm + CPM_USBPCR);
 
-	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
-
-	/* PHY power-on reset pulse. */
+	/* PHY reset: POR + UTMI_RST wrapped by an SRBC pulse. */
 	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	udelay(30);
+	clrbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
+	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	udelay(10);
 	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	udelay(300);
+	udelay(20);
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+	mdelay(50);
 
-	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+	udelay(950);
+	setbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
+	udelay(20);
+	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
+	mdelay(10);
 }
 
 /*

@@ -208,6 +208,17 @@ static void dwc_otg_core_host_init(struct udevice *dev,
 	/* Clear Host Set HNP Enable in the OTG Control Register */
 	clrbits_le32(&regs->global_regs.gotgctl, GOTGCTL_HSTSETHNPEN);
 
+	/*
+	 * The Ingenic XBurst OTG has no VBUS comparator wired, so the
+	 * core's VBUS-valid never asserts: it stays out of host current
+	 * mode and the host port is never powered (HPRT0.PRTPWR=0,
+	 * CONNSTS=0). Override VBUS-valid (GOTGCTL bits 2|3 =
+	 * VbvalidOvEn | VbvalidOvVal = 0x0c), exactly like the working
+	 * vendor U-Boot's dwc_otg_core_host_init().
+	 */
+	if (usb_get_dr_mode(dev_ofnode(dev)) == USB_DR_MODE_HOST)
+		setbits_le32(&regs->global_regs.gotgctl, 0x0c);
+
 	/* Make sure the FIFOs are flushed. */
 	dwc2_flush_tx_fifo(regs, GRSTCTL_TXFNUM_ALL);	/* All Tx FIFOs */
 	dwc2_flush_rx_fifo(regs);
@@ -230,8 +241,16 @@ static void dwc_otg_core_host_init(struct udevice *dev,
 			dev_info(dev, "%s: Timeout!\n", __func__);
 	}
 
-	/* Turn on the vbus power. */
-	if (readl(&regs->global_regs.gintsts) & GINTSTS_CURMODE_HOST) {
+	/*
+	 * Turn on the vbus power. On the Ingenic XBurst OTG the
+	 * GINTSTS.CurMod (host) bit lags - it is not yet set here even
+	 * with FORCEHOSTMODE + the GOTGCTL VBUS-valid override above -
+	 * so the original GINTSTS_CURMODE_HOST guard leaves the port
+	 * unpowered forever. The working vendor U-Boot powers the port
+	 * unconditionally; do the same for dr_mode="host".
+	 */
+	if ((readl(&regs->global_regs.gintsts) & GINTSTS_CURMODE_HOST) ||
+	    usb_get_dr_mode(dev_ofnode(dev)) == USB_DR_MODE_HOST) {
 		hprt0 = readl(&regs->host_regs.hprt0) & ~HPRT0_W1C_MASK;
 		if (!(hprt0 & HPRT0_PWR)) {
 			hprt0 |= HPRT0_PWR;
@@ -278,18 +297,6 @@ static void dwc_otg_core_init(struct udevice *dev)
 	usbcfg &= ~GUSBCFG_TERMSELDLPULSE;
 #endif
 
-	/*
-	 * On the Ingenic XBurst OTG the ID line is not wired (the port
-	 * is used as a fixed host), so the core never leaves device/B
-	 * mode on its own and the port never enumerates. Force host
-	 * mode for dr_mode="host" *before* the core reset below, so the
-	 * controller and PHY come up as host - this mirrors the vendor
-	 * U-Boot (which sets FORCEHOSTMODE then resets the core). Doing
-	 * it after the reset (the hnp_srp_disable path further down) is
-	 * too late for this PHY.
-	 */
-	if (usb_get_dr_mode(dev_ofnode(dev)) == USB_DR_MODE_HOST)
-		usbcfg |= GUSBCFG_FORCEHOSTMODE;
 
 	writel(usbcfg, &regs->global_regs.gusbcfg);
 
@@ -351,6 +358,20 @@ static void dwc_otg_core_init(struct udevice *dev)
 	usbcfg &= ~GUSBCFG_PHYIF16;
 #endif /* DWC2_UTMI_WIDTH */
 #endif /* DWC2_PHY_TYPE */
+
+	/*
+	 * The Ingenic XBurst OTG core is wired to a fixed 16-bit UTMI+
+	 * PHY (the SoC programs USBPCR1 WORD_IF = 16-bit). dwc2's
+	 * DWC2_UTMI_WIDTH is a compile-time default of 8 with no
+	 * per-board/DT override that reaches this driver, so the block
+	 * above clears PHYIF16 and the controller<->PHY data path comes
+	 * up the wrong width - the host then never sees a device
+	 * (HPRT0.CONNSTS stays 0). Force the 16-bit interface for
+	 * dr_mode="host", matching the working vendor U-Boot
+	 * (GUSBCFG = 0x20001708).
+	 */
+	if (usb_get_dr_mode(dev_ofnode(dev)) == USB_DR_MODE_HOST)
+		usbcfg |= GUSBCFG_PHYIF16;
 
 	writel(usbcfg, &regs->global_regs.gusbcfg);
 
@@ -803,7 +824,14 @@ static int transfer_chunk(struct dwc2_hc_regs *hc_regs, void *aligned_buffer,
 		}
 	}
 
-	writel(phys_to_bus((unsigned long)aligned_buffer), &hc_regs->hcdma);
+	/*
+	 * HCDMA is a hardware bus-master (physical) address; aligned_buffer
+	 * is a cached KSEG0 CPU pointer on MIPS. The stock
+	 * phys_to_bus(ptr) only works where virt==phys (ARM); on MIPS it
+	 * programmed an out-of-RAM address. Convert with virt_to_phys()
+	 * (identity on virt==phys arches).
+	 */
+	writel(phys_to_bus(virt_to_phys(aligned_buffer)), &hc_regs->hcdma);
 
 	/* Clear old interrupt conditions for this host channel. */
 	writel(0x3fff, &hc_regs->hcint);
@@ -822,12 +850,18 @@ static int transfer_chunk(struct dwc2_hc_regs *hc_regs, void *aligned_buffer,
 
 	if (in) {
 		xfer_len -= sub;
-
-		invalidate_dcache_range((unsigned long)aligned_buffer,
-					(unsigned long)aligned_buffer +
-					roundup(xfer_len, ARCH_DMA_MINALIGN));
-
-		memcpy(buffer, aligned_buffer, xfer_len);
+		/*
+		 * Read the DMA'd payload back through the uncached KSEG1
+		 * alias. On XBurst the dwc2 internal-DMA write to DRAM
+		 * drains after CHHLTD and a cached read + invalidate races
+		 * it (the IN payload past the first cache line was lost).
+		 * The uncached read bypasses the D-cache and is ordered
+		 * after the DMA writes, so no dcache invalidate is needed.
+		 */
+		memcpy(buffer,
+		       (const void *)(0xa0000000 |
+				      virt_to_phys(aligned_buffer)),
+		       xfer_len);
 	}
 	*actual_len = xfer_len;
 

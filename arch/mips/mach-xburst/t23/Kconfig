@@ -44,4 +44,14 @@ config T23_APLL_MNOD
 	  1188=(297,3,2,1)=0x1290d100, 1000=(125,1,3,1)=0x07d05900,
 	  936=(234,3,2,1)=0x0ea0d100.
 
+config SPL_T23_USB_BOOT
+	bool "T23 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  clocks (and DDR once ported), then return to the bootrom
+	  (jr ra) instead of loading U-Boot proper from SPI-NOR. The
+	  T23N is bootrom-only on the lab rig, so this is how the SPL
+	  is brought up and tested. Development only.
+
 endif

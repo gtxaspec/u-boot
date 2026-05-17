@@ -10,6 +10,7 @@
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t31.h>
+#include <usb.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -162,5 +163,21 @@ int board_init(void)
 {
 	t31_msc0_init();
 	t31_usb_phy_init();
+	return 0;
+}
+
+/*
+ * Re-run the host PHY bring-up immediately before the dwc2 host core
+ * init. The dwc2 host path (usb_lowlevel_init) calls this just before
+ * dwc_otg_core_init()/the core reset; the one-shot board_init() PHY
+ * setup runs far too early (decoupled from the core reset) and the
+ * port never enumerates. This mirrors the vendor U-Boot ordering
+ * (otg_phy_init() then the dwc2 core init). Gadget mode uses the
+ * separate device-PHY weak hook (otg_phy_init(struct dwc2_udc *)).
+ */
+int board_usb_init(int index, enum usb_init_type init)
+{
+	if (init == USB_INIT_HOST)
+		t31_usb_phy_init();
 	return 0;
 }

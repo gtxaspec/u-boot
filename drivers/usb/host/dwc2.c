@@ -277,6 +277,20 @@ static void dwc_otg_core_init(struct udevice *dev)
 #else
 	usbcfg &= ~GUSBCFG_TERMSELDLPULSE;
 #endif
+
+	/*
+	 * On the Ingenic XBurst OTG the ID line is not wired (the port
+	 * is used as a fixed host), so the core never leaves device/B
+	 * mode on its own and the port never enumerates. Force host
+	 * mode for dr_mode="host" *before* the core reset below, so the
+	 * controller and PHY come up as host - this mirrors the vendor
+	 * U-Boot (which sets FORCEHOSTMODE then resets the core). Doing
+	 * it after the reset (the hnp_srp_disable path further down) is
+	 * too late for this PHY.
+	 */
+	if (usb_get_dr_mode(dev_ofnode(dev)) == USB_DR_MODE_HOST)
+		usbcfg |= GUSBCFG_FORCEHOSTMODE;
+
 	writel(usbcfg, &regs->global_regs.gusbcfg);
 
 	/* Reset the Controller */

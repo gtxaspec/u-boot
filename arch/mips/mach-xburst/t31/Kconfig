@@ -11,6 +11,72 @@ config SPL_T31_USB_BOOT
 	  build can be booted without touching the NOR flash. For
 	  development only; the production image uses the SFC-NOR SPL.
 
+choice
+	prompt "T31 SoC variant"
+	default T31_VARIANT_T31X
+	help
+	  Specific T31 product variant. The DDR2-128M family
+	  (N/L/LC/X/AL/C100) shares the MPLL/VPLL and the DDR2
+	  (M14D1G1664A) controller path and differs only in the APLL
+	  (CPU) clock; each is a distinct entry so the exact SKU is
+	  identified at boot. T31A uses a DDR3 controller/PHY path
+	  that is not yet ported.
+
+config T31_VARIANT_T31N
+	bool "T31N (DDR2-128M, CPU 1392 MHz)"
+	help
+	  Nominal 1400 MHz; the PLL aligns it to 1392 exactly as the
+	  vendor get_pllreg_value() does.
+
+config T31_VARIANT_T31L
+	bool "T31L (DDR2-128M, CPU 1008 MHz, lite)"
+
+config T31_VARIANT_T31LC
+	bool "T31LC (DDR2-128M, CPU 1104 MHz, lite)"
+
+config T31_VARIANT_T31X
+	bool "T31X (DDR2-128M, CPU 1392 MHz)"
+
+config T31_VARIANT_T31AL
+	bool "T31AL (DDR2-128M, CPU 1392 MHz)"
+
+config T31_VARIANT_C100
+	bool "C100 (DDR2-128M, CPU 1392 MHz, T31X-class small die)"
+
+config T31_VARIANT_T31A
+	bool "T31A (DDR3-128M, CPU 1512 MHz) [NOT YET SUPPORTED]"
+	help
+	  T31A uses a DDR3 controller/PHY init path that is not yet
+	  ported (sdram.c is DDR2-only). Selecting this fails the
+	  build by design until the DDR3 path lands.
+
+endchoice
+
+config T31_VARIANT_NAME
+	string
+	default "T31N"  if T31_VARIANT_T31N
+	default "T31L"  if T31_VARIANT_T31L
+	default "T31LC" if T31_VARIANT_T31LC
+	default "T31X"  if T31_VARIANT_T31X
+	default "T31AL" if T31_VARIANT_T31AL
+	default "C100"  if T31_VARIANT_C100
+	default "T31A"  if T31_VARIANT_T31A
+
+config T31_APLL_MHZ
+	int
+	default 1008 if T31_VARIANT_T31L
+	default 1104 if T31_VARIANT_T31LC
+	default 1512 if T31_VARIANT_T31A
+	default 1392
+	help
+	  APLL (CPU PLL) target in MHz for the selected variant. These
+	  are the post-alignment values the vendor get_pllreg_value()
+	  actually programs: N/X/AL/C100 1392, LC 1104, L 1008, and
+	  T31A 1512 (its nominal 1500 rounds up to 1512, M=126). The
+	  SPL programs CPAPCR M = T31_APLL_MHZ / 12 (N=1, OD0=1,
+	  OD1=2); the value must be a multiple of 12 and keep
+	  Fvco = 24*M within 1250-5000 MHz.
+
 config SYS_SOC
 	default "t31"
 

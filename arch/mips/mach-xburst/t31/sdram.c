@@ -19,6 +19,10 @@
 #include <mach/t31.h>
 #include <mach/t31-ddr.h>
 
+#if defined(CONFIG_T31_VARIANT_T31A)
+#error "T31A uses DDR3; the DDR3 controller/PHY path is not yet ported (sdram.c is DDR2-only). Select a DDR2 variant or implement the DDR3 path."
+#endif
+
 
 #define ddr_writel(v, reg)	writel((v), (void __iomem *)(DDRC_BASE + (reg)))
 #define ddr_readl(reg)		readl((void __iomem *)(DDRC_BASE + (reg)))

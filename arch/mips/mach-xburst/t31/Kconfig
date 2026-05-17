@@ -1,5 +1,16 @@
 if SOC_T31
 
+config SPL_T31_USB_BOOT
+	bool "T31 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  clocks and DDR, then return to the bootrom (jr ra) instead of
+	  loading U-Boot proper from SPI-NOR. The host then uploads
+	  U-Boot straight into DRAM over USB (VR_PROGRAM_START2), so a
+	  build can be booted without touching the NOR flash. For
+	  development only; the production image uses the SFC-NOR SPL.
+
 config SYS_SOC
 	default "t31"
 

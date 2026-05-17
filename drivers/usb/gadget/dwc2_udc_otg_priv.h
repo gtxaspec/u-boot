@@ -62,6 +62,9 @@ struct dwc2_ep {
 	u8 bEndpointAddress;
 	u8 bmAttributes;
 
+	/* slave/PIO: last OUT packet on this EP was < maxpacket (short) */
+	u8 pio_short;
+
 	enum ep_type ep_type;
 	int fifo_num;
 };

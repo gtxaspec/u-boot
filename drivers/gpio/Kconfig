@@ -762,11 +762,4 @@ config MPFS_GPIO
 	help
 		Enable to support the GPIO driver on Polarfire SoC
 
-config INGENIC_T31_GPIO
-	bool "Ingenic XBurst1 T-series GPIO driver"
-	depends on DM_GPIO && ARCH_XBURST
-	help
-	  Support the four GPIO ports (PA..PD) of the Ingenic XBurst1
-	  T-series SoCs (T31 etc.), exposed through the gpio command.
-
 endif

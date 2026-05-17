@@ -424,4 +424,13 @@ source "drivers/pinctrl/tegra/Kconfig"
 source "drivers/pinctrl/uniphier/Kconfig"
 source "drivers/pinctrl/starfive/Kconfig"
 
+config PINCTRL_INGENIC
+	bool "Ingenic XBurst1 T31 pin control + GPIO"
+	depends on PINCTRL_GENERIC && ARCH_XBURST
+	help
+	  Pin controller and GPIO driver for the Ingenic XBurst1 T31
+	  SoC. Mirrors the mainline Linux ingenic,t31-pinctrl binding
+	  (pin-controller node with ingenic,t31-gpio child banks) so the
+	  device tree is portable between Linux and U-Boot.
+
 endmenu

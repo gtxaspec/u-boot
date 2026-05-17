@@ -200,6 +200,14 @@ int board_init(void)
 	return 0;
 }
 
+/* Printed right after the "Model:" line; shows the exact T31 SKU. */
+int checkboard(void)
+{
+	printf("Variant: %s (CPU %d MHz)\n",
+	       CONFIG_T31_VARIANT_NAME, CONFIG_T31_APLL_MHZ);
+	return 0;
+}
+
 /*
  * Re-run the host PHY bring-up immediately before the dwc2 host core
  * init. The dwc2 host path (usb_lowlevel_init) calls this just before

@@ -16,7 +16,7 @@
  * Marek Szyprowski <m.szyprowski@samsung.com>
  * Lukasz Majewski <l.majewski@samsumg.com>
  */
-#define DEBUG
+#undef DEBUG
 #include <clk.h>
 #include <dm.h>
 #include <generic-phy.h>
@@ -56,11 +56,11 @@
 
 #define OTG_DMA_MODE		1
 
-#define DEBUG_SETUP 1
-#define DEBUG_EP0 1
-#define DEBUG_ISR 1
-#define DEBUG_OUT_EP 1
-#define DEBUG_IN_EP 1
+#define DEBUG_SETUP 0
+#define DEBUG_EP0 0
+#define DEBUG_ISR 0
+#define DEBUG_OUT_EP 0
+#define DEBUG_IN_EP 0
 
 #include <usb/dwc2_udc.h>
 

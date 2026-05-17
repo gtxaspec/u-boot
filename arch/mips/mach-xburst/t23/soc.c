@@ -38,10 +38,25 @@ static void spl_put_hex(u32 v)
 		t23_spl_putc(hex[(v >> i) & 0xf]);
 }
 
+#if defined(CONFIG_T23_DRAM_32M)
+#define T23_DRAM_SIZE	0x02000000u	/* 32 MB */
+#else
+#define T23_DRAM_SIZE	0x04000000u	/* 64 MB */
+#endif
+
 /*
- * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
- * cached (KSEG0) window and verify the read-back. Steps across the
- * 128 MB so a stuck/aliased address line is caught, not just word 0.
+ * Verify DRAM up to the *configured* size (T23 is 64 MB, or 32 MB
+ * for T23DL/DN - never 128 MB). Two passes:
+ *
+ *  1. Stuck-bit: walk patterns at offsets within [0, SIZE) at both
+ *     the KSEG1 (uncached) and KSEG0 (cached) windows.
+ *  2. Alias: write a unique marker per offset across [0, SIZE) via
+ *     KSEG1, then read them all back. If the DDR controller is
+ *     configured larger than the populated part (the classic
+ *     wrong-geometry bug) the high offsets wrap onto the low ones
+ *     and the markers collide - so "DDR OK" actually proves the
+ *     size/geometry, instead of a write-then-read-same-address
+ *     test that silently passes on an aliased part.
  */
 static int dram_verify(void)
 {
@@ -49,8 +64,11 @@ static int dram_verify(void)
 		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
 		0xdeadbeef, 0x12345678,
 	};
+	const u32 offs[] = {
+		0x0, 0x4, 0x100000, T23_DRAM_SIZE / 4,
+		T23_DRAM_SIZE / 2, T23_DRAM_SIZE - 4,
+	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
-	const u32 offs[] = { 0x0, 0x4, 0x100000, 0x4000000, 0x7fffffc };
 	int b, o, p;
 
 	for (b = 0; b < 2; b++) {
@@ -71,6 +89,21 @@ static int dram_verify(void)
 					return -1;
 				}
 			}
+		}
+	}
+
+	for (o = 0; o < (int)ARRAY_SIZE(offs); o++)
+		*(volatile u32 *)(0xa0000000 + offs[o]) = 0xa5000000 | offs[o];
+	for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
+		volatile u32 *a = (volatile u32 *)(0xa0000000 + offs[o]);
+
+		if (*a != (0xa5000000 | offs[o])) {
+			t23_spl_puts("T23 SPL: DDR ALIAS @");
+			spl_put_hex((u32)(uintptr_t)a);
+			t23_spl_puts(" read ");
+			spl_put_hex(*a);
+			t23_spl_puts(" (controller mis-sized vs part)\n");
+			return -1;
 		}
 	}
 	return 0;
@@ -96,8 +129,11 @@ void board_init_f(ulong dummy)
 	t23_spl_puts("T23 SPL: PLL configured\n");
 
 	sdram_init();
-	if (dram_verify() == 0)
-		t23_spl_puts("T23 SPL: DDR OK\n");
+	if (dram_verify() == 0) {
+		t23_spl_puts("T23 SPL: DDR OK ");
+		spl_put_hex(T23_DRAM_SIZE);
+		t23_spl_puts(" (alias-checked)\n");
+	}
 
 #ifdef CONFIG_SPL_T23_USB_BOOT
 	/*

@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T23 DFU loader (USB-boot; binman image unused).
+ *
+ * The T23 mask ROM SFC-NOR boot path is the common XBurst1 one (the
+ * 2048-byte header CRC7+length finalized by the ingenic-t31-spl
+ * binman etype - that header format is family-generic, emitted by
+ * the shared start.S, not T31-specific). Builds:
+ *
+ *   u-boot-spl-t23.bin : SPL with the finalized SFC-NOR boot header.
+ *   u-boot-t23.bin     : full 16 MB flash image, headered SPL at 0
+ *                        and the LZMA U-Boot at 0x10000.
+ *   u-boot-t23-min.bin : same layout, trimmed to the U-Boot blob.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t23 {
+		filename = "u-boot-spl-t23.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-t23.bin";
+		pad-byte = <0xff>;
+		size = <0x1000000>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t23.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+
+	flash-min {
+		filename = "u-boot-t23-min.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t23.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

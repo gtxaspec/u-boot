@@ -6,21 +6,35 @@
  *
  * T31 has three PLLs: APLL (CPU), MPLL (DDR/peripheral) and VPLL.
  * The CPCCR register selects clock sources and the core/L2/AHB/APB
- * dividers. Values below are the isvp_t31_sfcnor_ddr128M profile
- * (DDR2 128 MB): APLL 1392 MHz, MPLL 1200 MHz (DDR 600 MHz),
- * VPLL 1200 MHz.
- *
- * TODO: parameterise PLL/divider values via Kconfig/device tree per
- * board (T31A/T31LC/lite have different APLL/DDR targets).
+ * dividers. MPLL 1200 MHz (DDR 600 MHz) and VPLL 1200 MHz are shared
+ * by the whole DDR2-128M variant family; only the APLL (CPU clock)
+ * differs per variant and comes from CONFIG_T31_APLL_MHZ (Kconfig
+ * "T31 SoC variant" choice). T31X/N/AL/C100=1392, T31LC=1104,
+ * T31L=1008; T31X reproduces the original hardcoded 1392 exactly.
  */
 
 #include <asm/io.h>
+#include <linux/build_bug.h>
 #include <mach/t31.h>
 
-/* PLL M/N/OD encodings: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8) */
-#define T31_APLL_MNOD	((116 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+/*
+ * CPAPCR/CPMPCR/CPVPCR encoding: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8).
+ * Pllout = 24MHz * M / (N * OD0 * OD1); Fvco = 24MHz * M / N must be
+ * 1250..5000 MHz (vendor get_pllreg_value() constraints). The DDR2
+ * family uses N=1, OD0=1, OD1=2 so Pllout = 12MHz * M and
+ * M = CONFIG_T31_APLL_MHZ / 12 (must divide evenly).
+ */
+#define T31_APLL_M	(CONFIG_T31_APLL_MHZ / 12)
+#define T31_APLL_MNOD	((T31_APLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define T31_MPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define T31_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+
+static_assert(CONFIG_T31_APLL_MHZ % 12 == 0,
+	      "T31_APLL_MHZ must be a multiple of 12");
+static_assert(T31_APLL_M >= 16 && T31_APLL_M <= 2500,
+	      "T31 APLL M out of range");
+static_assert(24 * T31_APLL_M >= 1250 && 24 * T31_APLL_M <= 5000,
+	      "T31 APLL Fvco (24*M) out of 1250-5000 MHz");
 
 /*
  * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL, dividers for DDR 600.

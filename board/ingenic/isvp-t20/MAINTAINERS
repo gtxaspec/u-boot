@@ -1,0 +1,6 @@
+INGENIC ISVP-T20 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t20/
+F:	include/configs/isvp-t20.h
+F:	configs/isvp_t20_usbboot_defconfig

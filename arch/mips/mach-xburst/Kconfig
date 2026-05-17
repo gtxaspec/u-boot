@@ -51,8 +51,15 @@ config TARGET_ISVP_T31
 	help
 	  Ingenic ISVP T31 reference board, DDR2 128 MB, SFC NOR boot.
 
+config TARGET_ISVP_T23
+	bool "Ingenic ISVP-T23 reference board"
+	select SOC_T23
+	help
+	  Ingenic ISVP T23 reference board, DDR2 128 MB, SFC NOR boot.
+
 endchoice
 
 source "board/ingenic/isvp-t31/Kconfig"
+source "board/ingenic/isvp-t23/Kconfig"
 
 endmenu

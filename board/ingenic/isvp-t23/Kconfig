@@ -1,0 +1,15 @@
+if TARGET_ISVP_T23
+
+config SYS_BOARD
+	default "isvp-t23"
+
+config SYS_VENDOR
+	default "ingenic"
+
+config SYS_CONFIG_NAME
+	default "isvp-t23"
+
+config TEXT_BASE
+	default 0x80100000
+
+endif

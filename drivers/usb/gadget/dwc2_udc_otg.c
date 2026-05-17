@@ -474,21 +474,6 @@ static void reconfig_usbd(struct dwc2_udc *dev)
 
 	dwc2_core_reset(reg);
 
-	/*
-	 * On a device-only gadget with no OTG VBUS/ID sensing (e.g. the
-	 * Ingenic T31, where USB-boot leaves no real session signalling),
-	 * the core never sees B-session valid and never connects, so
-	 * enumeration fails. Force the GOTGCTL session-valid overrides
-	 * (enable, then value) after the core reset so they persist. The
-	 * STM path programs these itself under its own detection flag.
-	 */
-	if (!dev->pdata->activate_stm_id_vb_detection) {
-		setbits_le32(&reg->global_regs.gotgctl,
-			     GOTGCTL_VBVALOEN | GOTGCTL_BVALOEN);
-		setbits_le32(&reg->global_regs.gotgctl,
-			     GOTGCTL_VBVALOVAL | GOTGCTL_BVALOVAL);
-	}
-
 	debug("Resetting OTG controller\n");
 
 	dflt_gusbcfg =
@@ -934,15 +919,7 @@ int dwc2_udc_probe(struct dwc2_plat_otg_data *pdata)
 		return -ENOMEM;
 	}
 
-	/*
-	 * The DWC2 is a bus master: it must be programmed with the
-	 * physical address of the control buffer, not the CPU virtual
-	 * one. On MIPS those differ (KSEG0) and handing it the virtual
-	 * address makes the core DMA the SETUP/descriptor outside DRAM
-	 * (enumeration fails, -32). virt_to_phys() is identity where
-	 * phys_to_bus already sufficed.
-	 */
-	usb_ctrl_dma_addr = (dma_addr_t) virt_to_phys(usb_ctrl);
+	usb_ctrl_dma_addr = (dma_addr_t) usb_ctrl;
 
 	udc_reinit(dev);
 

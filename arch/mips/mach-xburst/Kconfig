@@ -5,85 +5,16 @@ config SYS_VENDOR
 	default "ingenic"
 
 config SYS_SOC
-	default "t31" if SOC_T31
-	default "t23" if SOC_T23
-	default "t21" if SOC_T21
-	default "t30" if SOC_T30
-	default "t20" if SOC_T20
 	default "t10" if SOC_T10
+	default "t20" if SOC_T20
+	default "t21" if SOC_T21
+	default "t23" if SOC_T23
+	default "t30" if SOC_T30
+	default "t31" if SOC_T31
 
 choice
 	prompt "Ingenic XBurst1 SoC select"
-
-config SOC_T31
-	bool "Ingenic T31"
-	select SUPPORT_LITTLE_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_CACHE_SHIFT_5
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-	select BINMAN
-	help
-	  Ingenic T31 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
-	  Innophy DDR2/DDR3 PHY, SFC SPI-flash boot via on-chip mask ROM.
-
-config SOC_T23
-	bool "Ingenic T23"
-	select SUPPORT_LITTLE_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_CACHE_SHIFT_5
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-	select BINMAN
-	help
-	  Ingenic T23 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL (no
-	  VPLL), Innophy DDR2 PHY, SFC SPI-flash boot via on-chip mask
-	  ROM. Same XBurst1 base as T31; differs in clock targets and
-	  the DDR2 part.
-
-config SOC_T21
-	bool "Ingenic T21"
-	select SUPPORT_LITTLE_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_CACHE_SHIFT_5
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-	select BINMAN
-	help
-	  Ingenic T21 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
-	  Innophy DDR2 PHY (64 MB M14D5121632A like T23), SFC SPI-flash
-	  boot via on-chip mask ROM. Same XBurst1 base as T31/T23;
-	  differs in clock targets (APLL 864 / DDR 450).
-
-
-config SOC_T30
-	bool "Ingenic T30"
-	select SUPPORT_LITTLE_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_CACHE_SHIFT_5
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-	select BINMAN
-	help
-	  Ingenic T30 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
-	  Innophy DDR2 PHY (64 MB M14D5121632A like T21/T23), SFC SPI-flash
-	  boot via on-chip mask ROM. Same XBurst1 base as T31/T23/T21;
-	  differs in clock targets (APLL 750 / DDR 500).
-
-
-config SOC_T20
-	bool "Ingenic T20"
-	select SUPPORT_LITTLE_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_CACHE_SHIFT_5
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-	select BINMAN
-	help
-	  Ingenic T20 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
-	  DesignWare (DWC) DDR2 PHY, 64 MB M14D5121632A, SFC SPI-flash
-	  boot via on-chip mask ROM. Same XBurst1 base as T31; DWC DDR (not Innophy);
-	  3 GPIO banks; T20N APLL 860 / DDR 500.
+	default SOC_T31
 
 config SOC_T10
 	bool "Ingenic T10"
@@ -100,47 +31,86 @@ config SOC_T10
 	  XBurst1 base as T20; DWC DDR (not Innophy); 4 GPIO banks;
 	  T10N APLL 860 / MPLL 1200 / DDR 400 (MEM_FREQ = MPLL/3).
 
+config SOC_T20
+	bool "Ingenic T20"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T20 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  DesignWare (DWC) DDR2 PHY, 64 MB M14D5121632A, SFC SPI-flash
+	  boot via on-chip mask ROM. Same XBurst1 base as T31; DWC DDR (not Innophy);
+	  3 GPIO banks; T20N APLL 860 / DDR 500.
+
+config SOC_T21
+	bool "Ingenic T21"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T21 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  Innophy DDR2 PHY (64 MB M14D5121632A like T23), SFC SPI-flash
+	  boot via on-chip mask ROM. Same XBurst1 base as T31/T23;
+	  differs in clock targets (APLL 864 / DDR 450).
+
+config SOC_T23
+	bool "Ingenic T23"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T23 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL (no
+	  VPLL), Innophy DDR2 PHY, SFC SPI-flash boot via on-chip mask
+	  ROM. Same XBurst1 base as T31; differs in clock targets and
+	  the DDR2 part.
+
+config SOC_T30
+	bool "Ingenic T30"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T30 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  Innophy DDR2 PHY (64 MB M14D5121632A like T21/T23), SFC SPI-flash
+	  boot via on-chip mask ROM. Same XBurst1 base as T31/T23/T21;
+	  differs in clock targets (APLL 864 / DDR 500).
+
+config SOC_T31
+	bool "Ingenic T31"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic T31 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
+	  Innophy DDR2/DDR3 PHY, SFC SPI-flash boot via on-chip mask ROM.
+
 endchoice
 
-source "arch/mips/mach-xburst/t31/Kconfig"
-source "arch/mips/mach-xburst/t23/Kconfig"
-source "arch/mips/mach-xburst/t21/Kconfig"
-source "arch/mips/mach-xburst/t30/Kconfig"
-source "arch/mips/mach-xburst/t20/Kconfig"
 source "arch/mips/mach-xburst/t10/Kconfig"
+source "arch/mips/mach-xburst/t20/Kconfig"
+source "arch/mips/mach-xburst/t21/Kconfig"
+source "arch/mips/mach-xburst/t23/Kconfig"
+source "arch/mips/mach-xburst/t30/Kconfig"
+source "arch/mips/mach-xburst/t31/Kconfig"
 
 choice
 	prompt "Board select"
-
-config TARGET_ISVP_T31
-	bool "Ingenic ISVP-T31 reference board"
-	select SOC_T31
-	help
-	  Ingenic ISVP T31 reference board, DDR2 128 MB, SFC NOR boot.
-
-config TARGET_ISVP_T23
-	bool "Ingenic ISVP-T23 reference board"
-	select SOC_T23
-	help
-	  Ingenic ISVP T23 reference board, DDR2 64 MB, SFC NOR boot.
-
-config TARGET_ISVP_T21
-	bool "Ingenic ISVP-T21 reference board"
-	select SOC_T21
-	help
-	  Ingenic ISVP T21 reference board, DDR2 64 MB, SFC NOR boot.
-
-config TARGET_ISVP_T30
-	bool "Ingenic ISVP-T30 reference board"
-	select SOC_T30
-	help
-	  Ingenic ISVP T30 reference board, DDR2 64 MB, SFC NOR boot.
-
-config TARGET_ISVP_T20
-	bool "Ingenic ISVP-T20 reference board"
-	select SOC_T20
-	help
-	  Ingenic ISVP T20 reference board, DDR2 64 MB, SFC NOR boot.
+	default TARGET_ISVP_T31
 
 config TARGET_ISVP_T10
 	bool "Ingenic ISVP-T10 reference board"
@@ -148,13 +118,43 @@ config TARGET_ISVP_T10
 	help
 	  Ingenic ISVP T10 reference board, DDR2 64 MB, SFC NOR boot.
 
+config TARGET_ISVP_T20
+	bool "Ingenic ISVP-T20 reference board"
+	select SOC_T20
+	help
+	  Ingenic ISVP T20 reference board, DDR2 64 MB, SFC NOR boot.
+
+config TARGET_ISVP_T21
+	bool "Ingenic ISVP-T21 reference board"
+	select SOC_T21
+	help
+	  Ingenic ISVP T21 reference board, DDR2 64 MB, SFC NOR boot.
+
+config TARGET_ISVP_T23
+	bool "Ingenic ISVP-T23 reference board"
+	select SOC_T23
+	help
+	  Ingenic ISVP T23 reference board, DDR2 64 MB, SFC NOR boot.
+
+config TARGET_ISVP_T30
+	bool "Ingenic ISVP-T30 reference board"
+	select SOC_T30
+	help
+	  Ingenic ISVP T30 reference board, DDR2 64 MB, SFC NOR boot.
+
+config TARGET_ISVP_T31
+	bool "Ingenic ISVP-T31 reference board"
+	select SOC_T31
+	help
+	  Ingenic ISVP T31 reference board, DDR2 128 MB, SFC NOR boot.
+
 endchoice
 
-source "board/ingenic/isvp-t31/Kconfig"
-source "board/ingenic/isvp-t23/Kconfig"
-source "board/ingenic/isvp-t21/Kconfig"
-source "board/ingenic/isvp-t30/Kconfig"
-source "board/ingenic/isvp-t20/Kconfig"
 source "board/ingenic/isvp-t10/Kconfig"
+source "board/ingenic/isvp-t20/Kconfig"
+source "board/ingenic/isvp-t21/Kconfig"
+source "board/ingenic/isvp-t23/Kconfig"
+source "board/ingenic/isvp-t30/Kconfig"
+source "board/ingenic/isvp-t31/Kconfig"
 
 endmenu

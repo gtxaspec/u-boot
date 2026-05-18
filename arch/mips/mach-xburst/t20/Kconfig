@@ -16,11 +16,11 @@ choice
 	  M14D1G1664A (8-bank) part. All run DDR 500 MHz - the
 	  clock is identical, only the DRAM geometry differs.
 
-config T20_VARIANT_T20N
-	bool "T20N (CPU 860 MHz, DDR 500, 64 MB)"
-
 config T20_VARIANT_T20L
 	bool "T20L / lite (CPU 712 MHz, DDR 500, 64 MB)"
+
+config T20_VARIANT_T20N
+	bool "T20N (CPU 860 MHz, DDR 500, 64 MB)"
 
 config T20_VARIANT_T20X
 	bool "T20X (CPU 860 MHz, DDR 500, 128 MB)"

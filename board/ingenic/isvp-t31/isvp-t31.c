@@ -215,6 +215,7 @@ int checkboard(void)
 	return 0;
 }
 
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 /*
  * Re-run the host PHY bring-up immediately before the dwc2 host core
  * init. The dwc2 host path (usb_lowlevel_init) calls this just before
@@ -230,3 +231,4 @@ int board_usb_init(int index, enum usb_init_type init)
 		t31_usb_phy_init();
 	return 0;
 }
+#endif /* CONFIG_USB || CONFIG_USB_GADGET */

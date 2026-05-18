@@ -1,5 +1,36 @@
 if SOC_T32
 
+choice
+	prompt "T32 SoC variant"
+	default T32_VARIANT_LQ
+	help
+	  Specific T32 (vendor PRJ007) DDR2 goat SKU. LQ/VL/ZL all
+	  use the same 64 MB DDR2 M14D5121632A and - unlike T33's
+	  bins - are byte-identical in both the PLL and the DDR
+	  register set (host pll_params_creator / ddr_creator_chip_v3
+	  output for PRJ007_{lq,vl,zl}_goat_sfcnor is the same); the
+	  letter is a vendor bin badge only, so the variant selects
+	  no parameter change. The PRJ007 DDR3/LPDDR3 SKUs
+	  (nq/vn/vnp/vx/xq/zn/zx) need separate DDR PHY ports and
+	  are deferred (not selectable here).
+
+config T32_VARIANT_LQ
+	bool "T32LQ (DDR2, APLL 900 / MPLL 1200 / DDR 600)"
+
+config T32_VARIANT_VL
+	bool "T32VL (== LQ params)"
+
+config T32_VARIANT_ZL
+	bool "T32ZL (== LQ params)"
+
+endchoice
+
+config T32_VARIANT_NAME
+	string
+	default "T32VL" if T32_VARIANT_VL
+	default "T32ZL" if T32_VARIANT_ZL
+	default "T32LQ"
+
 config SPL_T32_USB_BOOT
 	bool "T32 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL

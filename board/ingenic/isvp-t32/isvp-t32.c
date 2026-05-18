@@ -28,3 +28,10 @@ int board_init(void)
 {
 	return 0;
 }
+
+/* Printed right after the "Model:" line; shows the exact T32 SKU. */
+int checkboard(void)
+{
+	printf("Variant: %s\n", CONFIG_T32_VARIANT_NAME);
+	return 0;
+}

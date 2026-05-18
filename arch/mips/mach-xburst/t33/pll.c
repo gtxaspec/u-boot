@@ -2,18 +2,17 @@
 /*
  * Ingenic T33 PLL and clock setup (SPL)
  *
- * Forward-port of the vendor U-Boot 2022.10 PRJ pllsetting.c for the
- * T33 (PRJ008) "L" profile: APLL 950 MHz, MPLL 1300 MHz, DDR 650,
- * EXTAL 24 MHz. T33 uses the M/N/OD0/OD1 CPAPCR/CPMPCR form (like
- * T31/T23/T20). The register words are the exact host
- * pll_params_creator output for PRJ008_l_goat_sfcnor (verbatim, NOT
- * recomputed):
- *   APLL  M=0x1db N=3 OD1=4 OD0=1 EN=1 -> CPAPCR 0x1db0e1c1 (950 MHz)
- *   MPLL  M=0x145 N=2 OD1=3 OD0=1 EN=1 -> CPMPCR 0x145099c1 (1300 MHz)
+ * Forward-port of the vendor U-Boot 2022.10 PRJ pllsetting.c. T33
+ * uses the M/N/OD0/OD1 CPAPCR/CPMPCR form (like T31/T23/T20),
+ * EXTAL 24 MHz, and does NOT program VPLL (vendor pll_sets() skips
+ * it). Two DDR2 bins, CONFIG_T33_DDR2_550-selected; words are the
+ * exact host pll_params_creator output (verbatim, NOT recomputed):
+ *   L/DL  (PRJ008_l)  APLL 0x1db0e1c1 950 / MPLL 0x145099c1 1300
+ *                     / DDR 650; H0/H2DIV 4 PDIV 9
+ *   VL/ZL (PRJ008_vl) APLL 0x1290a1c1 891 / MPLL 0x113099c1 1100
+ *                     / DDR 550; H0/H2DIV 3 PDIV 7
  * CPxPCR = (EN<<0)|(M<<20)|(N<<14)|(OD1<<11)|(OD0<<8)|(1<<7)|(1<<6).
- * T33 (PRJ008) does NOT program VPLL (vendor pll_sets() skips it).
- * CPCCR dividers CDIV=0 L2DIV=1 H0DIV=4 H2DIV=4 PDIV=9; selects
- * SRC=2 CPLL=1 H0PLL=2 H2PLL=2.
+ * CPCCR selects (bin-invariant) SRC=2 CPLL=1 H0PLL=2 H2PLL=2.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -21,16 +20,26 @@
 #include <asm/io.h>
 #include <mach/t33.h>
 
-/* Exact vendor pll_params_creator words for PRJ008_l (T33). */
-#define T33_CPAPCR	0x1db0e1c1u	/* APLL 950 MHz */
-#define T33_CPMPCR	0x145099c1u	/* MPLL 1300 MHz */
 /*
- * CPCCR: phase 1 = base | dividers; phase 2 = source selects |
- * dividers. Vendor cpccr_default writes 0x55700000 first.
+ * Exact vendor pll_params_creator words, per DDR2 bin (verbatim,
+ * NOT recomputed). L/DL (PRJ008_l) = APLL 950 / MPLL 1300 / DDR
+ * 650; VL/ZL (PRJ008_vl, CONFIG_T33_DDR2_550) = APLL 891 / MPLL
+ * 1100 / DDR 550. CPCCR phase 1 = base | dividers; phase 2 =
+ * source selects | dividers; vendor cpccr_default writes
+ * 0x55700000 first (bin-invariant).
  */
 #define T33_CPCCR_DEFAULT	0x55700000u
-#define T33_CPCCR_DIV		0x55794410u	/* | CDIV/L2/H0/H2/PDIV */
-#define T33_CPCCR_SEL		0x9a094410u	/* SEL_* | dividers */
+#if defined(CONFIG_T33_DDR2_550)
+#define T33_CPAPCR	0x1290a1c1u	/* APLL 891 MHz (VL/ZL) */
+#define T33_CPMPCR	0x113099c1u	/* MPLL 1100 MHz */
+#define T33_CPCCR_DIV	0x55773310u	/* H0/H2DIV 3, PDIV 7 */
+#define T33_CPCCR_SEL	0x9a073310u
+#else
+#define T33_CPAPCR	0x1db0e1c1u	/* APLL 950 MHz (L/DL) */
+#define T33_CPMPCR	0x145099c1u	/* MPLL 1300 MHz */
+#define T33_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
+#define T33_CPCCR_SEL	0x9a094410u
+#endif
 
 static u32 cpm_r(unsigned int off)
 {
@@ -89,7 +98,11 @@ void clk_ungate_uart(unsigned int idx)
  * divider[7:0]. cdr = MPLL / CK - 1.
  */
 #define T33_EXTAL_HZ	24000000U
-#define T33_DDR_CK_HZ	325000000U	/* CONFIG_SYS_MEM_FREQ 650M / 2 */
+#if defined(CONFIG_T33_DDR2_550)
+#define T33_DDR_CK_HZ	275000000U	/* VL/ZL: 550M / 2 */
+#else
+#define T33_DDR_CK_HZ	325000000U	/* L/DL: 650M / 2 */
+#endif
 
 /* CPxPCR (CPAPCR/CPMPCR) -> Hz. Shared by the DDR and SFC0 clocks. */
 u32 t33_pll_rate(unsigned int cpxpcr_off)

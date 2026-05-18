@@ -16,17 +16,22 @@
  * ddr_innophy.c DDR2 path. The init order, poll loops and delays
  * are timing-critical and reproduced exactly.
  *
- * Intentionally NOT ported (single fixed chip per defconfig;
- * upstream-friendly, no host tool / no generated header / no
- * global_reg_value indirection): LPDDR2/3 + DDR3 paths, hardware
- * training, the eFUSE-KGD hamming machinery (deferred vendor
- * factory mechanism) and the multi-chip match table.
+ * DDR2 (soft-train), DDR3 and LPDDR3 (hardware-train) are all
+ * supported, Kconfig-selected per vendor goat SKU class (see
+ * t32/Kconfig and the parameter chain below). Still intentionally
+ * NOT ported (upstream-friendly, no host tool / no generated
+ * header / no global_reg_value indirection): the eFUSE-KGD hamming
+ * machinery (deferred vendor factory mechanism) and the runtime
+ * multi-chip match table - the chip/class is fixed per defconfig.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
 
 #ifndef __T32_DDR_H__
 #define __T32_DDR_H__
+
+#include <asm/io.h>		/* readl()/writel() for the PHY inlines */
+#include <linux/types.h>
 
 #include <linux/types.h>
 
@@ -328,7 +333,29 @@ enum {
 	DDRP_DQ14, DDRP_DQ15, DDRP_DM1,
 };
 
-/* M14D5121632A PHY pin-wrap map (38 lanes), vendor ddr_creator output */
+/*
+ * PHY pin-wrap map (38 lanes), vendor ddr_params_creator *_MAP.
+ * W632GU6NG DDR3 uses the NK5CC64M16HQ3 map (vendor #elif
+ * DDR_TYPE_DDR3 default); W631GU6NG DDR3 and LPDDR3 use the
+ * W631GU6NG map; DDR2 the M14D5121632A map.
+ */
+#if defined(CONFIG_T32_DDR3_W632_900) || defined(CONFIG_T32_DDR3_W632_700)
+#define T32_DDR_PIN_MAP { \
+	DDRP_A3, DDRP_A4, DDRP_A2, DDRP_A0, DDRP_A1, DDRP_A5, DDRP_A11, \
+	DDRP_A9, DDRP_A8, DDRP_A7, DDRP_A10, DDRP_A6, DDRP_A12, DDRP_A13, \
+	DDRP_WEB, DDRP_CASB, DDRP_RASB, DDRP_BA0, DDRP_BA1, DDRP_BA2, \
+	DDRP_DM0, DDRP_DQ0, DDRP_DQ1, DDRP_DQ2, DDRP_DQ3, DDRP_DQ4, \
+	DDRP_DQ5, DDRP_DQ6, DDRP_DQ7, DDRP_DM1, DDRP_DQ8, DDRP_DQ9, \
+	DDRP_DQ10, DDRP_DQ11, DDRP_DQ12, DDRP_DQ13, DDRP_DQ14, DDRP_DQ15 }
+#elif defined(CONFIG_T32_DDR3) || defined(CONFIG_T32_LPDDR3)
+#define T32_DDR_PIN_MAP { \
+	DDRP_BA0, DDRP_A4, DDRP_A2, DDRP_BA2, DDRP_A1, DDRP_A5, DDRP_A9, \
+	DDRP_A11, DDRP_A8, DDRP_A6, DDRP_CASB, DDRP_A7, DDRP_A0, DDRP_A13, \
+	DDRP_WEB, DDRP_A10, DDRP_RASB, DDRP_BA1, DDRP_A12, DDRP_A3, \
+	DDRP_DQ0, DDRP_DQ2, DDRP_DQ1, DDRP_DM0, DDRP_DQ3, DDRP_DQ4, \
+	DDRP_DQ5, DDRP_DQ6, DDRP_DQ7, DDRP_DQ8, DDRP_DM1, DDRP_DQ9, \
+	DDRP_DQ10, DDRP_DQ11, DDRP_DQ12, DDRP_DQ13, DDRP_DQ15, DDRP_DQ14 }
+#else
 #define T32_DDR_PIN_MAP { \
 	DDRP_A10, DDRP_A3, DDRP_A6, DDRP_A1, DDRP_A5, DDRP_A4, DDRP_A11, \
 	DDRP_A9, DDRP_A12, DDRP_A7, DDRP_BA0, DDRP_A8, DDRP_A2, DDRP_A13, \
@@ -336,68 +363,283 @@ enum {
 	DDRP_DM0, DDRP_DQ6, DDRP_DQ3, DDRP_DQ1, DDRP_DQ4, DDRP_DQ2, \
 	DDRP_DQ7, DDRP_DQ5, DDRP_DQ0, DDRP_DQ13, DDRP_DQ10, DDRP_DQ12, \
 	DDRP_DQ8, DDRP_DQ15, DDRP_DQ14, DDRP_DQ11, DDRP_DQ9, DDRP_DM1 }
+#endif
 
 /*
- * --- DDR2 known-good controller/PHY parameter set ---
- * M14D5121632A, host ddr_creator_chip_v3 (target PRJ007_lq). Used
- * directly by ddrc_init()/ddrp_init(); single fixed chip, so no
- * runtime match table.
+ * --- DDR controller/PHY parameter set, per Kconfig SoC variant ---
+ * Each #if block is the full authoritative host ddr_creator_chip_v3
+ * output for that vendor PRJ007 class (verbatim, NOT recomputed).
+ * The uMCTL2 register names are identical across DDR2/DDR3/LPDDR3;
+ * only the values, T32_DDR_TYPE/SIZE/FREQ and the training path
+ * differ (DDR2 soft-train, DDR3/LPDDR3 hardware-train - see
+ * t32/sdram.c). PRJ007 DDR2 lq/vl/zl are param-identical (badge);
+ * DDR3 W631 nq(900)/vn,zn(700) 128 MB, W632 xq(900)/vx,zx(700)
+ * 256 MB; LPDDR3 vnp 128 MB.
  */
 #define T32_DDR_TYPE_DDR2	0x1111
+#define T32_DDR_TYPE_DDR3	0x2222
+#define T32_DDR_TYPE_LPDDR3	0x4444
+
+#if defined(CONFIG_T32_DDR3_W631_900)	/* T32NQ DDR3 W631GU6NG 128M 900 */
+#define T32_DDR_TYPE		0x2222
+#define T32_DDR_SIZE		0x08000000U	/* 128 MB */
+#define T32_DDR_FREQ		900000000U
+#define DDRC_MSTR              0x00040001
+#define DDRC_INIT0             0x000100dc
+#define DDRC_INIT1             0x00580000
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x1f140000
+#define DDRC_INIT4             0x00200000
+#define DDRC_INIT5             0x00080000
+#define DDRC_TIMING0           0x0d101e0f
+#define DDRC_TIMING1           0x00030315
+#define DDRC_TIMING2           0x0000050a
+#define DDRC_TIMING3           0x00002007
+#define DDRC_TIMING4           0x06020307
+#define DDRC_TIMING5           0x05050303
+#define DDRC_TIMING6           0x00000000
+#define DDRC_TIMING7           0x00000505
+#define DDRC_TIMING8           0x00000802
+#define DDRC_TIMING14          0x00000000
+#define DDRC_ADDRMAP1          0x00151515
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0f04
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x006d0032
+#define DDRC_ODTCFG            0x06000610
+#define DDRC_DFITMG0           0x06050003
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000009
+#define DDRP_CL_FRE_OP0        0x0000000d
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x00000032
+#define DDRP_REG_PHY_TREFI     0x00000db7
+#define DDRP_MEM_SELECT_T      0x00000002
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#elif defined(CONFIG_T32_DDR3_W631_700)	/* T32VN/ZN DDR3 W631GU6NG 128M 700 */
+#define T32_DDR_TYPE		0x2222
+#define T32_DDR_SIZE		0x08000000U	/* 128 MB */
+#define T32_DDR_FREQ		700000000U
+#define DDRC_MSTR              0x00040001
+#define DDRC_INIT0             0x000100ab
+#define DDRC_INIT1             0x00450000
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x1d700000
+#define DDRC_INIT4             0x00180000
+#define DDRC_INIT5             0x00080000
+#define DDRC_TIMING0           0x0b0d170c
+#define DDRC_TIMING1           0x00030311
+#define DDRC_TIMING2           0x00000509
+#define DDRC_TIMING3           0x00002006
+#define DDRC_TIMING4           0x05020306
+#define DDRC_TIMING5           0x04040302
+#define DDRC_TIMING6           0x00000000
+#define DDRC_TIMING7           0x00000404
+#define DDRC_TIMING8           0x00000802
+#define DDRC_TIMING14          0x00000000
+#define DDRC_ADDRMAP1          0x00151515
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0f04
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x00550027
+#define DDRC_ODTCFG            0x0600060c
+#define DDRC_DFITMG0           0x06040002
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000008
+#define DDRP_CL_FRE_OP0        0x0000000b
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x00000027
+#define DDRP_REG_PHY_TREFI     0x00000aac
+#define DDRP_MEM_SELECT_T      0x00000002
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#elif defined(CONFIG_T32_DDR3_W632_900)	/* T32XQ DDR3 W632GU6NG 256M 900 */
+#define T32_DDR_TYPE		0x2222
+#define T32_DDR_SIZE		0x10000000U	/* 256 MB */
+#define T32_DDR_FREQ		900000000U
+#define DDRC_MSTR              0x00040001
+#define DDRC_INIT0             0x000100dc
+#define DDRC_INIT1             0x00580000
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x1f140000
+#define DDRC_INIT4             0x00200000
+#define DDRC_INIT5             0x00080000
+#define DDRC_TIMING0           0x0d131e10
+#define DDRC_TIMING1           0x00030317
+#define DDRC_TIMING2           0x0000050a
+#define DDRC_TIMING3           0x00002007
+#define DDRC_TIMING4           0x07020307
+#define DDRC_TIMING5           0x05050303
+#define DDRC_TIMING6           0x00000000
+#define DDRC_TIMING7           0x00000505
+#define DDRC_TIMING8           0x00000802
+#define DDRC_TIMING14          0x00000000
+#define DDRC_ADDRMAP1          0x00161616
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0404
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x006d0052
+#define DDRC_ODTCFG            0x06000610
+#define DDRC_DFITMG0           0x06050003
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000009
+#define DDRP_CL_FRE_OP0        0x0000000d
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x00000052
+#define DDRP_REG_PHY_TREFI     0x00000db7
+#define DDRP_MEM_SELECT_T      0x00000002
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#elif defined(CONFIG_T32_DDR3_W632_700)	/* T32VX/ZX DDR3 W632GU6NG 256M 700 */
+#define T32_DDR_TYPE		0x2222
+#define T32_DDR_SIZE		0x10000000U	/* 256 MB */
+#define T32_DDR_FREQ		700000000U
+#define DDRC_MSTR              0x00040001
+#define DDRC_INIT0             0x000100ab
+#define DDRC_INIT1             0x00450000
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x1d700000
+#define DDRC_INIT4             0x00180000
+#define DDRC_INIT5             0x00080000
+#define DDRC_TIMING0           0x0b13170d
+#define DDRC_TIMING1           0x00030312
+#define DDRC_TIMING2           0x00000509
+#define DDRC_TIMING3           0x00002006
+#define DDRC_TIMING4           0x05020306
+#define DDRC_TIMING5           0x04040302
+#define DDRC_TIMING6           0x00000000
+#define DDRC_TIMING7           0x00000404
+#define DDRC_TIMING8           0x00000802
+#define DDRC_TIMING14          0x00000000
+#define DDRC_ADDRMAP1          0x00161616
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0404
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x00550040
+#define DDRC_ODTCFG            0x0600060c
+#define DDRC_DFITMG0           0x06040002
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000008
+#define DDRP_CL_FRE_OP0        0x0000000b
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x00000040
+#define DDRP_REG_PHY_TREFI     0x00000aac
+#define DDRP_MEM_SELECT_T      0x00000002
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#elif defined(CONFIG_T32_LPDDR3_700)	/* T32VNP LPDDR3 W63AH6N2B 128M 700 */
+#define T32_DDR_TYPE		0x4444
+#define T32_DDR_SIZE		0x08000000U	/* 128 MB */
+#define T32_DDR_FREQ		700000000U
+#define DDRC_MSTR              0x00040008
+#define DDRC_INIT0             0x00450001
+#define DDRC_INIT1             0x00000000
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x00030019
+#define DDRC_INIT4             0x00020000
+#define DDRC_INIT5             0x000b0004
+#define DDRC_TIMING0           0x0a12170f
+#define DDRC_TIMING1           0x00030317
+#define DDRC_TIMING2           0x03060709
+#define DDRC_TIMING3           0x00505000
+#define DDRC_TIMING4           0x07020408
+#define DDRC_TIMING5           0x01010606
+#define DDRC_TIMING6           0x01010004
+#define DDRC_TIMING7           0x00000101
+#define DDRC_TIMING8           0x00000000
+#define DDRC_TIMING14          0x00000032
+#define DDRC_ADDRMAP1          0x00151515
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0f04
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x0055002e
+#define DDRC_ODTCFG            0x06000600
+#define DDRC_DFITMG0           0x06040002
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000006
+#define DDRP_CL_FRE_OP0        0x0000000b
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x0000002e
+#define DDRP_REG_PHY_TREFI     0x00000aac
+#define DDRP_MEM_SELECT_T      0x00000003
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#else					/* T32LQ/VL/ZL DDR2 M14D5121632A 64M 600 (default) */
+#define T32_DDR_TYPE		0x1111
 #define T32_DDR_SIZE		0x04000000U	/* 64 MB */
-#define T32_DDR_FREQ		600000000U	/* controller data rate */
+#define T32_DDR_FREQ		600000000U
+#define DDRC_MSTR              0x00040000
+#define DDRC_INIT0             0x0001003b
+#define DDRC_INIT1             0x00000007
+#define DDRC_INIT2             0x00000000
+#define DDRC_INIT3             0x01130000
+#define DDRC_INIT4             0x00000000
+#define DDRC_INIT5             0x00000000
+#define DDRC_TIMING0           0x0a01140e
+#define DDRC_TIMING1           0x00020312
+#define DDRC_TIMING2           0x00000408
+#define DDRC_TIMING3           0x00001000
+#define DDRC_TIMING4           0x04010405
+#define DDRC_TIMING5           0x01010202
+#define DDRC_TIMING6           0x00000000
+#define DDRC_TIMING7           0x00000101
+#define DDRC_TIMING8           0x00000402
+#define DDRC_TIMING14          0x00000000
+#define DDRC_ADDRMAP1          0x003f1515
+#define DDRC_ADDRMAP2          0x00000000
+#define DDRC_ADDRMAP3          0x00000000
+#define DDRC_ADDRMAP4          0x00001f1f
+#define DDRC_ADDRMAP5          0x04040404
+#define DDRC_ADDRMAP6          0x0f0f0f04
+#define DDRC_RFSHCTL3          0x00000002
+#define DDRC_RFSHTMG           0x00490020
+#define DDRC_ODTCFG            0x07020708
+#define DDRC_DFITMG0           0x06020002
+#define DDRC_DFITMG1           0x00080307
+#define DDRC_DFIUPD0           0x80400003
+#define DDRP_REG_CHANNEL_EN    0x00000003
+#define DDRP_CWL_FRE_OP0       0x00000007
+#define DDRP_CL_FRE_OP0        0x00000008
+#define DDRP_AL_FRE_OP0        0x00000000
+#define DDRP_REG_PHY_TRFC      0x00000020
+#define DDRP_REG_PHY_TREFI     0x00000925
+#define DDRP_MEM_SELECT_T      0x00000000
+#define DDRP_REG_PLLPOSTDIVEN  0x00000000
+#define DDRP_REG_PLLPOSTDIV    0x00000000
+#endif
 
 /*
- * Compile-time constants (vendor names: the controller register
- * VALUE is DDRC_<reg>, distinct from the unprefixed register ADDRESS
- * macro <reg> above, so t32/sdram.c reads near-verbatim against the
- * vendor ddr_innophy.c). MR0=0x0113/MR1=0x0000 (INIT3),
- * MR2=0x0000/MR3=0x0000 (INIT4).
- */
-#define DDRC_MSTR		0x00040000
-#define DDRC_INIT0		0x0001003b
-#define DDRC_INIT1		0x00000007
-#define DDRC_INIT2		0x00000000
-#define DDRC_INIT3		0x01130000
-#define DDRC_INIT4		0x00000000
-#define DDRC_INIT5		0x00000000
-#define DDRC_TIMING0		0x0a01140e
-#define DDRC_TIMING1		0x00020312
-#define DDRC_TIMING2		0x00000408
-#define DDRC_TIMING3		0x00001000
-#define DDRC_TIMING4		0x04010405
-#define DDRC_TIMING5		0x01010202
-#define DDRC_TIMING6		0x00000000
-#define DDRC_TIMING7		0x00000101
-#define DDRC_TIMING8		0x00000402
-#define DDRC_TIMING14		0x00000000
-#define DDRC_ADDRMAP1		0x003f1515
-#define DDRC_ADDRMAP2		0x00000000
-#define DDRC_ADDRMAP3		0x00000000
-#define DDRC_ADDRMAP4		0x00001f1f
-#define DDRC_ADDRMAP5		0x04040404
-#define DDRC_ADDRMAP6		0x0f0f0f04
-#define DDRC_RFSHCTL3		0x00000002
-#define DDRC_RFSHTMG		0x00490020
-#define DDRC_ODTCFG		0x07020708
-#define DDRC_DFITMG0		0x06020002
-#define DDRC_DFITMG1		0x00080307
-#define DDRC_DFIUPD0		0x80400003
-#define DDRP_REG_CHANNEL_EN	0x00000003
-#define DDRP_CWL_FRE_OP0	0x00000007
-#define DDRP_CL_FRE_OP0		0x00000008
-#define DDRP_AL_FRE_OP0		0x00000000
-#define DDRP_REG_PHY_TRFC	0x00000020
-#define DDRP_REG_PHY_TREFI	0x00000925
-#define DDRP_MEM_SELECT_T	0x00000000
-#define DDRP_REG_PLLPOSTDIVEN	0x00000000
-#define DDRP_REG_PLLPOSTDIV	0x00000000
-
-/*
- * --- DDR2 drive-strength / ODT parameters ---
- * Indices into the par array (vendor enum order). With no programmed
- * eFUSE-KGD (the case for this port), ddr_par_init() supplies these
- * fixed DDR2 defaults; the KGD/SKEW/INDEX entries are unused here.
+ * --- drive-strength / ODT parameters ---
+ * Indices into the par array (vendor enum order). No eFUSE-KGD in
+ * this port, so the vendor init_ddr_par[] per-type defaults apply
+ * (efuse_ddr_get.c L339-359); KGD_RTT_DIC resolves to 0 for every
+ * type. Only indices 0..11 are used (ddrp_set_drv_odt/ddrc_init).
  */
 enum {
 	T32_ODT_PD, T32_ODT_PU, T32_CMD_RC_PD, T32_CMD_RC_PU,
@@ -406,13 +648,33 @@ enum {
 	T32_DDR_PAR_NUM,
 };
 
-/* DDR2 ddr_par_init() defaults (no eFUSE); KGD_RTT_DIC resolves to 0. */
-#define T32_DDR2_DRV_ODT_DEFAULTS { \
+#if defined(CONFIG_T32_LPDDR3)
+/* LPDDR3 init_ddr_par[] defaults (no eFUSE). */
+#define T32_DRV_ODT_DEFAULTS { \
+	[T32_ODT_PD] = 0x00, [T32_ODT_PU] = 0x00, \
+	[T32_CMD_RC_PD] = 0x0e, [T32_CMD_RC_PU] = 0x0e, \
+	[T32_CLK_RC_PD] = 0x0e, [T32_CLK_RC_PU] = 0x0e, \
+	[T32_DQX_RC_PD] = 0x0e, [T32_DQX_RC_PU] = 0x0e, \
+	[T32_VREF] = 0x70, [T32_KGD_ODT] = 0x00, \
+	[T32_KGD_DS] = 0x02, [T32_KGD_RTT_DIC] = 0x02 }
+#elif defined(CONFIG_T32_DDR3)
+/* DDR3 init_ddr_par[] defaults (no eFUSE). */
+#define T32_DRV_ODT_DEFAULTS { \
+	[T32_ODT_PD] = 0x00, [T32_ODT_PU] = 0x00, \
+	[T32_CMD_RC_PD] = 0x0e, [T32_CMD_RC_PU] = 0x0e, \
+	[T32_CLK_RC_PD] = 0x0e, [T32_CLK_RC_PU] = 0x0e, \
+	[T32_DQX_RC_PD] = 0x0e, [T32_DQX_RC_PU] = 0x0e, \
+	[T32_VREF] = 0x70, [T32_KGD_ODT] = 0x00, \
+	[T32_KGD_DS] = 0x00, [T32_KGD_RTT_DIC] = 0x00 }
+#else
+/* DDR2 init_ddr_par[] defaults (no eFUSE). */
+#define T32_DRV_ODT_DEFAULTS { \
 	[T32_ODT_PD] = 0x00, [T32_ODT_PU] = 0x00, \
 	[T32_CMD_RC_PD] = 0x08, [T32_CMD_RC_PU] = 0x08, \
 	[T32_CLK_RC_PD] = 0x08, [T32_CLK_RC_PU] = 0x08, \
 	[T32_DQX_RC_PD] = 0x08, [T32_DQX_RC_PU] = 0x08, \
 	[T32_VREF] = 0x70, [T32_KGD_ODT] = 0x00, \
 	[T32_KGD_DS] = 0x00, [T32_KGD_RTT_DIC] = 0x00 }
+#endif
 
 #endif /* __T32_DDR_H__ */

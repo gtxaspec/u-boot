@@ -48,30 +48,33 @@ static u8 u_rb(unsigned int off)
 }
 
 /*
- * Mux UART1 (PB23 TX, PB24 RX) to device function 0. GPIO port
- * stride is 0x1000, so port B is at GPIO_BASE + 0x1000. Vendor
- * gpio_set_func() FUNC_0: clear INT, MASK, PAT1, PAT0 and disable
- * pulls; without it the pads are not routed (silent on silicon).
+ * Mux UART1 (PB23 TX, PB24 RX) to device function 0.
+ *
+ * The XBurst1 GPIO port stride is 0x100 (NOT 0x1000): port B is at
+ * GPIO_BASE + 1 * 0x100 (vendor jz_gpio_common GPIO_PX*(n) =
+ * GPIO_BASE + reg + n * 0x100). The exact vendor gpio_set_func()
+ * FUNC_0 sequence is: write the pin mask to PXINTC, PXMSKC,
+ * PXPAT1C, PXPAT0C (it does NOT touch the pull registers). The
+ * previous code used a 0x1000 stride and bogus pull offsets, so
+ * PB23/PB24 were never actually routed to UART1 - TX still worked
+ * because the mask ROM happens to leave UART1 TX usable, but RX was
+ * dead (the mask ROM does not route the console RX pin on T20).
  */
-#define GPIO_PORTB_BASE	0xb0011000	/* 0xb0010000 + port B (1) * 0x1000 */
+#define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x100)	/* port B, 0x100 stride */
 #define G_PXINTC	0x18
 #define G_PXMSKC	0x28
 #define G_PXPAT1C	0x38
 #define G_PXPAT0C	0x48
-#define G_PXPUENC	0x118
-#define G_PXPDENC	0x128
-#define UART1_PINS	(0x3u << 23)	/* PB23 + PB24 */
+#define UART1_PINS	(0x3u << 23)	/* PB23 TX + PB24 RX */
 
 static void t20_uart1_pinmux(void)
 {
 	void __iomem *b = (void __iomem *)GPIO_PORTB_BASE;
 
-	writel(UART1_PINS, b + G_PXINTC);
-	writel(UART1_PINS, b + G_PXMSKC);
-	writel(UART1_PINS, b + G_PXPAT1C);
-	writel(UART1_PINS, b + G_PXPAT0C);
-	writel(UART1_PINS, b + G_PXPUENC);
-	writel(UART1_PINS, b + G_PXPDENC);
+	writel(UART1_PINS, b + G_PXINTC);	/* clear INT  */
+	writel(UART1_PINS, b + G_PXMSKC);	/* clear MASK -> device fn */
+	writel(UART1_PINS, b + G_PXPAT1C);	/* PAT1 = 0 \ func 0     */
+	writel(UART1_PINS, b + G_PXPAT0C);	/* PAT0 = 0 /            */
 }
 
 void t20_spl_serial_init(void)

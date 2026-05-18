@@ -31,6 +31,7 @@ dtb-$(CONFIG_BOARD_TPLINK_WDR4300) += tplink_wdr4300.dtb
 dtb-$(CONFIG_BOARD_VOCORE2) += vocore_vocore2.dtb
 dtb-$(CONFIG_TARGET_JZ4780_CI20) += ci20.dtb
 dtb-$(CONFIG_TARGET_ISVP_T31) += t31-isvp.dtb
+dtb-$(CONFIG_TARGET_ISVP_T32) += t32-isvp.dtb
 dtb-$(CONFIG_TARGET_ISVP_T33) += t33-isvp.dtb
 dtb-$(CONFIG_TARGET_ISVP_T23) += t23-isvp.dtb t23-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T21) += t21-isvp.dtb t21-isvp-dfu.dtb

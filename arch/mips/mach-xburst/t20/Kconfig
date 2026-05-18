@@ -12,8 +12,9 @@ choice
 	  no PLLRG). Variants differ in the APLL (CPU) clock. The
 	  CPAPCR words are the exact vendor isvp_common.h
 	  CONFIG_SYS_APLL_MNOD (verbatim, vendor-authoritative).
-	  T20X (DDR2 128 MB) is a future variant - not in this
-	  64 MB choice.
+	  T20N/T20L are 64 MB M14D5121632A; T20X is the 128 MB
+	  M14D1G1664A (8-bank) part. All run DDR 500 MHz - the
+	  clock is identical, only the DRAM geometry differs.
 
 config T20_VARIANT_T20N
 	bool "T20N (CPU 860 MHz, DDR 500, 64 MB)"
@@ -21,12 +22,25 @@ config T20_VARIANT_T20N
 config T20_VARIANT_T20L
 	bool "T20L / lite (CPU 712 MHz, DDR 500, 64 MB)"
 
+config T20_VARIANT_T20X
+	bool "T20X (CPU 860 MHz, DDR 500, 128 MB)"
+
 endchoice
 
 config T20_VARIANT_NAME
 	string
 	default "T20L" if T20_VARIANT_T20L
+	default "T20X" if T20_VARIANT_T20X
 	default "T20N"
+
+config T20_DRAM_128M
+	bool
+	default y if T20_VARIANT_T20X
+	help
+	  T20X populates the 128 MB DDR2 M14D1G1664A (row 13, col
+	  10, 8-bank); T20N/T20L the 64 MB M14D5121632A (4-bank).
+	  Selects the matching DWC 128 MB GOLD set + REMMAP in
+	  mach/t20-ddr.h. Same DDR 500 MHz clock - DWC params only.
 
 config T20_APLL_MNOD
 	hex

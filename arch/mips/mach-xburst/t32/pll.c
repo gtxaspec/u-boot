@@ -105,6 +105,15 @@ u32 t32_pll_rate(unsigned int cpxpcr_off)
 	u32 od1 = (v >> 11) & 0x7;
 	u32 od0 = (v >> 8) & 0x7;
 
+	/* Guard the divisors (defensive - the words are fixed nonzero
+	 * constants, but never divide by a stray 0 field). */
+	if (!n)
+		n = 1;
+	if (!od1)
+		od1 = 1;
+	if (!od0)
+		od0 = 1;
+
 	return (u32)((u64)T32_EXTAL_HZ * m / n / od1 / od0);
 }
 

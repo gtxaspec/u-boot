@@ -26,7 +26,9 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	gd->ram_size = 64 << 20;	/* T20N: DDR2 M14D5121632A 64 MB */
+	/* T20N/T20L 64 MB M14D5121632A; T20X 128 MB M14D1G1664A */
+	gd->ram_size = IS_ENABLED(CONFIG_T20_DRAM_128M) ?
+		       (128 << 20) : (64 << 20);
 	return 0;
 }
 

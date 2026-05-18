@@ -1,0 +1,6 @@
+INGENIC ISVP-T10 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t10/
+F:	include/configs/isvp-t10.h
+F:	configs/isvp_t10_usbboot_defconfig

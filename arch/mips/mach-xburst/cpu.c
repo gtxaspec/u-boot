@@ -22,6 +22,8 @@ int print_cpuinfo(void)
 	const char *soc = "T30";
 #elif defined(CONFIG_SOC_T20)
 	const char *soc = "T20";
+#elif defined(CONFIG_SOC_T10)
+	const char *soc = "T10";
 #else
 	const char *soc = "T-series";
 #endif

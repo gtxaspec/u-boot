@@ -192,8 +192,9 @@ void otg_phy_init(struct dwc2_udc *dev)
 
 int dram_init(void)
 {
-	/* DDR2 128 MB; TODO: derive from the DDR controller once it is up */
-	gd->ram_size = 128 << 20;
+	/* T31X/T31AL 128 MB M14D1G1664A; T31N/L/LC/C100 64 MB */
+	gd->ram_size = IS_ENABLED(CONFIG_T31_DRAM_128M) ?
+		       (128 << 20) : (64 << 20);
 	return 0;
 }
 

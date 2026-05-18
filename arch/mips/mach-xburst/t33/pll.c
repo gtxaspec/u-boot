@@ -91,7 +91,8 @@ void clk_ungate_uart(unsigned int idx)
 #define T33_EXTAL_HZ	24000000U
 #define T33_DDR_CK_HZ	325000000U	/* CONFIG_SYS_MEM_FREQ 650M / 2 */
 
-static u32 pll_rate(unsigned int cpxpcr_off)
+/* CPxPCR (CPAPCR/CPMPCR) -> Hz. Shared by the DDR and SFC0 clocks. */
+u32 t33_pll_rate(unsigned int cpxpcr_off)
 {
 	u32 v = cpm_r(cpxpcr_off);
 	u32 m = (v >> 20) & 0xfff;
@@ -104,7 +105,7 @@ static u32 pll_rate(unsigned int cpxpcr_off)
 
 void ddr_clk_init(void)
 {
-	u32 mpll = pll_rate(CPM_CPMPCR);
+	u32 mpll = t33_pll_rate(CPM_CPMPCR);
 	u32 cdr = ((mpll + T33_DDR_CK_HZ - 1) / T33_DDR_CK_HZ - 1) & 0xff;
 	u32 v;
 

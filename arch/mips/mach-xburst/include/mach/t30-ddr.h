@@ -87,7 +87,11 @@
  */
 #define DDR_ROW			13
 #define DDR_COL			10
-#define DDR_BANK8		0
+#if defined(CONFIG_T30_DRAM_128M)
+#define DDR_BANK8		1	/* M14D1G1664A 128 MB, 8-bank */
+#else
+#define DDR_BANK8		0	/* M14D5121632A 64 MB, 4-bank */
+#endif
 #define CONFIG_DDR_DW32		0
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
@@ -97,11 +101,28 @@
 #define DDR_TARGET_RATE		500000000U
 
 /*
- * GOLD register values: exact vendor ddr_params_creator output for
- * isvp_t30_sfcnor (T30L, M14D5121632A, 500 MHz). The geometry
- * (CFG/MMAP) matches the T23 64 MB set; REFCNT/TIMING/MR0 are the
- * 500 MHz computed values. Tool validated against the T31 GOLD.
+ * GOLD register values: exact vendor ddr_params_creator output, all
+ * @ DDR 500 MHz. Default = isvp_t30_sfcnor (T30N/T30L,
+ * M14D5121632A, 64 MB, 4-bank). CONFIG_T30_DRAM_128M =
+ * isvp_t30_sfcnor_ddr128M (T30X/T30A, M14D1G1664A, 128 MB,
+ * 8-bank). Same Innophy PHY + same 500 MHz clock; only the
+ * geometry (CFG/MMAP) and the derived TIMING set differ. Tool
+ * validated bit-for-bit against the T31 128 MB GOLD.
  */
+#if defined(CONFIG_T30_DRAM_128M)
+#define DDRC_CFG_VALUE		0x0aa88a42
+#define DDRC_CTRL_VALUE		0x0000d91e
+#define DDRC_MMAP0_VALUE	0x000020f8
+#define DDRC_MMAP1_VALUE	0x00002800
+#define DDRC_REFCNT_VALUE	0x00f20001
+#define DDRC_TIMING1_VALUE	0x040e0806
+#define DDRC_TIMING2_VALUE	0x02170807
+#define DDRC_TIMING3_VALUE	0x2008051d
+#define DDRC_TIMING4_VALUE	0x1f240031
+#define DDRC_TIMING5_VALUE	0xff060405
+#define DDRC_TIMING6_VALUE	0x32170505
+#define DDRP_MR0_VALUE		0x00000e73
+#else
 #define DDRC_CFG_VALUE		0x0a288a40
 #define DDRC_CTRL_VALUE		0x0000d91e
 #define DDRC_MMAP0_VALUE	0x000020fc
@@ -114,8 +135,13 @@
 #define DDRC_TIMING5_VALUE	0xff060405
 #define DDRC_TIMING6_VALUE	0x32170505
 #define DDRP_MR0_VALUE		0x00000e73
+#endif
 
+#if defined(CONFIG_T30_DRAM_128M)
+#define DDR_CHIP_0_SIZE		134217728	/* 128 MB */
+#else
 #define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
+#endif
 #define DDR_CHIP_1_SIZE		0
 
 #endif /* __T30_DDR_H__ */

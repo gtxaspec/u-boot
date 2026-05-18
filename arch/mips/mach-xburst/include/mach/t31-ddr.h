@@ -3,12 +3,13 @@
  * Ingenic T31 DDR2/DDR3 controller and Innophy PHY register map
  *
  * Profile: T31 DDR @ 600 MHz (MPLL 1200 / 2), 16-bit, CS0 only.
- *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank (T31A,
- *     isvp_t31a_sfcnor_ddr128M); legacy Innophy DDR3 init path.
+ *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank
+ *     (T31A and C100); legacy Innophy DDR3 init path. Params
+ *     from isvp_c100_sfcnor (DDR3 @ DDR_600M = our fixed clock).
  *   CONFIG_T31_DRAM_128M = M14D1G1664A DDR2 128 MB, 8-bank
  *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL).
  *   else                 = M14D5121632A DDR2 64 MB, 4-bank
- *     (isvp_t31_sfcnor - T31N/T31L/T31LC/C100).
+ *     (isvp_t31_sfcnor - T31N/T31L/T31LC).
  *   All run the SAME 600 MHz clock; the 128 MB DDR2/DDR3 parts
  *   share row/col/bank/size geometry. DDR3 differs only in the
  *   clock/type-dependent CFG/REFCNT/TIMING1-6/MR0 set and the
@@ -123,16 +124,22 @@
  * both the 64M and 128M parts use this one set.
  */
 #if defined(CONFIG_T31_DDR3)
-/* M15T1G1664A DDR3-1333 @ 600 MHz (host ddr_params_creator,
- * isvp_t31a_sfcnor_ddr128M; verbatim). */
-#define DDRC_REFCNT_VALUE	0x00b60003
-#define DDRC_TIMING1_VALUE	0x06100c06
-#define DDRC_TIMING2_VALUE	0x041d0b08
-#define DDRC_TIMING3_VALUE	0x210b0627
-#define DDRC_TIMING4_VALUE	0x3c250043
+/*
+ * M15T1G1664A DDR3 @ 600 MHz - the host ddr_params_creator set
+ * for isvp_c100_sfcnor (CONFIG_C100,DDR3_128M, vendor DDR_600M),
+ * verbatim. T31 always runs the DDR clock at 600 (MPLL 1200/2),
+ * so both T31A and C100 (same M15T1G1664A part) use this single
+ * DDR3-@600 set. (NOT the isvp_t31a vendor config, whose DDR_750M
+ * timing would be wrong against our fixed 600 MHz DDR clock.)
+ */
+#define DDRC_REFCNT_VALUE	0x00910003
+#define DDRC_TIMING1_VALUE	0x050f0a06
+#define DDRC_TIMING2_VALUE	0x04170908
+#define DDRC_TIMING3_VALUE	0x2109051f
+#define DDRC_TIMING4_VALUE	0x30250043
 #define DDRC_TIMING5_VALUE	0xff080505
-#define DDRC_TIMING6_VALUE	0x80220505
-#define DDRP_MR0_VALUE		0x00001c40
+#define DDRC_TIMING6_VALUE	0x801c0505
+#define DDRP_MR0_VALUE		0x00001a40
 #else
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06

@@ -2,19 +2,24 @@
 /*
  * Ingenic T31 DDR2/DDR3 controller and Innophy PHY register map
  *
- * Profile: T31 DDR @ 600 MHz (MPLL 1200 / 2), 16-bit, CS0 only.
- *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank
- *     (T31A and C100); legacy Innophy DDR3 init path. Params
- *     from isvp_c100_sfcnor (DDR3 @ DDR_600M = our fixed clock).
+ * Profile: T31, 16-bit, CS0 only. DDR clock = MPLL/2, MPLL
+ * per-variant (CONFIG_T31_MPLL_MHZ): T31A 1500->DDR 750; all
+ * other supported variants 1200->DDR 600. (Vendor also runs
+ * N/L/LC at MPLL 1000/DDR 500 - a separate follow-up; today
+ * they use the 1200/600 set.)
+ *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank;
+ *     legacy Innophy DDR3 init path. T31A params from
+ *     isvp_t31a_sfcnor_ddr128M (DDR 750); C100 from
+ *     isvp_c100_sfcnor (DDR 600).
  *   CONFIG_T31_DRAM_128M = M14D1G1664A DDR2 128 MB, 8-bank
- *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL).
+ *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL), DDR 600.
  *   else                 = M14D5121632A DDR2 64 MB, 4-bank
- *     (isvp_t31_sfcnor - T31N/T31L/T31LC).
- *   All run the SAME 600 MHz clock; the 128 MB DDR2/DDR3 parts
- *   share row/col/bank/size geometry. DDR3 differs only in the
- *   clock/type-dependent CFG/REFCNT/TIMING1-6/MR0 set and the
- *   Innophy init branches in sdram.c. GOLD values are the
- *   known-good vendor host-params-creator output.
+ *     (isvp_t31_sfcnor - T31N/T31L/T31LC), DDR 600.
+ *   The 128 MB DDR2/DDR3 parts share row/col/bank/size
+ *   geometry; only the clock/type-dependent
+ *   CFG/REFCNT/TIMING1-6/MR0 set and the Innophy init branches
+ *   in sdram.c differ. GOLD values are the known-good vendor
+ *   host-params-creator output at each variant's real MEM_FREQ.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -92,9 +97,12 @@
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
 
-/* Clock targets for this profile */
-#define DDR_MPLL_RATE		1200000000U
-#define DDR_TARGET_RATE		600000000U
+/*
+ * Clock targets: DDR = MPLL/2, MPLL per-variant (CONFIG_T31_MPLL_MHZ
+ * from t31/Kconfig - 1200 -> DDR 600, 1500 -> DDR 750 for T31A).
+ */
+#define DDR_MPLL_RATE		(CONFIG_T31_MPLL_MHZ * 1000000U)
+#define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
 
 /*
  * GOLD computed register values from the vendor build that produced the
@@ -125,13 +133,23 @@
  */
 #if defined(CONFIG_T31_DDR3)
 /*
- * M15T1G1664A DDR3 @ 600 MHz - the host ddr_params_creator set
- * for isvp_c100_sfcnor (CONFIG_C100,DDR3_128M, vendor DDR_600M),
- * verbatim. T31 always runs the DDR clock at 600 (MPLL 1200/2),
- * so both T31A and C100 (same M15T1G1664A part) use this single
- * DDR3-@600 set. (NOT the isvp_t31a vendor config, whose DDR_750M
- * timing would be wrong against our fixed 600 MHz DDR clock.)
+ * M15T1G1664A DDR3, per-variant native clock (DDR = MPLL/2):
+ *   T31A  - DDR 750 (MPLL 1500), host set for isvp_t31a_sfcnor_ddr128M
+ *   C100  - DDR 600 (MPLL 1200), host set for isvp_c100_sfcnor
+ * Same chip / DDRC_CFG; only the clock-dependent
+ * REFCNT/TIMING1-6/MR0 differ. Both verbatim vendor
+ * ddr_params_creator output at the variant's real MEM_FREQ.
  */
+#if defined(CONFIG_T31_VARIANT_T31A)
+#define DDRC_REFCNT_VALUE	0x00b60003
+#define DDRC_TIMING1_VALUE	0x06100c06
+#define DDRC_TIMING2_VALUE	0x041d0b08
+#define DDRC_TIMING3_VALUE	0x210b0627
+#define DDRC_TIMING4_VALUE	0x3c250043
+#define DDRC_TIMING5_VALUE	0xff080505
+#define DDRC_TIMING6_VALUE	0x80220505
+#define DDRP_MR0_VALUE		0x00001c40
+#else	/* C100 (DDR3 @ 600) */
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06
 #define DDRC_TIMING2_VALUE	0x04170908
@@ -140,6 +158,7 @@
 #define DDRC_TIMING5_VALUE	0xff080505
 #define DDRC_TIMING6_VALUE	0x801c0505
 #define DDRP_MR0_VALUE		0x00001a40
+#endif
 #else
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06

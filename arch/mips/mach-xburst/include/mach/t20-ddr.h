@@ -111,10 +111,45 @@
 #define DDRP_DXGCR_DXEN		(1 << 0)
 
 /*
- * GOLD register values: exact vendor ddr_params_creator output for
- * isvp_t20_sfcnor (T20N, M14D5121632A, DDR2, 500 MHz). Tool
+ * GOLD register values: exact vendor ddr_params_creator output.
+ * Default = isvp_t20_sfcnor (T20N/T20L, M14D5121632A, 64 MB).
+ * CONFIG_T20_DRAM_128M = isvp_t20_sfcnor_ddr128M (T20X,
+ * M14D1G1664A, 128 MB, 8-bank). Both DDR2 @ 500 MHz - the clock
+ * is identical, only the DWC geometry/timing set differs. Tool
  * validated bit-for-bit against the T31 128 MB GOLD.
  */
+#if defined(CONFIG_T20_DRAM_128M)
+#define DDRC_CFG_VALUE		0x0ae88a42
+#define DDRC_CTRL_VALUE		0x0000d91e
+#define DDRC_MMAP0_VALUE	0x000020f8
+#define DDRC_MMAP1_VALUE	0x00002800
+#define DDRC_REFCNT_VALUE	0x00f20001
+#define DDRC_TIMING1_VALUE	0x040e0806
+#define DDRC_TIMING2_VALUE	0x02170807
+#define DDRC_TIMING3_VALUE	0x2008051d
+#define DDRC_TIMING4_VALUE	0x1f240031
+#define DDRC_TIMING5_VALUE	0xff060505
+#define DDRC_TIMING6_VALUE	0x32170505
+#define DDRC_AUTOSR_EN_VALUE	0x00000000
+#define DDRP_DCR_VALUE		0x0000000a
+#define DDRP_MR0_VALUE		0x00000e73
+#define DDRP_MR1_VALUE		0x00000002
+#define DDRP_MR2_VALUE		0x00000000
+#define DDRP_MR3_VALUE		0x00000000
+#define DDRP_PTR0_VALUE		0x00228019
+#define DDRP_PTR1_VALUE		0x064186a0
+#define DDRP_PTR2_VALUE		0x00000000
+#define DDRP_DTPR0_VALUE	0x3ab7889a
+#define DDRP_DTPR1_VALUE	0x004000b8
+#define DDRP_DTPR2_VALUE	0x1001a8c8
+#define DDRP_PGCR_VALUE		0x01842e02
+#define DDRP_ODTCR_VALUE	0x00000000
+#define DDRP_DX0GCR_VALUE	0x00090881
+#define DDRP_DX1GCR_VALUE	0x00090881
+#define DDRP_DX2GCR_VALUE	0x00090e80
+#define DDRP_DX3GCR_VALUE	0x00090e80
+#define DDRP_ZQNCR1_VALUE	0x0000006b
+#else
 #define DDRC_CFG_VALUE		0x0a688a40
 #define DDRC_CTRL_VALUE		0x0000d91e
 #define DDRC_MMAP0_VALUE	0x000020fc
@@ -145,6 +180,7 @@
 #define DDRP_DX2GCR_VALUE	0x00090e80
 #define DDRP_DX3GCR_VALUE	0x00090e80
 #define DDRP_ZQNCR1_VALUE	0x0000006b
+#endif
 
 /* {0:cal_value, 1:req_value} for the ZQ impedance recompute */
 #define DDRP_IMPANDCE_ARRAY	{ 0x00009c40, 0x00009c40 }
@@ -158,17 +194,27 @@
 /*
  * Address-remap table. Unlike the Innophy path (which computes the
  * swap from row/col), the DWC driver writes these precomputed words
- * straight to DDRC_REMAP(1..5).
+ * straight to DDRC_REMAP(1..5). 8-bank (128M) differs from 4-bank.
  */
+#if defined(CONFIG_T20_DRAM_128M)
+#define REMMAP_ARRAY \
+	{ 0x030e0d0c, 0x07060504, 0x0b0a0908, 0x0f020100, 0x13121110 }
+#else
 #define REMMAP_ARRAY \
 	{ 0x03020d0c, 0x07060504, 0x0b0a0908, 0x0f0e0100, 0x13121110 }
+#endif
 
-/* Clock targets: T20N MPLL 1000 MHz, DDR 500 MHz (cdr = 1, /2). */
+/* Clock targets: MPLL 1000 MHz, DDR 500 MHz - same for 64M/128M. */
 #define DDR_MPLL_RATE		1000000000U
 #define DDR_TARGET_RATE		500000000U
 
+#if defined(CONFIG_T20_DRAM_128M)
+#define DDR_CHIP_0_SIZE		134217728	/* 128 MB */
+#define T20_DRAM_SIZE		0x08000000u	/* 128 MB */
+#else
 #define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
-#define DDR_CHIP_1_SIZE		0
 #define T20_DRAM_SIZE		0x04000000u	/* 64 MB */
+#endif
+#define DDR_CHIP_1_SIZE		0
 
 #endif /* __T20_DDR_H__ */

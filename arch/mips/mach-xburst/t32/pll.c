@@ -23,19 +23,31 @@
 #include <asm/io.h>
 #include <mach/t32.h>
 
-/* Exact vendor pll_params_creator words for PRJ007_lq (T32). */
-#define T32_CPAPCR	0x04b051c1u	/* APLL 900 MHz */
-#define T32_CPMPCR	0x064051c1u	/* MPLL 1200 MHz */
-#define T32_CPVPCR	0x063051c1u	/* VPLL 1188 MHz */
 /*
- * CPCCR: phase 1 = base | dividers; phase 2 = source selects |
- * dividers. Vendor cpccr_default writes 0x55700000 first. Divider
- * field = (CDIV<<0)|(L2DIV<<4)|(H0DIV<<8)|(H2DIV<<12)|(PDIV<<16) =
- * 0x73310 for PRJ007_lq; SEL bits 0x9a000000 (same mux as T33).
+ * Exact vendor pll_params_creator words, per DDR class (verbatim,
+ * NOT recomputed). T32/PRJ007 always programs VPLL (CPVPCR const
+ * across classes). cpccr_default writes 0x55700000 first. Class
+ * map: LQ/VL/ZL DDR2 600; NQ/XQ DDR3 900; VN/ZN/VX/ZX DDR3 700;
+ * VNP LPDDR3 700.
  */
+#define T32_CPVPCR	0x063051c1u	/* VPLL 1188 MHz (all classes) */
 #define T32_CPCCR_DEFAULT	0x55700000u
-#define T32_CPCCR_DIV		0x55773310u	/* | CDIV/L2/H0/H2/PDIV */
-#define T32_CPCCR_SEL		0x9a073310u	/* SEL_* | dividers */
+#if defined(CONFIG_T32_DDR3_W631_900) || defined(CONFIG_T32_DDR3_W632_900)
+#define T32_CPAPCR	0x064051c1u	/* NQ/XQ */
+#define T32_CPMPCR	0x04b051c1u
+#define T32_CPCCR_DIV	0x55752210u	/* H0/H2DIV 2, PDIV 5 */
+#define T32_CPCCR_SEL	0x9a052210u
+#elif defined(CONFIG_T32_HWTRAIN)	/* VN/ZN/VX/ZX DDR3 + VNP LPDDR3, 700 */
+#define T32_CPAPCR	0x04b051c1u
+#define T32_CPMPCR	0x0af059c1u
+#define T32_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
+#define T32_CPCCR_SEL	0x9a094410u
+#else					/* LQ/VL/ZL DDR2 600 (default) */
+#define T32_CPAPCR	0x04b051c1u
+#define T32_CPMPCR	0x064051c1u
+#define T32_CPCCR_DIV	0x55773310u	/* H0/H2DIV 3, PDIV 7 */
+#define T32_CPCCR_SEL	0x9a073310u
+#endif
 
 static u32 cpm_r(unsigned int off)
 {
@@ -94,7 +106,13 @@ void clk_ungate_uart(unsigned int idx)
  * divider[7:0]. cdr = MPLL / CK - 1.
  */
 #define T32_EXTAL_HZ	24000000U
-#define T32_DDR_CK_HZ	300000000U	/* CONFIG_SYS_MEM_FREQ 600M / 2 */
+#if defined(CONFIG_T32_DDR3_W631_900) || defined(CONFIG_T32_DDR3_W632_900)
+#define T32_DDR_CK_HZ	450000000U	/* NQ/XQ: 900M / 2 */
+#elif defined(CONFIG_T32_HWTRAIN)
+#define T32_DDR_CK_HZ	350000000U	/* VN/ZN/VX/ZX/VNP: 700M / 2 */
+#else
+#define T32_DDR_CK_HZ	300000000U	/* LQ/VL/ZL: 600M / 2 */
+#endif
 
 /* CPxPCR (CPAPCR/CPMPCR) -> Hz. Shared by the DDR and SFC0 clocks. */
 u32 t32_pll_rate(unsigned int cpxpcr_off)

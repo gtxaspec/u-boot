@@ -38,6 +38,8 @@ DECLARE_GLOBAL_DATA_PTR;
 #define T21_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
 #define T21_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
 #define T21_UBOOT_MAX		0x00800000	/* decompressed size bound */
+#define T21_DRAM_BASE		0x80000000	/* KSEG0 cached DRAM */
+#define T21_DRAM_MAX		0x08000000	/* 128 MB (covers all variants) */
 
 /* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
 #define T21_SSI_RATE		70000000U
@@ -268,6 +270,21 @@ void t21_spl_load_uboot(void)
 	ih_load  = hdr_be32(scratch + 16);
 	if (ih_magic != T21_IH_MAGIC) {
 		t21_spl_puts("SPL: bad U-Boot image magic\n");
+		return;
+	}
+
+	/*
+	 * The header fields come off NOR - bound them before they drive a
+	 * read length / decompress destination / jump. ih_size caps the
+	 * scratch write; ih_load must land in DRAM.
+	 */
+	if (ih_size == 0 || ih_size > T21_UBOOT_MAX) {
+		t21_spl_puts("SPL: U-Boot image size out of range\n");
+		return;
+	}
+	if (ih_load < T21_DRAM_BASE ||
+	    ih_load >= T21_DRAM_BASE + T21_DRAM_MAX) {
+		t21_spl_puts("SPL: U-Boot load addr out of range\n");
 		return;
 	}
 

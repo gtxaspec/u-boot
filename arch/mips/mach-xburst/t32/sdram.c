@@ -31,7 +31,7 @@
 /* DDR clock (CPM_DDRCDR <- MPLL/divider); implemented in t32/pll.c. */
 void ddr_clk_init(void);
 
-static const u32 t32_ddr_par[T32_DDR_PAR_NUM] = T32_DDR2_DRV_ODT_DEFAULTS;
+static const u32 t32_ddr_par[T32_DDR_PAR_NUM] = T32_DRV_ODT_DEFAULTS;
 
 /*
  * Errata: clear CP0 $9 sel4 bit 1 so the CPU may issue speculative
@@ -52,6 +52,7 @@ static void enable_cpu_read_ddr(void)
 		: "=r"(res), "=r"(res1));
 }
 
+#if !defined(CONFIG_T32_HWTRAIN)	/* DDR2 soft-train helpers only */
 /* Small uncached pattern check used to score soft-training taps. */
 static int ddr_mem_pattern(void)
 {
@@ -155,6 +156,7 @@ static void ddrp_training_write_train_bypass_dq(u32 dq)
 	SET_INNOPHY_REG(reg_wl_freq_update, 0);
 	SET_INNOPHY_REG(reg_train_reg_update_en, 0);
 }
+#endif	/* !CONFIG_T32_HWTRAIN */
 
 static void ddrp_dqs_calibration(void)
 {
@@ -171,6 +173,7 @@ static void ddrp_dqs_calibration(void)
 	SET_INNOPHY_REG(reg_calcs_sel, 0x0);
 }
 
+#if !defined(CONFIG_T32_HWTRAIN)	/* DDR2 soft-train only */
 static void ddrp_training_soft_read_train(u32 dq)
 {
 	u32 min = 0xff, med, width = 0;
@@ -248,6 +251,65 @@ static void ddrp_training_soft_write_train(void)
 	SET_INNOPHY_REG(reg_train_reg_update_en, 0);
 }
 
+#endif	/* !CONFIG_T32_HWTRAIN (soft-train) */
+
+#if defined(CONFIG_T32_HWTRAIN)
+/*
+ * DDR3/LPDDR3 hardware training (vendor ddr_innophy.c
+ * DDR_HARDWARE_TRAIN path; PRINT_DDRP/dwc_debug stripped as in
+ * the DDR2 soft port). read/write training are type-independent;
+ * write-leveling differs DDR3 vs LPDDR3.
+ */
+static void ddrp_training_write_leveling(void)
+{
+	SET_INNOPHY_REG(reg_wlcs_sel, 0x2);
+#if defined(CONFIG_T32_LPDDR3)
+	/* LPDDR3: bits[7:0] = MR2[7:0] (INIT3), bits[15:8] = 0. */
+	SET_INNOPHY_REG(reg_wl_loadmode, DDRC_INIT3 & 0xff);
+#else
+	/* DDR3: bits[13:0] = MR1[13:0] (INIT3), bits[15:14] = 2'b01. */
+	SET_INNOPHY_REG(reg_wl_loadmode, (DDRC_INIT3 & 0x3fff) | (1 << 14));
+#endif
+	SET_INNOPHY_REG(reg_phy_refresh_en, 0x1);
+	SET_INNOPHY_REG(reg_wl_enable, 0x1);
+	BNE_INNOPHY_REG(wl_done_byte, 0x3);
+	BNE_INNOPHY_REG(reg_wl_end, 0x1);
+	SET_INNOPHY_REG(reg_wl_enable, 0x0);
+	SET_INNOPHY_REG(reg_wlcs_sel, 0x0);
+}
+
+static void ddrp_training_read_training(void)
+{
+	SET_INNOPHY_REG(reg_phy_refresh_en, 0x1);
+	SET_INNOPHY_REG(reg_rdtrain_cs_sel, 0x2);
+	SET_INNOPHY_REG(reg_a_l_rd_train_dqs_default, 0x1f);
+	SET_INNOPHY_REG(reg_a_h_rd_train_dqs_default, 0x1f);
+	SET_INNOPHY_REG(reg_dq_rd_train_en, 0x1);
+	BNE_INNOPHY_REG(train_true_done, 0x1);
+	SET_INNOPHY_REG(reg_dq_rd_train_en, 0x0);
+	SET_INNOPHY_REG(reg_rd_train_dqs_range_bypass, 0x0);
+	SET_INNOPHY_REG(reg_rdtrain_cs_sel, 0x0);
+	SET_INNOPHY_REG(reg_phy_refresh_en, 0x0);
+}
+
+static void ddrp_training_write_training(void)
+{
+	SET_INNOPHY_REG(reg_wrtrain_check_data_value_random_gen, 0x1);
+	SET_INNOPHY_REG(reg_wrtrain_cs_sel, 0x2);
+	SET_INNOPHY_REG(reg_phy_refresh_en, 0x1);
+	SET_INNOPHY_REG(reg_wr_train_dqs_default_bypass, 0x0);
+	SET_INNOPHY_REG(reg_dq_wr_train_auto, 0x1);
+	SET_INNOPHY_REG(reg_dq_wr_train_en, 0x1);
+	BNE_INNOPHY_REG(train_step1_delay_done, 0x1);
+	BNE_INNOPHY_REG(train_all_step_done, 0x1);
+	SET_INNOPHY_REG(reg_dq_wr_train_en, 0x0);
+	SET_INNOPHY_REG(reg_dq_wr_train_auto, 0x0);	/* must clear post-train */
+	SET_INNOPHY_REG(reg_wr_train_dqs_default_bypass, 0x0);
+	SET_INNOPHY_REG(reg_wrtrain_cs_sel, 0x0);
+	SET_INNOPHY_REG(reg_phy_refresh_en, 0x0);
+}
+#endif
+
 static void ddrp_training(void)
 {
 	u32 stat;
@@ -266,14 +328,20 @@ static void ddrp_training(void)
 		stat = ddrc_readl(STAT);
 	} while (!(stat & 0x1));
 
+#if defined(CONFIG_T32_HWTRAIN)
+	printf("DDR hardware training ...\n");
+	ddrp_training_write_leveling();
 	ddrp_dqs_calibration();
-
-	/* DDR2 soft training */
+	ddrp_training_read_training();
+	ddrp_training_write_training();
+#else
+	ddrp_dqs_calibration();
 	printf("DDR soft training ...\n");
 	ddrp_training_read_calib_bypass();
 	ddrp_training_soft_read_train(0x40);
 	ddrp_training_write_train_bypass_dq(0x80);
 	ddrp_training_soft_write_train();
+#endif
 }
 
 static void ddrc_init(u32 kgd_rtt_dic)
@@ -284,9 +352,21 @@ static void ddrc_init(u32 kgd_rtt_dic)
 
 	ddrc_writel(INIT0, DDRC_INIT0);
 	ddrc_writel(INIT1, DDRC_INIT1);
-	/* DDR2: INIT2 is LPDDR2-only; INIT5 is skipped. */
+	/* INIT2 is LPDDR2-only (skipped). INIT3/INIT4 masks + INIT5
+	 * are type-specific (vendor ddrc_init). kgd_rtt_dic == 0 here
+	 * (no eFUSE) for every type. */
+#if defined(CONFIG_T32_LPDDR3)
+	ddrc_writel(INIT3, DDRC_INIT3);
+	ddrc_writel(INIT4, (DDRC_INIT4 & ~0xf0000) | (kgd_rtt_dic << 16));
+	ddrc_writel(INIT5, DDRC_INIT5);
+#elif defined(CONFIG_T32_DDR3)
+	ddrc_writel(INIT3, (DDRC_INIT3 & ~0x266) | kgd_rtt_dic);
+	ddrc_writel(INIT4, DDRC_INIT4);
+	ddrc_writel(INIT5, DDRC_INIT5);
+#else
 	ddrc_writel(INIT3, (DDRC_INIT3 & ~0x46) | kgd_rtt_dic);
 	ddrc_writel(INIT4, DDRC_INIT4);
+#endif
 
 	ddrc_writel(ADDRMAP1, DDRC_ADDRMAP1);
 	ddrc_writel(ADDRMAP2, DDRC_ADDRMAP2);
@@ -302,7 +382,12 @@ static void ddrc_init(u32 kgd_rtt_dic)
 	ddrc_writel(DRAMTMG4, DDRC_TIMING4);
 	ddrc_writel(DRAMTMG5, DDRC_TIMING5);
 	ddrc_writel(DRAMTMG7, DDRC_TIMING7);
+#if defined(CONFIG_T32_LPDDR3)
+	ddrc_writel(DRAMTMG6, DDRC_TIMING6);	/* LPDDR2/3 */
+	ddrc_writel(DRAMTMG14, DDRC_TIMING14);
+#else
 	ddrc_writel(DRAMTMG8, DDRC_TIMING8);	/* DDR2/DDR3 */
+#endif
 
 	ddrc_writel(DFITMG0, DDRC_DFITMG0);
 	ddrc_writel(DFITMG1, DDRC_DFITMG1);
@@ -311,7 +396,9 @@ static void ddrc_init(u32 kgd_rtt_dic)
 	ddrc_writel(RFSHTMG, DDRC_RFSHTMG);
 	ddrc_writel(RFSHCTL3, DDRC_RFSHCTL3);
 
-	ddrc_writel(ODTCFG, DDRC_ODTCFG);	/* DDR2/LPDDR2 */
+#if !defined(CONFIG_T32_HWTRAIN)
+	ddrc_writel(ODTCFG, DDRC_ODTCFG);	/* DDR2/LPDDR2 only */
+#endif
 
 	data = ddrc_readl(SCHED);
 	data &= ~(1 << 2);

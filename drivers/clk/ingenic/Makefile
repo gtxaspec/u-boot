@@ -6,4 +6,5 @@ obj-$(CONFIG_CLK_INGENIC_T21) += clk-t21.o
 obj-$(CONFIG_CLK_INGENIC_T23) += clk-t23.o
 obj-$(CONFIG_CLK_INGENIC_T30) += clk-t30.o
 obj-$(CONFIG_CLK_INGENIC_T31) += clk-t31.o
+obj-$(CONFIG_CLK_INGENIC_T32) += clk-t32.o
 obj-$(CONFIG_CLK_INGENIC_T33) += clk-t33.o

@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+#include <dt-bindings/clock/ingenic,t32-cgu.h>
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "ingenic,t32";
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "ingenic,xburst", "mips,mips32r2";
+			reg = <0>;
+		};
+	};
+
+	cpuintc: interrupt-controller {
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+		compatible = "mti,cpu-interrupt-controller";
+	};
+
+	exclk: exclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+
+	rtclk: rtclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+	};
+
+	/*
+	 * CGU. The SPL programs the PLLs/dividers; this driver runs in
+	 * U-Boot proper, recalculates the PLL rates and provides
+	 * rate/gate control for the leaf clocks. T32 (PRJ007) is NOT
+	 * CGU-bit-compatible with T31 (own clk-t32 driver / binding).
+	 */
+	cgu: clock-controller@10000000 {
+		compatible = "ingenic,t32-cgu", "simple-mfd";
+		reg = <0x10000000 0x1000>;
+		#clock-cells = <1>;
+		clocks = <&exclk>, <&rtclk>;
+		clock-names = "ext", "rtc";
+		u-boot,dm-pre-reloc;
+	};
+
+	/*
+	 * TCU container (mirrors the Linux ingenic tcu/simple-mfd
+	 * binding) so the watchdog child binds; U-Boot only needs the
+	 * watchdog for sysreset (it self-clocks from the 32 kHz RTC).
+	 */
+	tcu: timer@10002000 {
+		compatible = "ingenic,t32-tcu", "ingenic,jz4760-tcu",
+			     "simple-mfd";
+		reg = <0x10002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x10002000 0x1000>;
+
+		watchdog: watchdog@0 {
+			compatible = "ingenic,t32-watchdog",
+				     "ingenic,jz4780-watchdog";
+			reg = <0x0 0x10>;
+		};
+	};
+
+	uart1: serial@10031000 {
+		compatible = "ingenic,jz4780-uart";
+		reg = <0x10031000 0x100>;
+		reg-shift = <2>;
+		clock-frequency = <24000000>;
+		status = "disabled";
+	};
+
+	/*
+	 * SFC2 (descriptor-capable SPI-NOR controller). The SPL uses it
+	 * to load U-Boot proper; a U-Boot-proper DM SPI driver for the
+	 * SFC2 register model is a follow-up, so this node stays
+	 * disabled (env is not in flash in the initial T32 profile).
+	 */
+	sfc: spi@13440000 {
+		compatible = "ingenic,t32-sfc";
+		reg = <0x13440000 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&cgu T32_CLK_SFC>;
+		spi-max-frequency = <50000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_sfc>;
+		status = "disabled";
+	};
+
+	msc0: mmc@13450000 {
+		compatible = "ingenic,t31-mmc";
+		reg = <0x13450000 0x1000>;
+		clocks = <&cgu T32_CLK_MSC0>;
+		clock-names = "mmc";
+		cap-sd-highspeed;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mmc0>;
+		status = "disabled";
+	};
+
+	/*
+	 * Pin controller + GPIO. T32 reuses the shared XBurst1
+	 * GPIO/pinmux engine and group tables (same rationale as T23/
+	 * T30); only the controller/gpio compatibles are T32-specific.
+	 */
+	pinctrl: pinctrl@10010000 {
+		compatible = "ingenic,t32-pinctrl";
+		reg = <0x10010000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		gpa: gpio@0 {
+			compatible = "ingenic,t32-gpio";
+			reg = <0>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpb: gpio@1 {
+			compatible = "ingenic,t32-gpio";
+			reg = <1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpc: gpio@2 {
+			compatible = "ingenic,t32-gpio";
+			reg = <2>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpd: gpio@3 {
+			compatible = "ingenic,t32-gpio";
+			reg = <3>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		pins_sfc: sfc {
+			function = "sfc";
+			groups = "sfc-data";
+		};
+
+		pins_mmc0: mmc0 {
+			function = "mmc0";
+			groups = "mmc0-1bit", "mmc0-4bit";
+		};
+	};
+};

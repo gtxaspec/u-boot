@@ -12,6 +12,20 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int print_cpuinfo(void)
 {
-	printf("CPU:   Ingenic T31 (XBurst1)\n");
+#if defined(CONFIG_SOC_T31)
+	const char *soc = "T31";
+#elif defined(CONFIG_SOC_T23)
+	const char *soc = "T23";
+#elif defined(CONFIG_SOC_T21)
+	const char *soc = "T21";
+#elif defined(CONFIG_SOC_T30)
+	const char *soc = "T30";
+#elif defined(CONFIG_SOC_T20)
+	const char *soc = "T20";
+#else
+	const char *soc = "T-series";
+#endif
+
+	printf("CPU:   Ingenic %s (XBurst1)\n", soc);
 	return 0;
 }

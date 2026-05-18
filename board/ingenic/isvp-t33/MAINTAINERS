@@ -1,0 +1,6 @@
+INGENIC ISVP-T33 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t33/
+F:	include/configs/isvp-t33.h
+F:	configs/isvp_t33_usbboot_defconfig

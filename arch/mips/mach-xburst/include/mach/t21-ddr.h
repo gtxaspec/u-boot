@@ -91,28 +91,46 @@
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
 
-/* Clock targets: T21N MPLL 900 MHz, DDR 450 MHz (cdr = 1, /2). */
+/*
+ * Clock targets, per variant (DDR = MPLL/2, cdr=1): T21N
+ * MPLL 900 / DDR 450; HIGH_PERF MPLL 1000 / DDR 500.
+ */
+#if defined(CONFIG_T21_VARIANT_HP)
+#define DDR_MPLL_RATE		1000000000U
+#define DDR_TARGET_RATE		500000000U
+#else
 #define DDR_MPLL_RATE		900000000U
 #define DDR_TARGET_RATE		450000000U
+#endif
 
 /*
- * GOLD register values: exact vendor ddr_params_creator output for
- * isvp_t21_sfcnor (T21N, M14D5121632A, 450 MHz). The geometry
- * (CFG/MMAP) matches the T23 64 MB set; REFCNT/TIMING/MR0 are the
- * 450 MHz computed values. Tool validated against the T31 GOLD.
+ * GOLD register values: exact vendor ddr_params_creator output
+ * for isvp_t21_sfcnor (M14D5121632A 64 MB). CFG/MMAP/CTRL and
+ * TIMING5 are geometry/clock-invariant; REFCNT/TIMING1-4/6/MR0
+ * are the clock-dependent set - T21N @450, HIGH_PERF @500.
  */
 #define DDRC_CFG_VALUE		0x0a288a40
 #define DDRC_CTRL_VALUE		0x0000d91e
 #define DDRC_MMAP0_VALUE	0x000020fc
 #define DDRC_MMAP1_VALUE	0x00002400
+#define DDRC_TIMING5_VALUE	0xff060405
+#if defined(CONFIG_T21_VARIANT_HP)
+#define DDRC_REFCNT_VALUE	0x00f20001
+#define DDRC_TIMING1_VALUE	0x040e0806
+#define DDRC_TIMING2_VALUE	0x02170707
+#define DDRC_TIMING3_VALUE	0x2007051e
+#define DDRC_TIMING4_VALUE	0x1a240031
+#define DDRC_TIMING6_VALUE	0x32170505
+#define DDRP_MR0_VALUE		0x00000e73
+#else
 #define DDRC_REFCNT_VALUE	0x00da0001
 #define DDRC_TIMING1_VALUE	0x040e0706
 #define DDRC_TIMING2_VALUE	0x02150607
 #define DDRC_TIMING3_VALUE	0x2006051b
 #define DDRC_TIMING4_VALUE	0x17240031
-#define DDRC_TIMING5_VALUE	0xff060405
 #define DDRC_TIMING6_VALUE	0x32150505
 #define DDRP_MR0_VALUE		0x00000c73
+#endif
 
 #define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
 #define DDR_CHIP_1_SIZE		0

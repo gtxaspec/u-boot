@@ -42,12 +42,26 @@ static_assert(24 * T31_MPLL_M >= 1250 && 24 * T31_MPLL_M <= 5000,
 	      "T31 MPLL Fvco (24*M) out of 1250-5000 MHz");
 
 /*
- * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL, dividers for DDR 600.
- * SEL_SRC=2 SEL_CPU=1 SEL_H0=2 SEL_H2=2
- * DIV_PCLK=12 DIV_H2=6 DIV_H0=6 DIV_L2=2 DIV_CPU=1
+ * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL. SEL_SRC=2 SEL_CPU=1
+ * SEL_H0=2 SEL_H2=2; DIV_L2=2 DIV_CPU=1. The H0/H2/PCLK dividers
+ * track the MPLL band (vendor DDR_xxxM table): MPLL 1008 (DDR
+ * 504) -> PCLK 8 / H2 4 / H0 4; MPLL 1200/1500 (DDR 600/750) ->
+ * PCLK 12 / H2 6 / H0 6 - keeps the bus clocks in spec as MPLL
+ * changes.
  */
+#if CONFIG_T31_MPLL_MHZ <= 1008
+#define T31_CPCCR_DIV_PCLK	8
+#define T31_CPCCR_DIV_H2	4
+#define T31_CPCCR_DIV_H0	4
+#else
+#define T31_CPCCR_DIV_PCLK	12
+#define T31_CPCCR_DIV_H2	6
+#define T31_CPCCR_DIV_H0	6
+#endif
 #define T31_CPCCR_CFG	((2 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | \
-			 ((12 - 1) << 16) | ((6 - 1) << 12) | ((6 - 1) << 8) | \
+			 ((T31_CPCCR_DIV_PCLK - 1) << 16) | \
+			 ((T31_CPCCR_DIV_H2 - 1) << 12) | \
+			 ((T31_CPCCR_DIV_H0 - 1) << 8) | \
 			 ((2 - 1) << 4) | ((1 - 1) << 0))
 
 static void cpm_writel(u32 val, unsigned int off)

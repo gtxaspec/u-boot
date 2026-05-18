@@ -97,18 +97,22 @@ config T31_APLL_MHZ
 config T31_MPLL_MHZ
 	int
 	default 1500 if T31_VARIANT_T31A
+	default 1008 if T31_VARIANT_T31N || T31_VARIANT_T31L || \
+			T31_VARIANT_T31LC
 	default 1200
 	help
 	  MPLL target in MHz for the selected variant. MPLL feeds the
 	  DDR clock (DDR = MPLL/2) and the H0/H2/PCLK bus tree. The
-	  vendor runs MPLL per variant: 1200 (DDR 600 - T31X/T31AL/
-	  C100 and the DDR2-64M group today) and 1500 (DDR 750 -
-	  T31A, the M15T1G1664A native rate). The SPL programs CPMPCR
-	  M = T31_MPLL_MHZ / 12 (N=1, OD0=1, OD1=2); must be a
-	  multiple of 12. DDR 600 and 750 share the CPCCR bus
-	  dividers (PCLK 12 / H2 6 / H0 6), so only M changes here.
-	  (The DDR-500 group N/L/LC still runs 1200/600 - their
-	  vendor-native MPLL 1000 / DDR 500 is a separate follow-up.)
+	  vendor runs MPLL per variant:
+	    1008 -> DDR 504 : T31N/T31L/T31LC (DDR2-64M; vendor
+	            "1000" aligned by get_pllreg_value to 1008, M=84)
+	    1200 -> DDR 600 : T31X/T31AL (DDR2-128M), C100 (DDR3)
+	    1500 -> DDR 750 : T31A (DDR3, M15T1G1664A native)
+	  The SPL programs CPMPCR M = T31_MPLL_MHZ / 12 (N=1, OD0=1,
+	  OD1=2); must be a multiple of 12 (1008/1200/1500 -> M
+	  84/100/125). The 1008 group uses the vendor DDR_500M CPCCR
+	  bus dividers (PCLK 8 / H2 4 / H0 4); 1200/1500 share PCLK
+	  12 / H2 6 / H0 6 (t31/pll.c picks per band).
 
 config SPL_T31_USB_BOOT
 	bool "T31 SPL: return to mask ROM for USB boot (dev loop)"

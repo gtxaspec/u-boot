@@ -55,3 +55,13 @@ config CLK_INGENIC_T31
 	  Recalculates the PLL rates programmed by the SPL and provides
 	  rate/gate control for the leaf peripheral clocks (SFC, MMC,
 	  GMAC) that U-Boot drives.
+
+config CLK_INGENIC_T33
+	bool "Ingenic T33 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T33 (PRJ008) SoC Clock/Power
+	  Manager. T33 is "T31-extended" but the CGU is not bit-compatible
+	  (dedicated SFC0 divider, ce/busy/stop = 29/28/27, different
+	  CLKGR* gate map). Provides rate/gate control for the leaf
+	  peripheral clocks (SFC, MMC, GMAC) that U-Boot drives.

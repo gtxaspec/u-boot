@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T33 SFC-NOR boot.
+ *
+ * The T33 mask ROM boots SPI-NOR by reading the SPL at flash offset
+ * 0, which then loads U-Boot proper from a fixed offset. Unlike T31,
+ * no CRC7 boot-header finalizer is run here: QEMU flash-boots the SPL
+ * directly (it does not emulate the mask ROM), and the validation
+ * path for this no-silicon SoC is QEMU NOR flash-boot. A real-silicon
+ * boot-header tool can be added later without changing the layout.
+ *
+ *   u-boot-t33.bin     : 16 MB flash image - raw SPL at offset 0,
+ *                        LZMA U-Boot at 0x10000, 0xff-padded.
+ *   u-boot-t33-min.bin : same layout, trimmed to the last entry.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	flash {
+		filename = "u-boot-t33.bin";
+		pad-byte = <0xff>;
+		size = <0x1000000>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		/*
+		 * LZMA-compressed U-Boot proper in a legacy mkimage
+		 * header; the SPL parses the header and decompresses to
+		 * CONFIG_TEXT_BASE.
+		 */
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+
+	flash-min {
+		filename = "u-boot-t33-min.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

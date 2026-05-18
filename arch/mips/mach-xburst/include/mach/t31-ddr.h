@@ -2,11 +2,16 @@
 /*
  * Ingenic T31 DDR2 controller and Innophy PHY register map
  *
- * Profile: isvp_t31_sfcnor_ddr128M
- *   DDR2, M14D1G1664A, 128 MB, 16-bit bus, CS0 only, DDR clock 600 MHz
- *   (MPLL 1200 MHz / 2). Register values are build-time computed by the
- *   vendor host params creator; the GOLD values below are reproduced
- *   from the known-good vendor build.
+ * Profile: T31 DDR2 @ 600 MHz (MPLL 1200 / 2), 16-bit, CS0 only.
+ *   CONFIG_T31_DRAM_128M = M14D1G1664A 128 MB, 8-bank
+ *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL).
+ *   else                  = M14D5121632A 64 MB, 4-bank
+ *     (isvp_t31_sfcnor - T31N/T31L/T31LC/C100).
+ *   Both run the SAME 600 MHz clock, so REFCNT/TIMING/MR0 are
+ *   shared (clock-dependent, geometry-independent - confirmed on
+ *   T30); only CFG/MMAP/DDR_BANK8/size differ by geometry. GOLD
+ *   values are the known-good vendor host-params-creator output.
+ *   (T31A = DDR3-128M: separate, not built by sdram.c yet.)
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -69,10 +74,17 @@
 #define CPM_DRCG		0xd0
 #define CPM_DDRCDR		0x2c
 
-/* Chip geometry from include/ddr/chips/DDR2_M14D1G1664A.h (DW32=0) */
+/*
+ * Chip geometry. Both parts are row 13 / col 10 (DW32=0); 128M
+ * M14D1G1664A is 8-bank, 64M M14D5121632A is 4-bank.
+ */
 #define DDR_ROW			13
 #define DDR_COL			10
-#define DDR_BANK8		1
+#if defined(CONFIG_T31_DRAM_128M)
+#define DDR_BANK8		1	/* M14D1G1664A 128 MB, 8-bank */
+#else
+#define DDR_BANK8		0	/* M14D5121632A 64 MB, 4-bank */
+#endif
 #define CONFIG_DDR_DW32		0
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
@@ -88,10 +100,22 @@
  * PHY pokes; the DWC DDRP_* values in the vendor generated header are
  * for the other PHY and are not used here.
  */
-#define DDRC_CFG_VALUE		0x0aa88a42
-#define DDRC_CTRL_VALUE		0x0000d91e
+#if defined(CONFIG_T31_DRAM_128M)
+#define DDRC_CFG_VALUE		0x0aa88a42	/* M14D1G1664A 128M 8-bank */
 #define DDRC_MMAP0_VALUE	0x000020f8
 #define DDRC_MMAP1_VALUE	0x00002800
+#else
+#define DDRC_CFG_VALUE		0x0a288a40	/* M14D5121632A 64M 4-bank */
+#define DDRC_MMAP0_VALUE	0x000020fc
+#define DDRC_MMAP1_VALUE	0x00002400
+#endif
+#define DDRC_CTRL_VALUE		0x0000d91e
+/*
+ * REFCNT/TIMING/MR0 are the 600 MHz set - clock-dependent only,
+ * geometry-independent (confirmed on T30: 64M and 128M @ the same
+ * clock share these). T31 always runs DDR 600 (MPLL 1200/2), so
+ * both the 64M and 128M parts use this one set.
+ */
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06
 #define DDRC_TIMING2_VALUE	0x021c0a07
@@ -101,7 +125,11 @@
 #define DDRC_TIMING6_VALUE	0x321c0505
 #define DDRP_MR0_VALUE		0x00000f73
 
+#if defined(CONFIG_T31_DRAM_128M)
 #define DDR_CHIP_0_SIZE		134217728	/* 128 MB */
+#else
+#define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
+#endif
 #define DDR_CHIP_1_SIZE		0
 
 #endif /* __T31_DDR_H__ */

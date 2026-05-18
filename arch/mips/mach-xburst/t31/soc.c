@@ -36,10 +36,18 @@ static void spl_put_hex(u32 v)
 		t31_spl_putc(hex[(v >> i) & 0xf]);
 }
 
+/* T31N/L/LC/C100 = 64 MB; T31X/T31AL = 128 MB (M14D1G1664A). */
+#if defined(CONFIG_T31_DRAM_128M)
+#define T31_DRAM_SIZE	0x08000000u	/* 128 MB */
+#else
+#define T31_DRAM_SIZE	0x04000000u	/* 64 MB */
+#endif
+
 /*
  * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
  * cached (KSEG0) window and verify the read-back. Steps across the
- * 128 MB so a stuck/aliased address line is caught, not just word 0.
+ * full part so a stuck/aliased address line is caught, not just
+ * word 0.
  */
 static int dram_verify(void)
 {
@@ -48,7 +56,8 @@ static int dram_verify(void)
 		0xdeadbeef, 0x12345678,
 	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
-	const u32 offs[] = { 0x0, 0x4, 0x100000, 0x4000000, 0x7fffffc };
+	const u32 offs[] = { 0x0, 0x4, 0x100000,
+			     T31_DRAM_SIZE / 2, T31_DRAM_SIZE - 4 };
 	int b, o, p;
 
 	for (b = 0; b < 2; b++) {

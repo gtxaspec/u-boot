@@ -1,0 +1,6 @@
+INGENIC ISVP-T32 BOARD
+M:	Alfonso Gamboa <gtxent@gmail.com>
+S:	Maintained
+F:	board/ingenic/isvp-t32/
+F:	include/configs/isvp-t32.h
+F:	configs/isvp_t32_sfcnor_defconfig

@@ -21,12 +21,11 @@
 /* APLL: exact vendor CPAPCR word for the selected variant. */
 #define T21_APLL_MNOD	CONFIG_T21_APLL_MNOD
 /*
- * MPLL = vendor CONFIG_SYS_MPLL_MNOD for DDR_450M & CONFIG_T21:
- * (M=74,N=1,OD1=1<<11,OD0=2<<5) = 900 MHz. The HIGH_PERF variant
- * (DDR_500M) needs a different MPLL; that is refined with the T21
- * DDR path - the SPL console does not depend on the MPLL value.
+ * MPLL = vendor CONFIG_SYS_MPLL_MNOD, per variant (DDR = MPLL/2):
+ * T21N DDR_450M -> 0x04a04840 (900); HIGH_PERF DDR_500M ->
+ * 0x07c08820 (1000). Kconfig-selected, mirrors T21_APLL_MNOD.
  */
-#define T21_MPLL_MNOD	((74 << 20) | (1 << 14) | (1 << 11) | (2 << 5))
+#define T21_MPLL_MNOD	CONFIG_T21_MPLL_MNOD
 
 /*
  * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL.

@@ -34,6 +34,18 @@ config T21_APLL_MNOD
 	  864 = (M=71,N=1,OD1=1<<11,OD0=2<<5) = 0x04704840 (T21N);
 	  1200 = (M=49,N=0,OD1=1<<11,OD0=3<<5) = 0x03100860 (HIGH_PERF).
 
+config T21_MPLL_MNOD
+	hex
+	default 0x07c08820 if T21_VARIANT_HP
+	default 0x04a04840
+	help
+	  CPMPCR value, exact vendor CONFIG_SYS_MPLL_MNOD. DDR =
+	  MPLL/2: T21N MPLL 900 / DDR 450 = 0x04a04840; HIGH_PERF
+	  MPLL 1000 / DDR 500 = 0x07c08820. The CPCCR bus dividers
+	  (PCLK 8 / H2 4 / H0 4) are identical for both, so only the
+	  MPLL word and the clock-dependent DDR2 timing set
+	  (mach/t21-ddr.h) differ between the variants.
+
 config SPL_T21_USB_BOOT
 	bool "T21 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL

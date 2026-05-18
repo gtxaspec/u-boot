@@ -4,32 +4,111 @@ choice
 	prompt "T32 SoC variant"
 	default T32_VARIANT_LQ
 	help
-	  Specific T32 (vendor PRJ007) DDR2 goat SKU. LQ/VL/ZL all
-	  use the same 64 MB DDR2 M14D5121632A and - unlike T33's
-	  bins - are byte-identical in both the PLL and the DDR
-	  register set (host pll_params_creator / ddr_creator_chip_v3
-	  output for PRJ007_{lq,vl,zl}_goat_sfcnor is the same); the
-	  letter is a vendor bin badge only, so the variant selects
-	  no parameter change. The PRJ007 DDR3/LPDDR3 SKUs
-	  (nq/vn/vnp/vx/xq/zn/zx) need separate DDR PHY ports and
-	  are deferred (not selectable here).
+	  Specific T32 (vendor PRJ007) goat SKU. Authoritative params
+	  are the host pll_params_creator / ddr_creator_chip_v3 output
+	  for PRJ007_<sku>_goat_sfcnor (verbatim, NOT recomputed):
+	    LQ/VL/ZL  DDR2  M14D5121632A  64 MB  DDR 600
+	    NQ        DDR3  W631GU6NG    128 MB  DDR 900
+	    VN/ZN     DDR3  W631GU6NG    128 MB  DDR 700
+	    XQ        DDR3  W632GU6NG    256 MB  DDR 900
+	    VX/ZX     DDR3  W632GU6NG    256 MB  DDR 700
+	    VNP       LPDDR3 W63AH6N2B  128 MB  DDR 700
+	  LQ==VL==ZL, VN==ZN, VX==ZX are param-identical vendor bin
+	  badges. DDR2 = soft-train; DDR3/LPDDR3 = hardware-train (a
+	  different Innophy PHY path).
 
 config T32_VARIANT_LQ
-	bool "T32LQ (DDR2, APLL 900 / MPLL 1200 / DDR 600)"
+	bool "T32LQ (DDR2 600 MHz, 64 MB)"
 
 config T32_VARIANT_VL
-	bool "T32VL (== LQ params)"
+	bool "T32VL (DDR2 600 MHz; == LQ params)"
 
 config T32_VARIANT_ZL
-	bool "T32ZL (== LQ params)"
+	bool "T32ZL (DDR2 600 MHz; == LQ params)"
+
+config T32_VARIANT_NQ
+	bool "T32NQ (DDR3 900 MHz, 128 MB)"
+
+config T32_VARIANT_VN
+	bool "T32VN (DDR3 700 MHz, 128 MB)"
+
+config T32_VARIANT_ZN
+	bool "T32ZN (DDR3 700 MHz; == VN params)"
+
+config T32_VARIANT_XQ
+	bool "T32XQ (DDR3 900 MHz, 256 MB)"
+
+config T32_VARIANT_VX
+	bool "T32VX (DDR3 700 MHz, 256 MB)"
+
+config T32_VARIANT_ZX
+	bool "T32ZX (DDR3 700 MHz, 256 MB; == VX params)"
+
+config T32_VARIANT_VNP
+	bool "T32VNP (LPDDR3 700 MHz, 128 MB)"
 
 endchoice
 
 config T32_VARIANT_NAME
 	string
-	default "T32VL" if T32_VARIANT_VL
-	default "T32ZL" if T32_VARIANT_ZL
+	default "T32VL"  if T32_VARIANT_VL
+	default "T32ZL"  if T32_VARIANT_ZL
+	default "T32NQ"  if T32_VARIANT_NQ
+	default "T32VN"  if T32_VARIANT_VN
+	default "T32ZN"  if T32_VARIANT_ZN
+	default "T32XQ"  if T32_VARIANT_XQ
+	default "T32VX"  if T32_VARIANT_VX
+	default "T32ZX"  if T32_VARIANT_ZX
+	default "T32VNP" if T32_VARIANT_VNP
 	default "T32LQ"
+
+# --- internal DDR param-class selectors (one set per variant) ---
+# mach/t32-ddr.h param chain + t32/pll.c key off these.
+
+config T32_DDR3_W631_900
+	bool
+	default y if T32_VARIANT_NQ
+
+config T32_DDR3_W631_700
+	bool
+	default y if T32_VARIANT_VN || T32_VARIANT_ZN
+
+config T32_DDR3_W632_900
+	bool
+	default y if T32_VARIANT_XQ
+
+config T32_DDR3_W632_700
+	bool
+	default y if T32_VARIANT_VX || T32_VARIANT_ZX
+
+config T32_LPDDR3_700
+	bool
+	default y if T32_VARIANT_VNP
+
+config T32_DDR3
+	bool
+	default y if T32_DDR3_W631_900 || T32_DDR3_W631_700 || \
+		     T32_DDR3_W632_900 || T32_DDR3_W632_700
+	help
+	  Master "this build is DDR3". Selects the hardware-train
+	  Innophy path + DDR3 ddrc_init register branches + DDR3
+	  drive/ODT defaults in t32/sdram.c.
+
+config T32_LPDDR3
+	bool
+	default y if T32_LPDDR3_700
+	help
+	  Master "this build is LPDDR3". Hardware-train path with
+	  the LPDDR3 ddrc_init branches (INIT3 as-is, INIT4 masked,
+	  TIMING6/14 instead of TIMING8, LPDDR3 write-leveling).
+
+config T32_HWTRAIN
+	bool
+	default y if T32_DDR3 || T32_LPDDR3
+	help
+	  DDR3 and LPDDR3 both use the Innophy hardware-train path
+	  (write-leveling -> calibration -> read/write training)
+	  instead of the DDR2 soft-train. Single gate for that.
 
 config SPL_T32_USB_BOOT
 	bool "T32 SPL: return to mask ROM for USB boot (dev loop)"

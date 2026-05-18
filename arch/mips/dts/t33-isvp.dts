@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "t33.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t33", "ingenic,t33";
+	model = "Ingenic ISVP-T33 (DDR2 64M, SFC NOR)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (M14D5121632A) */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};

@@ -40,6 +40,47 @@ static void spl_put_hex(u32 v)
 		t33_spl_putc(hex[(v >> i) & 0xf]);
 }
 
+/*
+ * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
+ * cached (KSEG0) window and verify the read-back, stepping across the
+ * full 64 MB part so a stuck/aliased address line is caught.
+ */
+#define T33_DRAM_SIZE	0x04000000u	/* 64 MB (M14D5121632A) */
+
+static int dram_verify(void)
+{
+	static const u32 pat[] = {
+		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
+		0xdeadbeef, 0x12345678,
+	};
+	const u32 bases[] = { 0xa0000000, 0x80000000 };
+	const u32 offs[] = { 0x0, 0x4, 0x100000,
+			     T33_DRAM_SIZE / 2, T33_DRAM_SIZE - 4 };
+	int b, o, p;
+
+	for (b = 0; b < 2; b++) {
+		for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
+			volatile u32 *a =
+				(volatile u32 *)(bases[b] + offs[o]);
+
+			for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
+				*a = pat[p];
+				if (*a != pat[p]) {
+					t33_spl_puts("T33 SPL: DDR FAIL @");
+					spl_put_hex((u32)(uintptr_t)a);
+					t33_spl_puts(" wrote ");
+					spl_put_hex(pat[p]);
+					t33_spl_puts(" read ");
+					spl_put_hex(*a);
+					t33_spl_putc('\n');
+					return -1;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
@@ -79,6 +120,8 @@ void board_init_f(ulong dummy)
 	t33_spl_puts("T33 SPL: PLL configured\n");
 
 	sdram_init();
+	if (dram_verify() == 0)
+		t33_spl_puts("T33 SPL: DDR OK\n");
 
 #ifdef CONFIG_SPL_T33_USB_BOOT
 	/*

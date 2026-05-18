@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T31 DDR2 controller and Innophy PHY init (SPL)
+ * Ingenic T31 DDR2/DDR3 controller and Innophy PHY init (SPL)
  *
- * Faithful transliteration of the vendor known-good DDR2 path
- * (arch/mips/cpu/xburst/ddr_innophy.c, ddr_set_dll.c, clk.c) for the
- * isvp_t31_sfcnor_ddr128M profile: DDR2 M14D1G1664A, 128 MB, 16-bit
- * bus, CS0 only, DDR clock 600 MHz (MPLL 1200 MHz / 2).
+ * Faithful transliteration of the vendor known-good path
+ * (arch/mips/cpu/xburst/ddr_innophy.c, ddr_set_dll.c, clk.c).
+ * DDR2 (default): M14D1G1664A 128 MB / M14D5121632A 64 MB, soft
+ * calibration. DDR3 (CONFIG_T31_DDR3 = T31A): M15T1G1664A 128 MB,
+ * the legacy Innophy DDR3 init (DFI reset, the no-poll DDR3 LMR
+ * MRS sequence, hardware write-leveling). All 16-bit, CS0 only,
+ * DDR clock 600 MHz (MPLL 1200 MHz / 2).
  *
- * The register write order, poll loops and delays are timing-critical
- * and reproduced exactly from the vendor source. The non-DDR2, FPGA,
- * M200, LPDDR, DDR3 and auto-self-refresh paths are removed.
+ * The register write order, poll loops and delays are timing-
+ * critical and reproduced exactly from the vendor source. The
+ * FPGA, M200, LPDDR and auto-self-refresh paths are removed.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <asm/io.h>
+#include <linux/compiler.h>
 #include <linux/delay.h>
 #include <mach/t31.h>
 #include <mach/t31-ddr.h>
-
-#if defined(CONFIG_T31_VARIANT_T31A)
-#error "T31A uses DDR3; the DDR3 controller/PHY path is not yet ported (sdram.c is DDR2-only). Select a DDR2 variant or implement the DDR3 path."
-#endif
 
 
 #define ddr_writel(v, reg)	writel((v), (void __iomem *)(DDRC_BASE + (reg)))
@@ -178,7 +178,7 @@ static void phy_calibration(void)
 
 static void ddr_inno_phy_init(void)
 {
-	u32 reg = 0;
+	u32 __maybe_unused reg = 0;	/* used only by the DDR2 path */
 
 	phy_writel(0x14, INNO_PLL_FBDIV);
 	phy_writel(0x1a, INNO_PLL_CTRL);
@@ -191,6 +191,17 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x0, INNO_TRAINING_CTRL);
 	phy_writel(0x03, INNO_DQ_WIDTH);
 
+#if defined(CONFIG_T31_DDR3)
+	/* MEMSEL = DDR3, BURSEL = burst8 */
+	phy_writel(0x30, INNO_MEM_CFG);
+	/* DQS0/1 TXPLL: clear [6:4] (vendor non-T23 path, raw 0x154/0x114) */
+	phy_writel(phy_readl(0x154) & 0xffffff8f, 0x154);
+	phy_writel(phy_readl(0x114) & 0xffffff8f, 0x114);
+	phy_writel(0x0d, INNO_CHANNEL_EN);
+	phy_writel(0x6, INNO_CWL);
+	phy_writel(0x8, INNO_CL);
+	phy_writel(0x00, INNO_AL);
+#else
 	/* MEMSEL = DDR2, BURSEL = burst8 */
 	phy_writel(0x11, INNO_MEM_CFG);
 	phy_writel(0x0d, INNO_CHANNEL_EN);
@@ -198,6 +209,7 @@ static void ddr_inno_phy_init(void)
 	reg = ((DDRP_MR0_VALUE & 0xf0) >> 4);
 	phy_writel(reg, INNO_CL);
 	phy_writel(0x00, INNO_AL);
+#endif
 
 	writel(0, (void __iomem *)DDR_APB_PHY_INIT);	/* start high */
 	while (!(readl((void __iomem *)DDR_APB_PHY_INIT) & (1 << 2)))	/* pll locked */
@@ -210,9 +222,39 @@ static void ddr_inno_phy_init(void)
 		;
 	writel(0, (void __iomem *)REG_DDR_CTRL);
 
+#if defined(CONFIG_T31_DDR3)
+	/* DDR3: DFI reset (kgdreset) - set, 200us, clear, 500us. */
+	writel(DDRC_CTRL_DFI_RST, (void __iomem *)REG_DDR_CTRL);
+	udelay(200);
+	writel(0, (void __iomem *)REG_DDR_CTRL);
+	udelay(500);
+#endif
+
 	writel(DDRC_CFG_VALUE, (void __iomem *)REG_DDR_CFG);
 	writel(0x0a, (void __iomem *)REG_DDR_CTRL);
 
+#if defined(CONFIG_T31_DDR3)
+	/* DDR3 LMR MRS sequence: MR2,MR3,MR1,MR0,ZQCL (no-poll
+	 * writel pairs - vendor ddr_innophy.c DDR3 branch). */
+	writel((0x08 << 12) | 0x211, (void __iomem *)REG_DDR_LMR);
+	writel(0, (void __iomem *)REG_DDR_LMR);
+	writel(0x311, (void __iomem *)REG_DDR_LMR);
+	writel(0, (void __iomem *)REG_DDR_LMR);
+	writel((0x6 << 12) | 0x111, (void __iomem *)REG_DDR_LMR);
+	writel(0, (void __iomem *)REG_DDR_LMR);
+	writel((DDRP_MR0_VALUE << 12) | 0x011, (void __iomem *)REG_DDR_LMR);
+	writel(0, (void __iomem *)REG_DDR_LMR);
+	writel(0x19, (void __iomem *)REG_DDR_LMR);
+	writel(0, (void __iomem *)REG_DDR_LMR);
+
+	/* DDR3 hardware write-leveling (wait WL_DONE == 0x3). */
+	writel(0x4, (void __iomem *)(DDR_PHY_BASE + 0x0c));
+	writel(0x40, (void __iomem *)(DDR_PHY_BASE + 0x10));
+	writel(0xa4, (void __iomem *)(DDR_PHY_BASE + 0x08));
+	while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xc0)))
+		;
+	writel(0xa1, (void __iomem *)(DDR_PHY_BASE + 0x08));
+#else
 	writel(0x400001, (void __iomem *)REG_DDR_LMR);
 	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
 		;
@@ -247,10 +289,15 @@ static void ddr_inno_phy_init(void)
 	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
 		;
 	udelay(5 * 1000);
+#endif
 
 	phy_calibration();
 
+#if defined(CONFIG_T31_DDR3)
+	writel(0x50, (void __iomem *)(DDR_PHY_BASE + 0x004));
+#else
 	writel(0x51, (void __iomem *)(DDR_PHY_BASE + 0x004));
+#endif
 	writel(0x24, (void __iomem *)(DDR_PHY_BASE + 0x028));
 
 	while (((readl((void __iomem *)(DDR_PHY_BASE + 0x190)) & 0xe0) <= 0x20) &&

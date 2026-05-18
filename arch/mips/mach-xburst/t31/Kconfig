@@ -5,22 +5,23 @@ choice
 	default T31_VARIANT_T31X
 	help
 	  Specific T31 product variant. All share the MPLL/VPLL and the
-	  Innophy DDR2 path and differ in the APLL (CPU) clock and the
-	  DRAM part: T31N/T31L/T31LC/C100 populate 64 MB DDR2
+	  Innophy PHY and differ in the APLL (CPU) clock and the DRAM
+	  part: T31N/T31L/T31LC/C100 populate 64 MB DDR2
 	  (M14D5121632A, 4-bank); T31X/T31AL populate 128 MB DDR2
-	  (M14D1G1664A, 8-bank). Each is a distinct entry so the exact
-	  SKU is identified at boot. T31A uses a DDR3-128M
-	  controller/PHY path that is not yet ported.
+	  (M14D1G1664A, 8-bank); T31A populates 128 MB DDR3
+	  (M15T1G1664A, 8-bank, hardware write-leveling). Each is a
+	  distinct entry so the exact SKU is identified at boot.
 
 config T31_VARIANT_C100
 	bool "C100 (DDR2-64M, CPU 1392 MHz, T31X-class small die)"
 
 config T31_VARIANT_T31A
-	bool "T31A (DDR3-128M, CPU 1512 MHz) [NOT YET SUPPORTED]"
+	bool "T31A (DDR3-128M, CPU 1512 MHz)"
 	help
-	  T31A uses a DDR3 controller/PHY init path that is not yet
-	  ported (sdram.c is DDR2-only). Selecting this fails the
-	  build by design until the DDR3 path lands.
+	  T31A populates 128 MB DDR3 M15T1G1664A and uses the legacy
+	  Innophy DDR3 controller/PHY init path (DFI reset, the DDR3
+	  LMR MRS sequence and hardware write-leveling) instead of the
+	  DDR2 soft path. Selects CONFIG_T31_DDR3.
 
 config T31_VARIANT_T31AL
 	bool "T31AL (DDR2-128M, CPU 1392 MHz)"
@@ -54,14 +55,25 @@ config T31_VARIANT_NAME
 
 config T31_DRAM_128M
 	bool
-	default y if T31_VARIANT_T31X || T31_VARIANT_T31AL
+	default y if T31_VARIANT_T31X || T31_VARIANT_T31AL || T31_VARIANT_T31A
 	help
-	  T31X/T31AL populate the 128 MB DDR2 M14D1G1664A (8-bank);
-	  T31N/T31L/T31LC/C100 the 64 MB M14D5121632A (4-bank).
-	  Selects the matching DDRC_CFG/MMAP geometry, the 8-bank flag
-	  and the chip size in mach/t31-ddr.h. Both run DDR 600 MHz so
-	  REFCNT/TIMING/MR0 are shared. T31A is DDR3-128M (separate,
-	  not built by the DDR2-only sdram.c yet).
+	  T31X/T31AL populate the 128 MB DDR2 M14D1G1664A (8-bank) and
+	  T31A the 128 MB DDR3 M15T1G1664A (8-bank); T31N/T31L/T31LC/
+	  C100 the 64 MB M14D5121632A (4-bank). Selects the matching
+	  DDRC_CFG/MMAP geometry, the 8-bank flag and the chip size in
+	  mach/t31-ddr.h (shared between the 128 MB DDR2 and DDR3
+	  parts - same row/col/bank/size).
+
+config T31_DDR3
+	bool
+	default y if T31_VARIANT_T31A
+	help
+	  T31A is DDR3 M15T1G1664A. Selects the DDR3 controller/PHY
+	  parameter set (mach/t31-ddr.h: DDRC_CFG/REFCNT/TIMING1-6/
+	  MR0) and the legacy Innophy DDR3 init branches in
+	  t31/sdram.c (INNO_MEM_CFG=0x30, DFI reset, the no-poll DDR3
+	  LMR MRS sequence and hardware write-leveling) instead of the
+	  DDR2 soft path. Geometry is shared via T31_DRAM_128M.
 
 config T31_APLL_MHZ
 	int

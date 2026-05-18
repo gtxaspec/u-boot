@@ -3,7 +3,8 @@
  * Ingenic T33 DDR: Synopsys uMCTL2 controller + Innophy training PHY
  *
  * Profile: T33 (vendor PRJ008) DDR2 M14D5121632A, 64 MB, 16-bit bus,
- *   CS0 only. DDR controller 650 MHz (data rate; tCK 1538 ps).
+ *   CS0 only. DDR controller 650 MHz (L/DL bins; tCK 1538 ps) or
+ *   550 MHz (VL/ZL bins, CONFIG_T33_DDR2_550). Same chip / pin MAP.
  *
  * This is NOT the legacy XBurst1 DDRC used by T10-T31. T33 has a
  * Synopsys uMCTL2-class controller (DDRC_MSTR/INITn/DRAMTMGn/
@@ -345,31 +346,58 @@ enum {
  */
 #define T33_DDR_TYPE_DDR2	0x1111
 #define T33_DDR_SIZE		0x04000000U	/* 64 MB */
-#define T33_DDR_FREQ		650000000U	/* controller data rate */
+
+/*
+ * Variant-varying DDR2 set. The vendor PRJ008 goat bins share the
+ * same M14D5121632A chip / pin MAP / 64 MB; they differ only in the
+ * DDR clock and the dependent uMCTL2 + Innophy timing. Values are
+ * the exact host ddr_creator_chip_v3 output: PRJ008_l/dl (default,
+ * 650 MHz) vs PRJ008_vl/zl (CONFIG_T33_DDR2_550, 550 MHz). Every
+ * other DDRC_/DDRP_ value below is bin-invariant.
+ */
+#if defined(CONFIG_T33_DDR2_550)
+#define T33_DDR_FREQ		550000000U	/* VL/ZL data rate */
+#define DDRC_INIT0		0x00010036
+#define DDRC_INIT3		0x0f130000
+#define DDRC_TIMING0		0x0901120c
+#define DDRC_TIMING1		0x00020310
+#define DDRC_TIMING4		0x04010304
+#define DDRC_TIMING8		0x00000401
+#define DDRC_RFSHTMG		0x0043001d
+#define DDRP_REG_PHY_TRFC	0x0000001d
+#define DDRP_REG_PHY_TREFI	0x00000862
+#else
+#define T33_DDR_FREQ		650000000U	/* L/DL data rate */
+#define DDRC_INIT0		0x00010040
+#define DDRC_INIT3		0x01130000
+#define DDRC_TIMING0		0x0a01150f
+#define DDRC_TIMING1		0x00020313
+#define DDRC_TIMING4		0x04010405
+#define DDRC_TIMING8		0x00000402
+#define DDRC_RFSHTMG		0x004f0023
+#define DDRP_REG_PHY_TRFC	0x00000023
+#define DDRP_REG_PHY_TREFI	0x000009e8
+#endif
 
 /*
  * Compile-time constants (vendor names: the controller register
  * VALUE is DDRC_<reg>, distinct from the unprefixed register ADDRESS
  * macro <reg> above, so t33/sdram.c reads near-verbatim against the
  * vendor ddr_innophy.c). MR0=0x0113/MR1=0x0000 (INIT3),
- * MR2=0x0000/MR3=0x0000 (INIT4).
+ * MR2=0x0000/MR3=0x0000 (INIT4). These are bin-invariant; the
+ * clock-dependent regs (INIT0/INIT3/TIMING0/1/4/8, RFSHTMG, PHY
+ * TRFC/TREFI) live in the CONFIG_T33_DDR2_550 block above.
  */
 #define DDRC_MSTR		0x00040000
-#define DDRC_INIT0		0x00010040
 #define DDRC_INIT1		0x00000007
 #define DDRC_INIT2		0x00000000
-#define DDRC_INIT3		0x01130000
 #define DDRC_INIT4		0x00000000
 #define DDRC_INIT5		0x00000000
-#define DDRC_TIMING0		0x0a01150f
-#define DDRC_TIMING1		0x00020313
 #define DDRC_TIMING2		0x00000408
 #define DDRC_TIMING3		0x00001000
-#define DDRC_TIMING4		0x04010405
 #define DDRC_TIMING5		0x01010202
 #define DDRC_TIMING6		0x00000000
 #define DDRC_TIMING7		0x00000101
-#define DDRC_TIMING8		0x00000402
 #define DDRC_TIMING14		0x00000000
 #define DDRC_ADDRMAP1		0x003f1515
 #define DDRC_ADDRMAP2		0x00000000
@@ -378,7 +406,6 @@ enum {
 #define DDRC_ADDRMAP5		0x04040404
 #define DDRC_ADDRMAP6		0x0f0f0f04
 #define DDRC_RFSHCTL3		0x00000002
-#define DDRC_RFSHTMG		0x004f0023
 #define DDRC_ODTCFG		0x07020708
 #define DDRC_DFITMG0		0x06020002
 #define DDRC_DFITMG1		0x00080307
@@ -387,8 +414,6 @@ enum {
 #define DDRP_CWL_FRE_OP0	0x00000007
 #define DDRP_CL_FRE_OP0		0x00000008
 #define DDRP_AL_FRE_OP0		0x00000000
-#define DDRP_REG_PHY_TRFC	0x00000023
-#define DDRP_REG_PHY_TREFI	0x000009e8
 #define DDRP_MEM_SELECT_T	0x00000000
 #define DDRP_REG_PLLPOSTDIVEN	0x00000000
 #define DDRP_REG_PLLPOSTDIV	0x00000000

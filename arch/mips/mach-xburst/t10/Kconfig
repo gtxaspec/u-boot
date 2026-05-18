@@ -15,11 +15,11 @@ choice
 	  T10X (DDR2 128 MB) is a future variant - not in this
 	  64 MB choice.
 
-config T10_VARIANT_T10N
-	bool "T10N (CPU 860 MHz, DDR 500, 64 MB)"
-
 config T10_VARIANT_T10L
 	bool "T10L / lite (CPU 712 MHz, DDR 500, 64 MB)"
+
+config T10_VARIANT_T10N
+	bool "T10N (CPU 860 MHz, DDR 500, 64 MB)"
 
 endchoice
 

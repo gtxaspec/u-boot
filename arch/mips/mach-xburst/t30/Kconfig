@@ -17,6 +17,9 @@ choice
 	  uses the original isvp_t30.h - other SoCs keep the fork's.
 	  T30A1 (T30A silicon + DDR3-128M) is deferred (DDR3).
 
+config T30_VARIANT_T30A
+	bool "T30A (CPU 864 MHz, DDR 500, 128 MB)"
+
 config T30_VARIANT_T30L
 	bool "T30L / lite (CPU 720 MHz, DDR 500, 64 MB)"
 
@@ -26,16 +29,13 @@ config T30_VARIANT_T30N
 config T30_VARIANT_T30X
 	bool "T30X (CPU 864 MHz, DDR 500, 128 MB)"
 
-config T30_VARIANT_T30A
-	bool "T30A (CPU 864 MHz, DDR 500, 128 MB)"
-
 endchoice
 
 config T30_VARIANT_NAME
 	string
+	default "T30A" if T30_VARIANT_T30A
 	default "T30N" if T30_VARIANT_T30N
 	default "T30X" if T30_VARIANT_T30X
-	default "T30A" if T30_VARIANT_T30A
 	default "T30L"
 
 config T30_DRAM_128M
@@ -51,9 +51,9 @@ config T30_DRAM_128M
 
 config T30_APLL_MNOD
 	hex
+	default 0x04704840 if T30_VARIANT_T30A
 	default 0x04704840 if T30_VARIANT_T30N
 	default 0x04704840 if T30_VARIANT_T30X
-	default 0x04704840 if T30_VARIANT_T30A
 	default 0x07705040
 	help
 	  CPAPCR value, exact ORIGINAL vendor isvp_t30.h

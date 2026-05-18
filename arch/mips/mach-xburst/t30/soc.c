@@ -38,8 +38,12 @@ static void spl_put_hex(u32 v)
 		t30_spl_putc(hex[(v >> i) & 0xf]);
 }
 
-/* T30N is 64 MB (M14D5121632A); no 128/32 MB T30 board in scope. */
+/* T30N/T30L = 64 MB M14D5121632A; T30X/T30A = 128 MB M14D1G1664A. */
+#if defined(CONFIG_T30_DRAM_128M)
+#define T30_DRAM_SIZE	0x08000000u	/* 128 MB */
+#else
 #define T30_DRAM_SIZE	0x04000000u	/* 64 MB */
+#endif
 
 /*
  * Verify DRAM up to the configured size. Two passes: a stuck-bit

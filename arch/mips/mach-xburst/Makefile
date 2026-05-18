@@ -8,3 +8,4 @@ obj-$(CONFIG_SOC_T23)		+= t23/
 obj-$(CONFIG_SOC_T21)		+= t21/
 obj-$(CONFIG_SOC_T30)		+= t30/
 obj-$(CONFIG_SOC_T20)		+= t20/
+obj-$(CONFIG_SOC_T10)		+= t10/

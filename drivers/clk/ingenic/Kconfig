@@ -45,3 +45,13 @@ config CLK_INGENIC_T20
 	  T20 uses the T31/T23-style M/N/OD1/OD0 PLL encoding (NOT the
 	  cpm_cpxpcr_t form of T21/T30). Provides rate/gate control for
 	  the leaf peripheral clocks (SFC, MMC, GMAC) that U-Boot drives.
+
+config CLK_INGENIC_T10
+	bool "Ingenic T10 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T10 SoC Clock/Power Manager (CGU).
+	  Same M/N/OD1/OD0 PLL encoding and CGU leaf map as T20 (SSI/MSC/
+	  MAC PLL-select = single bit 31, ce/busy/stop = 29/28/27).
+	  Provides rate/gate control for the leaf peripheral clocks (SFC,
+	  MMC, GMAC) that U-Boot drives.

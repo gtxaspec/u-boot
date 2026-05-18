@@ -16,24 +16,24 @@ choice
 config T30_VARIANT_T30L
 	bool "T30L / lite (CPU 750 MHz, DDR 500, 64 MB)"
 
-config T30_VARIANT_T30
-	bool "T30 (CPU 900 MHz, DDR 500, 64 MB)"
+config T30_VARIANT_T30N
+	bool "T30N (CPU 900 MHz, DDR 500, 64 MB)"
 
 endchoice
 
 config T30_VARIANT_NAME
 	string
-	default "T30" if T30_VARIANT_T30
+	default "T30N" if T30_VARIANT_T30N
 	default "T30L"
 
 config T30_APLL_MNOD
 	hex
-	default 0x04a04840 if T30_VARIANT_T30
+	default 0x04a04840 if T30_VARIANT_T30N
 	default 0x07c05040
 	help
 	  CPAPCR value, exact vendor CONFIG_SYS_APLL_MNOD:
 	  750 = (M=124,N=1,OD1=2<<11,OD0=2<<5) = 0x07c05040 (T30L);
-	  900 = (M=74,N=1,OD1=1<<11,OD0=2<<5)  = 0x04a04840 (T30).
+	  900 = (M=74,N=1,OD1=1<<11,OD0=2<<5)  = 0x04a04840 (T30N).
 
 config SPL_T30_USB_BOOT
 	bool "T30 SPL: return to mask ROM for USB boot (dev loop)"

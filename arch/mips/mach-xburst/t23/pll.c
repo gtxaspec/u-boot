@@ -18,16 +18,28 @@
 
 /* APLL: exact vendor CPAPCR word for the selected variant. */
 #define T23_APLL_MNOD	CONFIG_T23_APLL_MNOD
-/* MPLL 1200 MHz = (M=100,N=1,OD1=2,OD0=1) - vendor standard word. */
-#define T23_MPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+/* MPLL: exact vendor CPMPCR word, per variant (1200 std /
+ * 1000 for the T23X/T23DN DDR_500M profile). */
+#define T23_MPLL_MNOD	CONFIG_T23_MPLL_MNOD
 
 /*
- * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL, conservative dividers.
- * SEL_SRC=2 SEL_CPU=1 SEL_H0=2 SEL_H2=2
- * DIV_PCLK=12 DIV_H2=6 DIV_H0=6 DIV_L2=2 DIV_CPU=1
+ * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL. SEL_SRC=2 SEL_CPU=1
+ * SEL_H0=2 SEL_H2=2; DIV_L2=2 DIV_CPU=1. Bus dividers track the
+ * MPLL band (vendor DDR_xxxM table): the T23X/T23DN MPLL-1000
+ * (DDR 500) profile uses PCLK 8 / H2 4 / H0 4; the MPLL-1200
+ * variants (DDR 600/400) use PCLK 12 / H2 6 / H0 6.
  */
+#if CONFIG_T23_DDR_MHZ == 500
+#define T23_CPCCR_DIV_PCLK	8
+#define T23_CPCCR_DIV_HX	4
+#else
+#define T23_CPCCR_DIV_PCLK	12
+#define T23_CPCCR_DIV_HX	6
+#endif
 #define T23_CPCCR_CFG	((2 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | \
-			 ((12 - 1) << 16) | ((6 - 1) << 12) | ((6 - 1) << 8) | \
+			 ((T23_CPCCR_DIV_PCLK - 1) << 16) | \
+			 ((T23_CPCCR_DIV_HX - 1) << 12) | \
+			 ((T23_CPCCR_DIV_HX - 1) << 8) | \
 			 ((2 - 1) << 4) | ((1 - 1) << 0))
 
 static void cpm_writel(u32 val, unsigned int off)

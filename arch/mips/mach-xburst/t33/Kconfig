@@ -4,28 +4,38 @@ choice
 	prompt "T33 SoC variant"
 	default T33_VARIANT_L
 	help
-	  Specific T33 (vendor PRJ008) DDR2 goat SKU. All four use
-	  the same 64 MB DDR2 M14D5121632A (same chip and pin MAP);
-	  the bins differ only in the DDR/CPU clock. Authoritative
-	  params are the host pll_params_creator / ddr_creator_chip_v3
-	  output for PRJ008_<sku>_goat_sfcnor (verbatim, NOT
-	  recomputed): L/DL = APLL 950 / MPLL 1300 / DDR 650 MHz;
-	  VL/ZL = APLL 891 / MPLL 1100 / DDR 550 MHz. DL is param-
-	  identical to L and ZL to VL (vendor bin badge only). The
-	  PRJ008 DDR3 SKUs (n/vn/zn) need a separate DDR3 PHY port
-	  and are deferred (not selectable here).
+	  Specific T33 (vendor PRJ008) goat SKU. Authoritative params
+	  are the host pll_params_creator / ddr_creator_chip_v3 output
+	  for PRJ008_<sku>_goat_sfcnor (verbatim, NOT recomputed):
+	    L/DL   DDR2 M14D5121632A 64 MB,  APLL 950 / DDR 650
+	    VL/ZL  DDR2 M14D5121632A 64 MB,  APLL 891 / DDR 550
+	    N      DDR3 W631GU6NG   128 MB,  APLL 950 / DDR 900
+	    VN/ZN  DDR3 W631GU6NG   128 MB,  APLL 891 / DDR 700
+	  DL==L, ZL==VL, ZN==VN (vendor bin badge only - param
+	  identical). DDR2 = soft-train; DDR3 = hardware-train (a
+	  different Innophy PHY path). The W632GU6NG/LPDDR3 PRJ008
+	  bins do not exist (those are PRJ007/T32 only).
 
 config T33_VARIANT_L
-	bool "T33L (DDR 650 MHz)"
+	bool "T33L (DDR2 650 MHz, 64 MB)"
 
 config T33_VARIANT_DL
-	bool "T33DL (DDR 650 MHz; == L params)"
+	bool "T33DL (DDR2 650 MHz; == L params)"
 
 config T33_VARIANT_VL
-	bool "T33VL (DDR 550 MHz)"
+	bool "T33VL (DDR2 550 MHz, 64 MB)"
 
 config T33_VARIANT_ZL
-	bool "T33ZL (DDR 550 MHz; == VL params)"
+	bool "T33ZL (DDR2 550 MHz; == VL params)"
+
+config T33_VARIANT_N
+	bool "T33N (DDR3 900 MHz, 128 MB)"
+
+config T33_VARIANT_VN
+	bool "T33VN (DDR3 700 MHz, 128 MB)"
+
+config T33_VARIANT_ZN
+	bool "T33ZN (DDR3 700 MHz; == VN params)"
 
 endchoice
 
@@ -34,18 +44,44 @@ config T33_VARIANT_NAME
 	default "T33DL" if T33_VARIANT_DL
 	default "T33VL" if T33_VARIANT_VL
 	default "T33ZL" if T33_VARIANT_ZL
+	default "T33N"  if T33_VARIANT_N
+	default "T33VN" if T33_VARIANT_VN
+	default "T33ZN" if T33_VARIANT_ZN
 	default "T33L"
+
+# --- internal DDR param-class selectors (one is set per variant) ---
+# The mach/t33-ddr.h param chain and t33/pll.c key off these.
 
 config T33_DDR2_550
 	bool
 	default y if T33_VARIANT_VL || T33_VARIANT_ZL
 	help
-	  VL/ZL bins clock the M14D5121632A at DDR 550 MHz (APLL
-	  891 / MPLL 1100) instead of L/DL's 650 MHz (APLL 950 /
-	  MPLL 1300). Selects the matching CPAPCR/CPMPCR/CPCCR
-	  words (t33/pll.c) and the clock-dependent uMCTL2/Innophy
-	  timing set (mach/t33-ddr.h). Same chip, pin MAP and 64 MB
-	  size - only the clock and dependent timing differ.
+	  DDR2 VL/ZL: M14D5121632A at 550 MHz (APLL 891 / MPLL
+	  1100) vs L/DL 650 (APLL 950 / MPLL 1300). Default DDR2
+	  set is L (650).
+
+config T33_DDR3_W631_900
+	bool
+	default y if T33_VARIANT_N
+	help
+	  DDR3 W631GU6NG 128 MB at 900 MHz (T33N): APLL 950 /
+	  MPLL 1200.
+
+config T33_DDR3_W631_700
+	bool
+	default y if T33_VARIANT_VN || T33_VARIANT_ZN
+	help
+	  DDR3 W631GU6NG 128 MB at 700 MHz (T33VN/ZN): APLL 891
+	  / MPLL 1400.
+
+config T33_DDR3
+	bool
+	default y if T33_DDR3_W631_900 || T33_DDR3_W631_700
+	help
+	  Master "this build is DDR3" switch (vs DDR2). Selects the
+	  hardware-train Innophy path + DDR3 ddrc_init register
+	  branches + DDR3 drive/ODT defaults + the W631GU6NG pin
+	  MAP in t33/sdram.c. DDR2 builds use the soft-train path.
 
 config SPL_T33_USB_BOOT
 	bool "T33 SPL: return to mask ROM for USB boot (dev loop)"

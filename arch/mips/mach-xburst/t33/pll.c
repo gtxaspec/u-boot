@@ -29,14 +29,24 @@
  * 0x55700000 first (bin-invariant).
  */
 #define T33_CPCCR_DEFAULT	0x55700000u
-#if defined(CONFIG_T33_DDR2_550)
-#define T33_CPAPCR	0x1290a1c1u	/* APLL 891 MHz (VL/ZL) */
-#define T33_CPMPCR	0x113099c1u	/* MPLL 1100 MHz */
+#if defined(CONFIG_T33_DDR3_W631_900)	/* T33N: APLL 950 / MPLL 900 / DDR 900 */
+#define T33_CPAPCR	0x1db0e1c1u
+#define T33_CPMPCR	0x04b051c1u
+#define T33_CPCCR_DIV	0x55752210u	/* H0/H2DIV 2, PDIV 5 */
+#define T33_CPCCR_SEL	0x9a052210u
+#elif defined(CONFIG_T33_DDR3_W631_700)	/* T33VN/ZN: APLL 891 / MPLL 1400 / DDR 700 */
+#define T33_CPAPCR	0x1290a1c1u
+#define T33_CPMPCR	0x0af099c1u
+#define T33_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
+#define T33_CPCCR_SEL	0x9a094410u
+#elif defined(CONFIG_T33_DDR2_550)	/* VL/ZL: APLL 891 / MPLL 1100 / DDR 550 */
+#define T33_CPAPCR	0x1290a1c1u
+#define T33_CPMPCR	0x113099c1u
 #define T33_CPCCR_DIV	0x55773310u	/* H0/H2DIV 3, PDIV 7 */
 #define T33_CPCCR_SEL	0x9a073310u
-#else
-#define T33_CPAPCR	0x1db0e1c1u	/* APLL 950 MHz (L/DL) */
-#define T33_CPMPCR	0x145099c1u	/* MPLL 1300 MHz */
+#else					/* L/DL: APLL 950 / MPLL 1300 / DDR 650 */
+#define T33_CPAPCR	0x1db0e1c1u
+#define T33_CPMPCR	0x145099c1u
 #define T33_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
 #define T33_CPCCR_SEL	0x9a094410u
 #endif
@@ -98,7 +108,11 @@ void clk_ungate_uart(unsigned int idx)
  * divider[7:0]. cdr = MPLL / CK - 1.
  */
 #define T33_EXTAL_HZ	24000000U
-#if defined(CONFIG_T33_DDR2_550)
+#if defined(CONFIG_T33_DDR3_W631_900)
+#define T33_DDR_CK_HZ	450000000U	/* T33N: 900M / 2 */
+#elif defined(CONFIG_T33_DDR3_W631_700)
+#define T33_DDR_CK_HZ	350000000U	/* T33VN/ZN: 700M / 2 */
+#elif defined(CONFIG_T33_DDR2_550)
 #define T33_DDR_CK_HZ	275000000U	/* VL/ZL: 550M / 2 */
 #else
 #define T33_DDR_CK_HZ	325000000U	/* L/DL: 650M / 2 */

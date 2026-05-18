@@ -10,7 +10,9 @@
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t31.h>
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <usb.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -68,6 +70,7 @@ static void t31_msc0_init(void)
 		;
 }
 
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 /*
  * Bring up the USB OTG PHY for host. Faithful transliteration of the
  * vendor board/ingenic/isvp_t31/usb_init.c board_usb_init() - the
@@ -185,6 +188,7 @@ void otg_phy_init(struct dwc2_udc *dev)
 
 	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
 }
+#endif /* CONFIG_USB || CONFIG_USB_GADGET */
 
 int dram_init(void)
 {
@@ -196,7 +200,9 @@ int dram_init(void)
 int board_init(void)
 {
 	t31_msc0_init();
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 	t31_usb_phy_init();
+#endif
 	return 0;
 }
 

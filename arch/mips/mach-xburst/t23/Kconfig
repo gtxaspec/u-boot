@@ -13,11 +13,14 @@ choice
 	  (non-uniform N/OD - do not recompute, the vendor numbers are
 	  authoritative).
 
+config T23_VARIANT_T23DL
+	bool "T23DL (CPU 1188 MHz, 32 MB)"
+
+config T23_VARIANT_T23DN
+	bool "T23DN (CPU 1000 MHz, 32 MB)"
+
 config T23_VARIANT_T23N
 	bool "T23N (CPU 1188 MHz, 64 MB)"
-
-config T23_VARIANT_T23ZN
-	bool "T23ZN (CPU 1188 MHz, 64 MB)"
 
 config T23_VARIANT_T23N_HP
 	bool "T23N-HP (CPU 1400 MHz, 64 MB)"
@@ -28,21 +31,18 @@ config T23_VARIANT_T23N_LP
 config T23_VARIANT_T23X
 	bool "T23X / T23 base (CPU 1000 MHz, 64 MB)"
 
-config T23_VARIANT_T23DL
-	bool "T23DL (CPU 1188 MHz, 32 MB)"
-
-config T23_VARIANT_T23DN
-	bool "T23DN (CPU 1000 MHz, 32 MB)"
+config T23_VARIANT_T23ZN
+	bool "T23ZN (CPU 1188 MHz, 64 MB)"
 
 endchoice
 
 config T23_VARIANT_NAME
 	string
+	default "T23DL"   if T23_VARIANT_T23DL
+	default "T23DN"   if T23_VARIANT_T23DN
 	default "T23N-HP" if T23_VARIANT_T23N_HP
 	default "T23N-LP" if T23_VARIANT_T23N_LP
 	default "T23X"    if T23_VARIANT_T23X
-	default "T23DL"   if T23_VARIANT_T23DL
-	default "T23DN"   if T23_VARIANT_T23DN
 	default "T23ZN"   if T23_VARIANT_T23ZN
 	default "T23N"
 
@@ -58,21 +58,21 @@ config T23_DRAM_32M
 
 config T23_APLL_MNOD
 	hex
+	default 0x1290d100 if T23_VARIANT_T23DL
+	default 0x07d05900 if T23_VARIANT_T23DN
 	default 0x15e0d100 if T23_VARIANT_T23N_HP
 	default 0x0ea0d100 if T23_VARIANT_T23N_LP
 	default 0x07d05900 if T23_VARIANT_T23X
-	default 0x07d05900 if T23_VARIANT_T23DN
-	default 0x1290d100 if T23_VARIANT_T23DL
 	default 0x1290d100
 	help
 	  CPAPCR value = (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8), exact
 	  vendor CONFIG_SYS_APLL_MNOD: 1400=(350,3,2,1)=0x15e0d100,
 	  1188=(297,3,2,1)=0x1290d100, 1000=(125,1,3,1)=0x07d05900,
-	  936=(234,3,2,1)=0x0ea0d100. T23DL is vendor-exact (APLL
-	  1188 + DDR 600). T23DN's vendor profile is APLL 1000 + DDR
-	  500; the shared 600 MHz DDR path is used for it pending a
-	  per-variant DDR-clock split (rig device is T23N, so this is
-	  not yet HW-exercised).
+	  936=(234,3,2,1)=0x0ea0d100. T23N/T23ZN take the bare 1188
+	  default. T23DL is vendor-exact (APLL 1188 + DDR 600). T23DN's
+	  vendor profile is APLL 1000 + DDR 500; the shared 600 MHz DDR
+	  path is used for it pending a per-variant DDR-clock split (rig
+	  device is T23N, so this is not yet HW-exercised).
 
 config SPL_T23_USB_BOOT
 	bool "T23 SPL: return to mask ROM for USB boot (dev loop)"

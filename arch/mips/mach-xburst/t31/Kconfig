@@ -75,9 +75,9 @@ config T31_DDR3
 	  and the legacy Innophy DDR3 init branches in t31/sdram.c
 	  (INNO_MEM_CFG=0x30, DFI reset, the no-poll DDR3 LMR MRS
 	  sequence and hardware write-leveling) instead of the DDR2
-	  soft path. Geometry is shared via T31_DRAM_128M. Both run
-	  the T31 fixed DDR clock (600 MHz); APLL differs (T31A 1512,
-	  C100 1392, via T31_APLL_MHZ).
+	  soft path. Geometry is shared via T31_DRAM_128M. The DDR
+	  clock is MPLL/2 (T31_MPLL_MHZ): T31A 750, C100 600. APLL
+	  differs too (T31A 1512, C100 1392, via T31_APLL_MHZ).
 
 config T31_APLL_MHZ
 	int
@@ -93,6 +93,22 @@ config T31_APLL_MHZ
 	  SPL programs CPAPCR M = T31_APLL_MHZ / 12 (N=1, OD0=1,
 	  OD1=2); the value must be a multiple of 12 and keep
 	  Fvco = 24*M within 1250-5000 MHz.
+
+config T31_MPLL_MHZ
+	int
+	default 1500 if T31_VARIANT_T31A
+	default 1200
+	help
+	  MPLL target in MHz for the selected variant. MPLL feeds the
+	  DDR clock (DDR = MPLL/2) and the H0/H2/PCLK bus tree. The
+	  vendor runs MPLL per variant: 1200 (DDR 600 - T31X/T31AL/
+	  C100 and the DDR2-64M group today) and 1500 (DDR 750 -
+	  T31A, the M15T1G1664A native rate). The SPL programs CPMPCR
+	  M = T31_MPLL_MHZ / 12 (N=1, OD0=1, OD1=2); must be a
+	  multiple of 12. DDR 600 and 750 share the CPCCR bus
+	  dividers (PCLK 12 / H2 6 / H0 6), so only M changes here.
+	  (The DDR-500 group N/L/LC still runs 1200/600 - their
+	  vendor-native MPLL 1000 / DDR 500 is a separate follow-up.)
 
 config SPL_T31_USB_BOOT
 	bool "T31 SPL: return to mask ROM for USB boot (dev loop)"

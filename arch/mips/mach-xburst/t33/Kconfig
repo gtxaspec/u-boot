@@ -1,5 +1,52 @@
 if SOC_T33
 
+choice
+	prompt "T33 SoC variant"
+	default T33_VARIANT_L
+	help
+	  Specific T33 (vendor PRJ008) DDR2 goat SKU. All four use
+	  the same 64 MB DDR2 M14D5121632A (same chip and pin MAP);
+	  the bins differ only in the DDR/CPU clock. Authoritative
+	  params are the host pll_params_creator / ddr_creator_chip_v3
+	  output for PRJ008_<sku>_goat_sfcnor (verbatim, NOT
+	  recomputed): L/DL = APLL 950 / MPLL 1300 / DDR 650 MHz;
+	  VL/ZL = APLL 891 / MPLL 1100 / DDR 550 MHz. DL is param-
+	  identical to L and ZL to VL (vendor bin badge only). The
+	  PRJ008 DDR3 SKUs (n/vn/zn) need a separate DDR3 PHY port
+	  and are deferred (not selectable here).
+
+config T33_VARIANT_L
+	bool "T33L (DDR 650 MHz)"
+
+config T33_VARIANT_DL
+	bool "T33DL (DDR 650 MHz; == L params)"
+
+config T33_VARIANT_VL
+	bool "T33VL (DDR 550 MHz)"
+
+config T33_VARIANT_ZL
+	bool "T33ZL (DDR 550 MHz; == VL params)"
+
+endchoice
+
+config T33_VARIANT_NAME
+	string
+	default "T33DL" if T33_VARIANT_DL
+	default "T33VL" if T33_VARIANT_VL
+	default "T33ZL" if T33_VARIANT_ZL
+	default "T33L"
+
+config T33_DDR2_550
+	bool
+	default y if T33_VARIANT_VL || T33_VARIANT_ZL
+	help
+	  VL/ZL bins clock the M14D5121632A at DDR 550 MHz (APLL
+	  891 / MPLL 1100) instead of L/DL's 650 MHz (APLL 950 /
+	  MPLL 1300). Selects the matching CPAPCR/CPMPCR/CPCCR
+	  words (t33/pll.c) and the clock-dependent uMCTL2/Innophy
+	  timing set (mach/t33-ddr.h). Same chip, pin MAP and 64 MB
+	  size - only the clock and dependent timing differ.
+
 config SPL_T33_USB_BOOT
 	bool "T33 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL

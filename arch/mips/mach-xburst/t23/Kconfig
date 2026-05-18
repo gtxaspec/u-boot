@@ -69,10 +69,32 @@ config T23_APLL_MNOD
 	  vendor CONFIG_SYS_APLL_MNOD: 1400=(350,3,2,1)=0x15e0d100,
 	  1188=(297,3,2,1)=0x1290d100, 1000=(125,1,3,1)=0x07d05900,
 	  936=(234,3,2,1)=0x0ea0d100. T23N/T23ZN take the bare 1188
-	  default. T23DL is vendor-exact (APLL 1188 + DDR 600). T23DN's
-	  vendor profile is APLL 1000 + DDR 500; the shared 600 MHz DDR
-	  path is used for it pending a per-variant DDR-clock split (rig
-	  device is T23N, so this is not yet HW-exercised).
+	  default. Each variant now also runs its vendor-native DDR
+	  clock (see T23_MPLL_MNOD / T23_DDR_MHZ below).
+
+config T23_MPLL_MNOD
+	hex
+	default 0x07d05900 if T23_VARIANT_T23X || T23_VARIANT_T23DN
+	default 0x06405100
+	help
+	  CPMPCR value, exact vendor CONFIG_SYS_MPLL_MNOD. T23N/ZN/
+	  HP/LP/DL run MPLL 1200 (0x06405100); T23X/T23DN run the
+	  bare-T23 DDR_500M profile MPLL 1000 (0x07d05900). DDR =
+	  MPLL / (T23_DDR_MHZ-derived divider).
+
+config T23_DDR_MHZ
+	int
+	default 400 if T23_VARIANT_T23N_LP
+	default 500 if T23_VARIANT_T23X || T23_VARIANT_T23DN
+	default 600
+	help
+	  Vendor-native DDR data rate (MHz) for the variant:
+	  T23N/ZN/HP/DL 600 (MPLL 1200 / 2); T23N-LP 400 (MPLL
+	  1200 / 3); T23X/T23DN 500 (MPLL 1000 / 2). Selects
+	  DDR_TARGET_RATE and the clock-dependent DDR2 timing set
+	  (mach/t23-ddr.h); t23/pll.c uses the MPLL-1000 group's
+	  vendor DDR_500M CPCCR dividers (PCLK 8 / H2 4 / H0 4) vs
+	  the 1200-group's PCLK 12 / H2 6 / H0 6.
 
 config SPL_T23_USB_BOOT
 	bool "T23 SPL: return to mask ROM for USB boot (dev loop)"

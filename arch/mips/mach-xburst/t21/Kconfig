@@ -12,11 +12,11 @@ choice
 	  isvp_common.h CONFIG_SYS_APLL_MNOD values (non-uniform, OD0
 	  in the [7:5] field - do not recompute, vendor-authoritative).
 
-config T21_VARIANT_T21N
-	bool "T21N (CPU 864 MHz, DDR 450, 64 MB)"
-
 config T21_VARIANT_HP
 	bool "T21 HIGH_PERF (CPU 1200 MHz, DDR 500, 64 MB)"
+
+config T21_VARIANT_T21N
+	bool "T21N (CPU 864 MHz, DDR 450, 64 MB)"
 
 endchoice
 

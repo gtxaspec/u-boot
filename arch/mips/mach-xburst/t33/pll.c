@@ -79,3 +79,39 @@ void clk_ungate_uart(unsigned int idx)
 {
 	cpm_w(cpm_r(CPM_CLKGR0) & ~(CPM_CLKGR0_UART0 << idx), CPM_CLKGR0);
 }
+
+/*
+ * DDR clock. Vendor sdram_init() does _clk_set_rate(DDR,
+ * CONFIG_SYS_MEM_FREQ / 2); for PRJ008_l that is the MPLL-sourced
+ * DDR CK of 325 MHz (650 MT/s). CPM_DDRCDR layout (vendor CGU
+ * descriptor [DDR] = {.., sel_bit 30, ce 29, busy 28, stop 27}):
+ * src[31:30] (1=APLL, 2=MPLL), ce[29], busy[28], stop[27],
+ * divider[7:0]. cdr = MPLL / CK - 1.
+ */
+#define T33_EXTAL_HZ	24000000U
+#define T33_DDR_CK_HZ	325000000U	/* CONFIG_SYS_MEM_FREQ 650M / 2 */
+
+static u32 pll_rate(unsigned int cpxpcr_off)
+{
+	u32 v = cpm_r(cpxpcr_off);
+	u32 m = (v >> 20) & 0xfff;
+	u32 n = (v >> 14) & 0x3f;
+	u32 od1 = (v >> 11) & 0x7;
+	u32 od0 = (v >> 8) & 0x7;
+
+	return (u32)((u64)T33_EXTAL_HZ * m / n / od1 / od0);
+}
+
+void ddr_clk_init(void)
+{
+	u32 mpll = pll_rate(CPM_CPMPCR);
+	u32 cdr = ((mpll + T33_DDR_CK_HZ - 1) / T33_DDR_CK_HZ - 1) & 0xff;
+	u32 v;
+
+	v = cpm_r(CPM_DDRCDR);
+	v &= ~((3u << 30) | (1u << 28) | (1u << 27) | 0xff);
+	v |= (2u << 30) | (1u << 29) | cdr;	/* src=MPLL, ce, divider */
+	cpm_w(v, CPM_DDRCDR);
+	while (cpm_r(CPM_DDRCDR) & (1u << 28))	/* wait change-busy clear */
+		;
+}

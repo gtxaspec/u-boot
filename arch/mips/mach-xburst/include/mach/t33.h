@@ -61,6 +61,7 @@
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
 #define CPM_DDRCDR	0x2c
+#define CPM_SRBC0	0xc4	/* soft reset/bus control (DDRC/DDRP) */
 #define CPM_CPCSR	0xd4
 #define CPM_MESTSEL	0xec
 #define CPM_CPVPCR	0xe0	/* VPLL (unused on T33/PRJ008) */

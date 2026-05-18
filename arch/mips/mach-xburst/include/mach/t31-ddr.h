@@ -3,13 +3,14 @@
  * Ingenic T31 DDR2/DDR3 controller and Innophy PHY register map
  *
  * Profile: T31, 16-bit, CS0 only. DDR clock = MPLL/2, MPLL
- * per-variant (CONFIG_T31_MPLL_MHZ): T31A 1500->DDR 750; all
+ * per-variant (CONFIG_T31_MPLL_MHZ): T31A 1512->DDR 756; all
  * other supported variants 1200->DDR 600. (Vendor also runs
  * N/L/LC at MPLL 1000/DDR 500 - a separate follow-up; today
  * they use the 1200/600 set.)
  *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank;
  *     legacy Innophy DDR3 init path. T31A params from
- *     isvp_t31a_sfcnor_ddr128M (DDR 750); C100 from
+ *     isvp_t31a_sfcnor_ddr128M (nominal-750 set, run @756);
+ *     C100 from
  *     isvp_c100_sfcnor (DDR 600).
  *   CONFIG_T31_DRAM_128M = M14D1G1664A DDR2 128 MB, 8-bank
  *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL), DDR 600.
@@ -99,7 +100,7 @@
 
 /*
  * Clock targets: DDR = MPLL/2, MPLL per-variant (CONFIG_T31_MPLL_MHZ
- * from t31/Kconfig - 1200 -> DDR 600, 1500 -> DDR 750 for T31A).
+ * from t31/Kconfig - 1008->504, 1200->600, 1512->756 (T31A)).
  */
 #define DDR_MPLL_RATE		(CONFIG_T31_MPLL_MHZ * 1000000U)
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
@@ -134,7 +135,8 @@
 #if defined(CONFIG_T31_DDR3)
 /*
  * M15T1G1664A DDR3, per-variant native clock (DDR = MPLL/2):
- *   T31A  - DDR 750 (MPLL 1500), host set for isvp_t31a_sfcnor_ddr128M
+ *   T31A  - MPLL 1512 / DDR 756; host nominal-750 set for
+ *           isvp_t31a_sfcnor_ddr128M (vendor runs it at 756 too)
  *   C100  - DDR 600 (MPLL 1200), host set for isvp_c100_sfcnor
  * Same chip / DDRC_CFG; only the clock-dependent
  * REFCNT/TIMING1-6/MR0 differ. Both verbatim vendor

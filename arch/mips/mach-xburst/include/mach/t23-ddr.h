@@ -102,8 +102,12 @@
  * clock as T31, off the same MPLL 1200 (MNOD 100,1,2,1, set in
  * t23/pll.c). MPLL/DDR divider is /2 (cdr = 1), as on T31.
  */
-#define DDR_MPLL_RATE		1200000000U
-#define DDR_TARGET_RATE		600000000U
+#if CONFIG_T23_DDR_MHZ == 500
+#define DDR_MPLL_RATE		1000000000U	/* T23X/T23DN bare-T23 */
+#else
+#define DDR_MPLL_RATE		1200000000U	/* T23N/ZN/HP/DL/LP */
+#endif
+#define DDR_TARGET_RATE		(CONFIG_T23_DDR_MHZ * 1000000U)
 
 /*
  * DDRC_CFG / MMAP0 / MMAP1 are the exact vendor ddr_params_creator
@@ -131,14 +135,48 @@
 #endif
 
 #define DDRC_CTRL_VALUE		0x0000d91e
+#define DDRC_TIMING5_VALUE	0xff060405	/* clock-invariant */
+
+/*
+ * Clock-dependent timing. The 600 MHz set is the HW-verified
+ * margin-safe GOLD (proven on the T23N rig) - kept verbatim;
+ * its clock was always correct. The 500/400 sets are the exact
+ * vendor ddr_params_creator output for the bare-T23 (T23X 64M /
+ * T23DN 32M, DDR 500) and T23N-LP (64M, DDR 400) profiles -
+ * QEMU-only (no T23X/DN/LP silicon; rig is T23N). REFCNT/
+ * TIMING1/2/6/MR0 are geometry-invariant within a clock; only
+ * TIMING3/TIMING4 differ 32M vs 64M (tighter tRP/tRCD).
+ */
+#if CONFIG_T23_DDR_MHZ == 500
+#define DDRC_REFCNT_VALUE	0x00f20001
+#define DDRC_TIMING1_VALUE	0x040e0806
+#define DDRC_TIMING2_VALUE	0x02170707
+#define DDRC_TIMING6_VALUE	0x32170505
+#define DDRP_MR0_VALUE		0x00000f73
+#if defined(CONFIG_T23_DRAM_32M)	/* T23DN */
+#define DDRC_TIMING3_VALUE	0x2007041e
+#define DDRC_TIMING4_VALUE	0x12240031
+#else					/* T23X (64M) */
+#define DDRC_TIMING3_VALUE	0x2007051e
+#define DDRC_TIMING4_VALUE	0x1a240031
+#endif
+#elif CONFIG_T23_DDR_MHZ == 400		/* T23N-LP (64M) */
+#define DDRC_REFCNT_VALUE	0x00c20001
+#define DDRC_TIMING1_VALUE	0x040d0606
+#define DDRC_TIMING2_VALUE	0x02120607
+#define DDRC_TIMING3_VALUE	0x20060418
+#define DDRC_TIMING4_VALUE	0x14240031
+#define DDRC_TIMING6_VALUE	0x32120505
+#define DDRP_MR0_VALUE		0x00000b73
+#else					/* 600: HW-verified GOLD */
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06
 #define DDRC_TIMING2_VALUE	0x021c0a07
 #define DDRC_TIMING3_VALUE	0x200a0722
 #define DDRC_TIMING4_VALUE	0x26240031
-#define DDRC_TIMING5_VALUE	0xff060405
 #define DDRC_TIMING6_VALUE	0x321c0505
 #define DDRP_MR0_VALUE		0x00000f73
+#endif
 #define DDR_CHIP_1_SIZE		0
 
 #endif /* __T23_DDR_H__ */

@@ -14,13 +14,14 @@
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <mach/t33.h>
+#include <mach/t33-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	/* Placeholder until Stage 2 (Innophy DDR2) lands. */
-	gd->ram_size = 64 << 20;
+	/* Per the Kconfig DDR class: 64 MB DDR2 / 128 MB DDR3. */
+	gd->ram_size = T33_DDR_SIZE;
 	return 0;
 }
 

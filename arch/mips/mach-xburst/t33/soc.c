@@ -18,6 +18,7 @@
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t33.h>
+#include <mach/t33-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -43,9 +44,10 @@ static void spl_put_hex(u32 v)
 /*
  * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
  * cached (KSEG0) window and verify the read-back, stepping across the
- * full 64 MB part so a stuck/aliased address line is caught.
+ * whole part (64 MB DDR2 / 128 MB DDR3) so a stuck/aliased address
+ * line is caught.
  */
-#define T33_DRAM_SIZE	0x04000000u	/* 64 MB (M14D5121632A) */
+#define T33_DRAM_SIZE	T33_DDR_SIZE	/* per Kconfig DDR class */
 
 static int dram_verify(void)
 {

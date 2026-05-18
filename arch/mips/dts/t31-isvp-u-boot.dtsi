@@ -39,7 +39,10 @@
 
 	/*
 	 * Combined 16 MB SFC-NOR flash image: headered SPL at offset 0,
-	 * U-Boot proper at 0x10000. Erased flash reads as 0xff.
+	 * U-Boot proper at 0x8000 (SPL is ~17 KB / MAX_SIZE 0x5800, so
+	 * 32 KB clears it with margin - no 0x10000 gap). Erased flash
+	 * reads as 0xff. The SPL loader (t31/sfc.c T31_UBOOT_OFFSET)
+	 * MUST match this offset.
 	 */
 	flash {
 		filename = "u-boot-t31.bin";
@@ -59,15 +62,15 @@
 		 */
 		u-boot {
 			type = "blob";
-			offset = <0x10000>;
+			offset = <0x8000>;
 			filename = "u-boot-lzma.img";
 		};
 	};
 
 	/*
 	 * Trimmed flashable image: identical layout (headered SPL @ 0,
-	 * LZMA U-Boot @ 0x10000) but no chip-size padding - binman sizes
-	 * it to the end of the last entry (~270 KB). Flash at offset 0.
+	 * LZMA U-Boot @ 0x8000) but no chip-size padding - binman sizes
+	 * it to the end of the last entry. Flash at offset 0.
 	 */
 	flash-min {
 		filename = "u-boot-t31-min.bin";
@@ -81,7 +84,7 @@
 
 		u-boot {
 			type = "blob";
-			offset = <0x10000>;
+			offset = <0x8000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

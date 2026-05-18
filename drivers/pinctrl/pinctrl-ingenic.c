@@ -208,6 +208,7 @@ static const struct udevice_id t31_pinctrl_ids[] = {
 	{ .compatible = "ingenic,t21-pinctrl" },
 	{ .compatible = "ingenic,t30-pinctrl" },
 	{ .compatible = "ingenic,t20-pinctrl" },
+	{ .compatible = "ingenic,t10-pinctrl" },
 	{ }
 };
 
@@ -311,6 +312,7 @@ static const struct udevice_id t31_gpio_ids[] = {
 	{ .compatible = "ingenic,t21-gpio" },
 	{ .compatible = "ingenic,t30-gpio" },
 	{ .compatible = "ingenic,t20-gpio" },
+	{ .compatible = "ingenic,t10-gpio" },
 	{ }
 };
 

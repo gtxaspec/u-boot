@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0+
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "t10.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t10", "ingenic,t10";
+	model = "Ingenic ISVP-T10 (DDR2 64M, SFC NOR)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T10N) */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	bus-width = <4>;
+	broken-cd;	/* no card-detect line wired on the ISVP board */
+};
+
+&otg {
+	status = "okay";
+};

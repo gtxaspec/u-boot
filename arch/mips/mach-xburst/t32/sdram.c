@@ -173,7 +173,7 @@ static void ddrp_dqs_calibration(void)
 
 static void ddrp_training_soft_read_train(u32 dq)
 {
-	u32 min = 0xff, max = 0, med, width = 0;
+	u32 min = 0xff, med, width = 0;
 	u32 dqs;
 
 	ddrp_training_read_train_bypass(0, 0, dq);
@@ -191,7 +191,6 @@ static void ddrp_training_soft_read_train(u32 dq)
 
 		if (!ddr_mem_pattern()) {
 			width++;
-			max = dqs;
 			if (min == 0xff)
 				min = dqs;
 		}
@@ -213,7 +212,7 @@ static void ddrp_training_soft_read_train(u32 dq)
 
 static void ddrp_training_soft_write_train(void)
 {
-	u32 min = 0xff, max = 0, med, width = 0;
+	u32 min = 0xff, med, width = 0;
 	u32 dqs;
 
 	SET_INNOPHY_REG(reg_wl_bypass, 1);
@@ -230,7 +229,6 @@ static void ddrp_training_soft_write_train(void)
 
 		if (!ddr_mem_pattern()) {
 			width++;
-			max = dqs;
 			if (min == 0xff)
 				min = dqs;
 		}
@@ -248,8 +246,6 @@ static void ddrp_training_soft_write_train(void)
 	udelay(1);
 	SET_INNOPHY_REG(reg_wl_freq_update, 0);
 	SET_INNOPHY_REG(reg_train_reg_update_en, 0);
-
-	(void)max;
 }
 
 static void ddrp_training(void)

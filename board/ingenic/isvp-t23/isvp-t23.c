@@ -12,13 +12,16 @@
 
 #include <init.h>
 #include <stdio.h>
+#include <asm/global_data.h>
+#include <mach/t23.h>
+
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <dm/ofnode.h>
 #include <linux/usb/otg.h>
-#include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <linux/bitops.h>
-#include <mach/t23.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -32,6 +35,7 @@ int dram_init(void)
 	return 0;
 }
 
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 /*
  * USB PHY bring-up. Same XBurst1 USB PHY as T31, so the host path
  * is the HW-proven T31 t31_usb_phy_init() sequence (vendor isvp_t31
@@ -142,6 +146,12 @@ int board_init(void)
 
 	return 0;
 }
+#else  /* no USB (slim/wired-eth-only build) */
+int board_init(void)
+{
+	return 0;
+}
+#endif
 
 /* Printed right after the "Model:" line; shows the exact T23 SKU. */
 int checkboard(void)

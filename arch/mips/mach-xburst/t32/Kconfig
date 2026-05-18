@@ -1,0 +1,13 @@
+if SOC_T32
+
+config SPL_T32_USB_BOOT
+	bool "T32 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  clocks (and DDR once ported), then return to the bootrom
+	  (jr ra) instead of loading U-Boot proper from SPI-NOR -
+	  how the SPL is brought up and tested (QEMU / lab rig).
+	  Development only.
+
+endif

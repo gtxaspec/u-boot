@@ -56,6 +56,17 @@ config CLK_INGENIC_T31
 	  rate/gate control for the leaf peripheral clocks (SFC, MMC,
 	  GMAC) that U-Boot drives.
 
+config CLK_INGENIC_T32
+	bool "Ingenic T32 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T32 (PRJ007) SoC Clock/Power
+	  Manager. Same CGU register model as T33 (dedicated SFC0
+	  divider, ce/busy/stop = 29/28/27, CLKGR* gate map); the leaf
+	  rates are recomputed from the CPM PLL registers at runtime so
+	  the driver is shared-structure with clk-t33. Provides rate/
+	  gate control for SFC, MMC and GMAC.
+
 config CLK_INGENIC_T33
 	bool "Ingenic T33 CGU clock driver"
 	depends on CLK && ARCH_XBURST

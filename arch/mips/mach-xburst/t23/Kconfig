@@ -16,6 +16,9 @@ choice
 config T23_VARIANT_T23N
 	bool "T23N (CPU 1188 MHz, 64 MB)"
 
+config T23_VARIANT_T23ZN
+	bool "T23ZN (CPU 1188 MHz, 64 MB)"
+
 config T23_VARIANT_T23N_HP
 	bool "T23N-HP (CPU 1400 MHz, 64 MB)"
 
@@ -40,6 +43,7 @@ config T23_VARIANT_NAME
 	default "T23X"    if T23_VARIANT_T23X
 	default "T23DL"   if T23_VARIANT_T23DL
 	default "T23DN"   if T23_VARIANT_T23DN
+	default "T23ZN"   if T23_VARIANT_T23ZN
 	default "T23N"
 
 config T23_DRAM_32M

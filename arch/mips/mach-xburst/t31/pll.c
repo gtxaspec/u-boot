@@ -26,7 +26,8 @@
  */
 #define T31_APLL_M	(CONFIG_T31_APLL_MHZ / 12)
 #define T31_APLL_MNOD	((T31_APLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-#define T31_MPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+#define T31_MPLL_M	(CONFIG_T31_MPLL_MHZ / 12)
+#define T31_MPLL_MNOD	((T31_MPLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define T31_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 
 static_assert(CONFIG_T31_APLL_MHZ % 12 == 0,
@@ -35,6 +36,10 @@ static_assert(T31_APLL_M >= 16 && T31_APLL_M <= 2500,
 	      "T31 APLL M out of range");
 static_assert(24 * T31_APLL_M >= 1250 && 24 * T31_APLL_M <= 5000,
 	      "T31 APLL Fvco (24*M) out of 1250-5000 MHz");
+static_assert(CONFIG_T31_MPLL_MHZ % 12 == 0,
+	      "T31_MPLL_MHZ must be a multiple of 12");
+static_assert(24 * T31_MPLL_M >= 1250 && 24 * T31_MPLL_M <= 5000,
+	      "T31 MPLL Fvco (24*M) out of 1250-5000 MHz");
 
 /*
  * CPCCR: SCLKA=APLL, CPU<-APLL, H0/H2<-MPLL, dividers for DDR 600.

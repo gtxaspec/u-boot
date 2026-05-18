@@ -1,17 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Ingenic T31 DDR2 controller and Innophy PHY register map
+ * Ingenic T31 DDR2/DDR3 controller and Innophy PHY register map
  *
- * Profile: T31 DDR2 @ 600 MHz (MPLL 1200 / 2), 16-bit, CS0 only.
- *   CONFIG_T31_DRAM_128M = M14D1G1664A 128 MB, 8-bank
+ * Profile: T31 DDR @ 600 MHz (MPLL 1200 / 2), 16-bit, CS0 only.
+ *   CONFIG_T31_DDR3      = M15T1G1664A DDR3 128 MB, 8-bank (T31A,
+ *     isvp_t31a_sfcnor_ddr128M); legacy Innophy DDR3 init path.
+ *   CONFIG_T31_DRAM_128M = M14D1G1664A DDR2 128 MB, 8-bank
  *     (isvp_t31_sfcnor_ddr128M - T31X/T31AL).
- *   else                  = M14D5121632A 64 MB, 4-bank
+ *   else                 = M14D5121632A DDR2 64 MB, 4-bank
  *     (isvp_t31_sfcnor - T31N/T31L/T31LC/C100).
- *   Both run the SAME 600 MHz clock, so REFCNT/TIMING/MR0 are
- *   shared (clock-dependent, geometry-independent - confirmed on
- *   T30); only CFG/MMAP/DDR_BANK8/size differ by geometry. GOLD
- *   values are the known-good vendor host-params-creator output.
- *   (T31A = DDR3-128M: separate, not built by sdram.c yet.)
+ *   All run the SAME 600 MHz clock; the 128 MB DDR2/DDR3 parts
+ *   share row/col/bank/size geometry. DDR3 differs only in the
+ *   clock/type-dependent CFG/REFCNT/TIMING1-6/MR0 set and the
+ *   Innophy init branches in sdram.c. GOLD values are the
+ *   known-good vendor host-params-creator output.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -100,7 +102,11 @@
  * PHY pokes; the DWC DDRP_* values in the vendor generated header are
  * for the other PHY and are not used here.
  */
-#if defined(CONFIG_T31_DRAM_128M)
+#if defined(CONFIG_T31_DDR3)
+#define DDRC_CFG_VALUE		0x0aac8a42	/* M15T1G1664A DDR3 128M 8-bank */
+#define DDRC_MMAP0_VALUE	0x000020f8
+#define DDRC_MMAP1_VALUE	0x00002800
+#elif defined(CONFIG_T31_DRAM_128M)
 #define DDRC_CFG_VALUE		0x0aa88a42	/* M14D1G1664A 128M 8-bank */
 #define DDRC_MMAP0_VALUE	0x000020f8
 #define DDRC_MMAP1_VALUE	0x00002800
@@ -116,6 +122,18 @@
  * clock share these). T31 always runs DDR 600 (MPLL 1200/2), so
  * both the 64M and 128M parts use this one set.
  */
+#if defined(CONFIG_T31_DDR3)
+/* M15T1G1664A DDR3-1333 @ 600 MHz (host ddr_params_creator,
+ * isvp_t31a_sfcnor_ddr128M; verbatim). */
+#define DDRC_REFCNT_VALUE	0x00b60003
+#define DDRC_TIMING1_VALUE	0x06100c06
+#define DDRC_TIMING2_VALUE	0x041d0b08
+#define DDRC_TIMING3_VALUE	0x210b0627
+#define DDRC_TIMING4_VALUE	0x3c250043
+#define DDRC_TIMING5_VALUE	0xff080505
+#define DDRC_TIMING6_VALUE	0x80220505
+#define DDRP_MR0_VALUE		0x00001c40
+#else
 #define DDRC_REFCNT_VALUE	0x00910003
 #define DDRC_TIMING1_VALUE	0x050f0a06
 #define DDRC_TIMING2_VALUE	0x021c0a07
@@ -124,6 +142,7 @@
 #define DDRC_TIMING5_VALUE	0xff060405
 #define DDRC_TIMING6_VALUE	0x321c0505
 #define DDRP_MR0_VALUE		0x00000f73
+#endif
 
 #if defined(CONFIG_T31_DRAM_128M)
 #define DDR_CHIP_0_SIZE		134217728	/* 128 MB */

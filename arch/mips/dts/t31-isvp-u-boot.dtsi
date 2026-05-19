@@ -6,16 +6,14 @@
  * flash offset 0, which then loads U-Boot proper from a fixed offset.
  * This builds both pieces with 'make':
  *
- *   u-boot-spl-t31.bin : SPL with the finalized SFC-NOR boot header
- *                        (CRC7 + image length), bootable on its own
- *                        and equivalent to tools/mkt31spl.c output.
- *   u-boot-t31.bin     : full 16 MB flash image, headered SPL at
- *                        offset 0 and the LZMA U-Boot at 0x10000,
- *                        0xff-padded to the chip size.
- *   u-boot-t31-min.bin : same layout but trimmed to the end of the
- *                        U-Boot blob (~270 KB) - flash this at
- *                        offset 0 and leave the rest of the chip
- *                        untouched (erased flash already reads 0xff).
+ *   u-boot-spl-t31.bin       : SPL with the finalized SFC-NOR boot
+ *                              header (CRC7 + image length), bootable
+ *                              standalone (equiv. to tools/mkt31spl.c).
+ *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
+ *                              at 0x8000 (the SPL loader's
+ *                              T31_UBOOT_OFFSET in t31/sfc.c), trimmed
+ *                              (no 0xff padding) - flash at offset 0;
+ *                              erased flash already reads 0xff.
  */
 
 / {
@@ -38,42 +36,14 @@
 	};
 
 	/*
-	 * Combined 16 MB SFC-NOR flash image: headered SPL at offset 0,
-	 * U-Boot proper at 0x8000 (SPL is ~17 KB / MAX_SIZE 0x5800, so
-	 * 32 KB clears it with margin - no 0x10000 gap). Erased flash
-	 * reads as 0xff. The SPL loader (t31/sfc.c T31_UBOOT_OFFSET)
-	 * MUST match this offset.
+	 * Combined SFC-NOR flash image: headered SPL at offset 0, LZMA
+	 * U-Boot at 0x8000 (SPL ~17 KB / MAX_SIZE 0x5800; 32 KB clears
+	 * it with margin - no 0x10000 gap). Trimmed to the end of the
+	 * last entry; erased flash reads 0xff so the rest of the chip
+	 * is fine to leave alone after flashing at offset 0.
 	 */
 	flash {
-		filename = "u-boot-t31.bin";
-		pad-byte = <0xff>;
-		size = <0x1000000>;
-
-		spl {
-			type = "blob";
-			offset = <0x0>;
-			filename = "u-boot-spl-t31.bin";
-		};
-
-		/*
-		 * LZMA-compressed U-Boot proper inside a legacy mkimage
-		 * header; the SPL parses the header and decompresses to
-		 * CONFIG_TEXT_BASE. ~3.5x smaller than raw u-boot.bin.
-		 */
-		u-boot {
-			type = "blob";
-			offset = <0x8000>;
-			filename = "u-boot-lzma.img";
-		};
-	};
-
-	/*
-	 * Trimmed flashable image: identical layout (headered SPL @ 0,
-	 * LZMA U-Boot @ 0x8000) but no chip-size padding - binman sizes
-	 * it to the end of the last entry. Flash at offset 0.
-	 */
-	flash-min {
-		filename = "u-boot-t31-min.bin";
+		filename = "u-boot-with-spl-lzma.bin";
 		pad-byte = <0xff>;
 
 		spl {

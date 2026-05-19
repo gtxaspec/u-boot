@@ -72,6 +72,7 @@ static const struct udevice_id ingenic_sound_ids[] = {
 	{ .compatible = "ingenic,t10-sound" },
 	{ .compatible = "ingenic,t20-sound" },
 	{ .compatible = "ingenic,t21-sound" },
+	{ .compatible = "ingenic,t23-sound" },
 	{ .compatible = "ingenic,t30-sound" },
 	{ .compatible = "ingenic,t31-sound" },
 	{ .compatible = "ingenic,c100-sound" },

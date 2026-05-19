@@ -150,7 +150,7 @@ int checkboard(void)
 {
 	printf("Variant: %s\n", CONFIG_T30_VARIANT_NAME);
 #ifdef CONFIG_SPL_T30_USB_BOOT
-	puts("Loader: USB-boot (development; no NOR access)\n");
+	puts("Loader: USB-boot\n");
 #endif
 	return 0;
 }

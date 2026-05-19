@@ -201,4 +201,38 @@
 		g-tx-fifo-size = <256 256 16 16 16>;
 		status = "disabled";
 	};
+
+	/*
+	 * Audio: AIC (I2S) controller + on-chip codec. PIO playback driven
+	 * by U-Boot's `sound` command. Speaker-amp enable GPIO is per-board
+	 * (set in the board .dts via ingenic,spk-gpio; SDK default PB31
+	 * active-high). Compatible split: T20 -> A-block codec; T31/C100/T23
+	 * -> B-block codec (jz_t10_codec handles both via driver_data).
+	 */
+	aic: audio-controller@10020000 {
+		compatible = "ingenic,t31-aic";
+		reg = <0x10020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	codec: audio-codec@10021000 {
+		compatible = "ingenic,t31-codec";
+		reg = <0x10021000 0x140>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	sound: sound {
+		compatible = "ingenic,t31-sound";
+		status = "disabled";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
+	};
 };

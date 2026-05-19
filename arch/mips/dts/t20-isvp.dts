@@ -7,7 +7,9 @@
 
 / {
 	compatible = "ingenic,isvp-t20", "ingenic,t20";
-	model = "Ingenic ISVP-T20 (DDR2 64M, SFC NOR)";
+	/* One DT serves T20N/T20L (64M) and T20X (128M); the real
+	 * DRAM size is reported by dram_init, the SKU by checkboard. */
+	model = "Ingenic ISVP-T20 (SFC NOR)";
 
 	aliases {
 		serial1 = &uart1;
@@ -44,5 +46,18 @@
 };
 
 &otg {
+	status = "okay";
+};
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+};
+
+&sound {
 	status = "okay";
 };

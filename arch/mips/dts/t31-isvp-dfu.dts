@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T31, DFU/USB-boot loader variant.
+ *
+ * Identical to t31-isvp.dts except the DWC2 OTG is dr_mode =
+ * "peripheral" so the dwc2_udc_otg gadget binds (dwc2_udc_otg_bind
+ * rejects "host"). Used only by isvp_t31_usbboot_defconfig - the
+ * dev/flash loader that USB-boots and auto-enters DFU. Production
+ * NOR uses t31-isvp.dts (dr_mode="host" for USB host + USB-NIC).
+ *
+ * Memory: 128 MB - matches T31_VARIANT_T31X (the usbboot defconfig
+ * default) and also covers T31AL (Wyze V3). 64 MB variants would
+ * need their own DFU DT + defconfig pair.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "t31.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t31", "ingenic,t31";
+	model = "Ingenic ISVP-T31 (DDR2 128M, DFU loader)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x08000000>;	/* 128 MB DDR2 (T31X/T31AL) */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	bus-width = <4>;
+	broken-cd;
+};
+
+&otg {
+	status = "okay";
+	dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
+};

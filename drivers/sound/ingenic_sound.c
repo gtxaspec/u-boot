@@ -48,13 +48,17 @@ static int ingenic_sound_play(struct udevice *dev, void *data, uint data_size)
  * sound_stop_play() is always called by sound_beep() after the play
  * loop, and U-Boot's sound-uclass.c invokes ops->stop_play()
  * unconditionally (its guard checks ops->play, not ops->stop_play).
- * A driver that omits .stop_play therefore calls a NULL pointer and
- * faults. The i2s tx_data already drops replay after each buffer, so
- * this just needs to exist and succeed.
+ * Forward to the i2s driver, which keeps AICCR_ERPL held high across
+ * the per-buffer tx_data calls (toggling it between buffers is
+ * audible on B-block codecs as silence gaps) and only drops it here.
  */
+int ingenic_i2s_stop_play(struct udevice *dev);
+
 static int ingenic_sound_stop_play(struct udevice *dev)
 {
-	return 0;
+	struct sound_uc_priv *uc_priv = dev_get_uclass_priv(dev);
+
+	return ingenic_i2s_stop_play(uc_priv->i2s);
 }
 
 static int ingenic_sound_probe(struct udevice *dev)

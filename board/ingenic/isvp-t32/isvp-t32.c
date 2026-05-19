@@ -35,5 +35,8 @@ int board_init(void)
 int checkboard(void)
 {
 	printf("Variant: %s\n", CONFIG_T32_VARIANT_NAME);
+#ifdef CONFIG_SPL_T32_USB_BOOT
+	puts("Loader: USB-boot (development; no NOR access)\n");
+#endif
 	return 0;
 }

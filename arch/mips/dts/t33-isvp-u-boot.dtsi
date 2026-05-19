@@ -33,30 +33,7 @@
 	};
 
 	flash {
-		filename = "u-boot-t33.bin";
-		pad-byte = <0xff>;
-		size = <0x1000000>;
-
-		spl {
-			type = "blob";
-			offset = <0x0>;
-			filename = "u-boot-spl-t33.bin";
-		};
-
-		/*
-		 * LZMA-compressed U-Boot proper in a legacy mkimage
-		 * header; the SPL parses the header and decompresses to
-		 * CONFIG_TEXT_BASE.
-		 */
-		u-boot {
-			type = "blob";
-			offset = <0x10000>;
-			filename = "u-boot-lzma.img";
-		};
-	};
-
-	flash-min {
-		filename = "u-boot-t33-min.bin";
+		filename = "u-boot-with-spl-lzma.bin";
 		pad-byte = <0xff>;
 
 		spl {

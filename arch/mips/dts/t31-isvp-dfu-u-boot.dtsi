@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T31 DFU loader (USB-boot; binman image unused).
+ *
+ * The USB-boot path uploads spl/u-boot-spl.bin + u-boot-lzma.img
+ * directly via the mask ROM (t31-usbboot.py), so the binman flash
+ * images here are not used in the USB-boot flow. They are kept
+ * consistent with the production t31-isvp layout (LZMA U-Boot at
+ * 0x8000, not 0x10000) so a stray `make` of this config still
+ * produces a sensible flash image. Outputs:
+ *
+ *   u-boot-spl-t31.bin : SPL with the finalized SFC-NOR boot header.
+ *   u-boot-t31.bin     : full 16 MB flash image, headered SPL at 0
+ *                        and the LZMA U-Boot at 0x8000.
+ *   u-boot-t31-min.bin : same layout, trimmed to the U-Boot blob.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t31 {
+		filename = "u-boot-spl-t31.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-t31.bin";
+		pad-byte = <0xff>;
+		size = <0x1000000>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t31.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+
+	flash-min {
+		filename = "u-boot-t31-min.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t31.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

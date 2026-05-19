@@ -281,6 +281,7 @@ static const struct i2s_ops ingenic_i2s_ops = {
 static const struct ingenic_i2s_soc soc_t10  = { .mpll_hz = 1200000000u };
 static const struct ingenic_i2s_soc soc_t20  = { .mpll_hz = 1000000000u };
 static const struct ingenic_i2s_soc soc_t21  = { .mpll_hz =  900000000u };
+static const struct ingenic_i2s_soc soc_t23  = { .mpll_hz = 1200000000u };
 static const struct ingenic_i2s_soc soc_t30  = { .mpll_hz = 1000000000u };
 static const struct ingenic_i2s_soc soc_t31  = { .mpll_hz = 1200000000u };
 static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u };
@@ -289,6 +290,7 @@ static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t10-aic",  .data = (ulong)&soc_t10 },
 	{ .compatible = "ingenic,t20-aic",  .data = (ulong)&soc_t20 },
 	{ .compatible = "ingenic,t21-aic",  .data = (ulong)&soc_t21 },
+	{ .compatible = "ingenic,t23-aic",  .data = (ulong)&soc_t23 },
 	{ .compatible = "ingenic,t30-aic",  .data = (ulong)&soc_t30 },
 	{ .compatible = "ingenic,t31-aic",  .data = (ulong)&soc_t31 },
 	{ .compatible = "ingenic,c100-aic", .data = (ulong)&soc_c100 },

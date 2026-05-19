@@ -44,9 +44,8 @@
 };
 
 &gmac {
+	/* T21 embedded ePHY: no external PHY chip, no reset GPIO. */
 	status = "okay";
-	/* PHY reset GPIO; exact pin varies per board, override per device. */
-	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
 };
 
 &otg {

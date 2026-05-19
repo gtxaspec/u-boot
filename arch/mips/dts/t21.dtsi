@@ -168,19 +168,20 @@
 	};
 
 	/*
-	 * GMAC: Synopsys DesignWare MAC. ingenic,mode-reg is the CPM
-	 * GMAC-PHY-control register (CPM + 0xe8). Same glue as T31.
+	 * GMAC: Synopsys DesignWare MAC with the T21 embedded ("OMNI")
+	 * ePHY - no external PHY chip, no reset GPIO, no external RMII
+	 * pins. The dwmac_ingenic "ingenic,t21-gmac" path powers/resets
+	 * the inner PHY via the CPM GMAC-PHY-control register (CPM+0xe8)
+	 * and runs the MAC<->ePHY link in MII at a 25 MHz MAC-PHY clock.
 	 */
 	gmac: ethernet@134b0000 {
-		compatible = "ingenic,t31-gmac";
+		compatible = "ingenic,t21-gmac";
 		reg = <0x134b0000 0x2000>;
-		phy-mode = "rmii";
+		phy-mode = "mii";
 		max-speed = <100>;
-		macphy-rate = <50000000>;
+		macphy-rate = <25000000>;
 		clocks = <&cgu T21_CLK_GMAC>;
 		ingenic,mode-reg = <0x100000e8>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_mac>;
 		status = "disabled";
 	};
 

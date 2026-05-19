@@ -12,14 +12,14 @@
 #include <init.h>
 #include <stdio.h>
 #include <asm/global_data.h>
+#include <asm/io.h>
+#include <linux/delay.h>
+#include <linux/bitops.h>
 #include <mach/t21.h>
 
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <dm/ofnode.h>
 #include <linux/usb/otg.h>
-#include <asm/io.h>
-#include <linux/delay.h>
-#include <linux/bitops.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -28,6 +28,57 @@ int dram_init(void)
 {
 	gd->ram_size = 64 << 20;	/* T21N: DDR2 M14D5121632A 64 MB */
 	return 0;
+}
+
+/*
+ * MSC0 (microSD) is PB0..PB5 in device function 0 (CLK, CMD, D0..D3).
+ * The SPL never touches MSC, so set up its pinmux and functional clock
+ * here before the driver model probes - without an ungated MSC0 clock
+ * the first jz_mmc register access bus-stalls (mmc list / mmcinfo
+ * hang). Faithful to the vendor clk_set_rate(MSC, 24 MHz): source is
+ * APLL/sclka ([31:30] select 0); jz_mmc assumes a 24 MHz functional
+ * clock and T21N APLL is 864 MHz, so cdr = ((864/24)/2 - 1) = 17 and
+ * 864/(2*(17+1)) = 24 MHz exactly. Set CE and the divider, wait BUSY,
+ * and (like the vendor) never clear CE or the MSC goes unclocked on
+ * real silicon. Same approach as the HW-proven isvp-t31 t31_msc0_init.
+ */
+#define GPIO_PORTB_BASE		0xb0011000	/* GPIO_BASE + port B * 0x1000 */
+#define G_PXINTC		0x18
+#define G_PXMSKC		0x28
+#define G_PXPAT1C		0x38
+#define G_PXPAT0C		0x48
+#define G_PXPUENC		0x118
+#define G_PXPDENC		0x128
+#define MSC0_PINS		((0x3u << 4) | (0xfu << 0))	/* PB0..PB5 */
+#define MSC0_CDR		17	/* ((APLL 864 / 24) / 2) - 1 */
+
+static void t21_msc0_init(void)
+{
+	void __iomem *gpb = (void __iomem *)GPIO_PORTB_BASE;
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	u32 v;
+
+	/* Mux PB0..PB5 to device function 0 (vendor gpio_set_func). */
+	writel(MSC0_PINS, gpb + G_PXINTC);
+	writel(MSC0_PINS, gpb + G_PXMSKC);
+	writel(MSC0_PINS, gpb + G_PXPAT1C);
+	writel(MSC0_PINS, gpb + G_PXPAT0C);
+	writel(MSC0_PINS, gpb + G_PXPUENC);
+	writel(MSC0_PINS, gpb + G_PXPDENC);
+
+	/* Ungate the MSC0 functional clock. */
+	writel(readl(cpm + CPM_CLKGR0) & ~CPM_CLKGR0_MSC0, cpm + CPM_CLKGR0);
+
+	/*
+	 * Source = APLL (sel 0), clear src/stop/divider, set CE + cdr,
+	 * wait BUSY. Leave CE set, exactly like the vendor.
+	 */
+	v = readl(cpm + CPM_MSC0CDR);
+	v &= ~((3u << 30) | (3u << MSCCDR_STOP_SHIFT) | MSCCDR_DIV_MASK);
+	v |= MSCCDR_CE | MSC0_CDR;
+	writel(v, cpm + CPM_MSC0CDR);
+	while (readl(cpm + CPM_MSC0CDR) & MSCCDR_BUSY)
+		;
 }
 
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
@@ -119,10 +170,13 @@ void otg_phy_init(struct dwc2_udc *dev)
 	t21_usb_phy_init(true);		/* DEVICE_ONLY_MODE for DFU/g_dnl */
 }
 
+#endif /* CONFIG_USB || CONFIG_USB_GADGET */
+
 int board_init(void)
 {
-	ofnode otg = ofnode_path("/usb@13500000");
+	t21_msc0_init();
 
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 	/*
 	 * Only the host build (dr_mode="host", t21-isvp.dts) does the
 	 * host PHY bring-up here. The DFU loader (t21-isvp-dfu.dts,
@@ -131,17 +185,17 @@ int board_init(void)
 	 * and the gadget then fails to enumerate; the dwc2_udc_otg
 	 * weak hook otg_phy_init() does the device PHY init instead.
 	 */
-	if (ofnode_valid(otg) && usb_get_dr_mode(otg) == USB_DR_MODE_HOST)
-		t21_usb_phy_init(false);
+	{
+		ofnode otg = ofnode_path("/usb@13500000");
+
+		if (ofnode_valid(otg) &&
+		    usb_get_dr_mode(otg) == USB_DR_MODE_HOST)
+			t21_usb_phy_init(false);
+	}
+#endif
 
 	return 0;
 }
-#else  /* no USB (slim/wired-eth-only build) */
-int board_init(void)
-{
-	return 0;
-}
-#endif
 
 /* Printed right after the "Model:" line; shows the exact T21 SKU. */
 int checkboard(void)

@@ -78,14 +78,22 @@
 #define AIC_TX_FIFO_DEPTH	64
 #define AIC_TX_TRIGGER		30
 
-/* CPM: AIC peripheral gate + I2S CGU divider (all T10-T31). */
+/*
+ * CPM: AIC peripheral gate + I2S CGU divider.
+ *
+ * T10/T20/T21/T30 keep a single I2SCDR at 0x60 (TX+RX share one
+ * divider). T23/T31/C100 deleted I2SCDR@0x60 and split it into two
+ * independent dividers: I2SSPKCDR@0x70 (TX/speaker) and I2SMICCDR@
+ * 0x84 (RX/mic). Both halves share the same M[28:20]/N[19:0]/CE[29]
+ * field layout as the unified register (kernel
+ * arch/mips/xburst/soc-t31/common/clk/clk_cgu.c, vendor U-Boot
+ * arch/mips/include/asm/arch-t31/cpm.h). Vendor kernel always
+ * clk_enable()s BOTH halves on T31/C100 even for playback-only;
+ * mirror that.
+ */
 #define CPM_BASE		0xb0000000
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR0_AIC		BIT(11)
-#define CPM_I2SCDR		0x60
-/* I2SCDR layout (T21 PM 11.4.1.19): I2PCS[31:30] (00=SCLKA 01=MPLL
- * 10/11=VPLL), CE_I2S[29], I2SDIV_M[28:20], I2SDIV_N[19:0]; the M/N
- * decimal divider out = parent * M / N. No BUSY bit. */
 #define I2SCDR_SRC_MASK		(3u << 30)
 #define I2SCDR_SRC_MPLL		(1u << 30)
 #define I2SCDR_CE		BIT(29)
@@ -102,12 +110,15 @@
 #define AIC_SYSCLK_HZ		(44100u * 256u)		/* 11.2896 MHz */
 
 struct ingenic_i2s_soc {
-	u32 mpll_hz;	/* I2SCDR parent (MPLL) rate for this SoC */
+	u32 mpll_hz;		/* I2SCDR parent (MPLL) rate for this SoC */
+	u32 spk_cdr_off;	/* TX clk divider: 0x60 unified or 0x70 spk */
+	u32 mic_cdr_off;	/* RX clk divider: 0 (unified) or 0x84 mic */
 };
 
 struct ingenic_i2s_priv {
 	void __iomem *base;
 	const struct ingenic_i2s_soc *soc;
+	bool		playing;	/* ERPL enabled, drop on stop_play */
 };
 
 static inline void aic_rmw(void __iomem *base, u32 off, u32 clr, u32 set)
@@ -118,23 +129,34 @@ static inline void aic_rmw(void __iomem *base, u32 off, u32 clr, u32 set)
 	writel(v, base + off);
 }
 
+static void ingenic_aic_cdr_program(void __iomem *cpm, u32 off, u32 n)
+{
+	u32 v = readl(cpm + off);
+
+	v &= ~(I2SCDR_SRC_MASK | I2SCDR_M_MASK | I2SCDR_N_MASK);
+	v |= I2SCDR_SRC_MPLL | (1u << I2SCDR_M_SH) |
+	     (n & I2SCDR_N_MASK) | I2SCDR_CE;
+	writel(v, cpm + off);
+	/* The M/N decimal divider has no BUSY/poll; CE makes it live. */
+}
+
 static void ingenic_aic_clk_init(struct ingenic_i2s_priv *priv)
 {
 	void __iomem *cpm = (void __iomem *)CPM_BASE;
-	u32 n, v;
+	u32 n;
 
 	/* Ungate the AIC peripheral clock (gated -> first AIC access
 	 * bus-stalls, same failure class as the MSC0 clock). */
 	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_AIC);
 
 	/*
-	 * Program the I2S CGU divider: source = MPLL, M = 1, N chosen
-	 * so the output is ~12.288 MHz (output = parent * M / N). The
-	 * SPL/bootrom does not set this up for the audio path, so a
-	 * bare change-enable on an unprogrammed divider yields NO
-	 * SYSCLK - the internal codec (I2S master) then never produces
-	 * BITCLK and the TX FIFO never drains. Leave CE set afterwards
-	 * (same rule as the MSC0/MAC-PHY dividers).
+	 * Program the I2S CGU divider(s): source = MPLL, M = 1, N chosen
+	 * so the output is ~SYSCLK (output = parent * M / N). The SPL
+	 * / bootrom does not set this up for the audio path, so a bare
+	 * change-enable on an unprogrammed divider yields NO SYSCLK -
+	 * the internal codec (I2S master) then never produces BITCLK
+	 * and the TX FIFO never drains. Leave CE set afterwards (same
+	 * rule as the MSC0/MAC-PHY dividers).
 	 */
 	n = priv->soc->mpll_hz / AIC_SYSCLK_HZ;
 	if (!n)
@@ -142,12 +164,9 @@ static void ingenic_aic_clk_init(struct ingenic_i2s_priv *priv)
 	if (n > I2SCDR_N_MASK)
 		n = I2SCDR_N_MASK;
 
-	v = readl(cpm + CPM_I2SCDR);
-	v &= ~(I2SCDR_SRC_MASK | I2SCDR_M_MASK | I2SCDR_N_MASK);
-	v |= I2SCDR_SRC_MPLL | (1u << I2SCDR_M_SH) |
-	     (n & I2SCDR_N_MASK) | I2SCDR_CE;
-	writel(v, cpm + CPM_I2SCDR);
-	/* The M/N decimal divider has no BUSY/poll; CE makes it live. */
+	ingenic_aic_cdr_program(cpm, priv->soc->spk_cdr_off, n);
+	if (priv->soc->mic_cdr_off)
+		ingenic_aic_cdr_program(cpm, priv->soc->mic_cdr_off, n);
 }
 
 static int ingenic_i2s_init(struct ingenic_i2s_priv *priv)
@@ -203,17 +222,23 @@ static int ingenic_i2s_tx_data(struct udevice *dev, void *data,
 	void __iomem *b = priv->base;
 	const u16 *s = data;
 	uint n = data_size / sizeof(u16);	/* one 16-bit word/sample */
-	u32 tmo;
-
-	/* Flush stale TX FIFO, then go live. */
-	aic_rmw(b, AICCR, 0, AICCR_TFLUSH);
-	aic_rmw(b, AICCR, 0, AICCR_ERPL);
 
 	/*
-	 * PIO feed, bounded. If the codec (I2S master) is not producing
-	 * BITCLK the FIFO never drains - time out and error instead of
-	 * hanging U-Boot forever.
+	 * U-Boot's sound_beep() splits long tones into 1-second buffers
+	 * and calls sound_play() repeatedly. Toggling AICCR_ERPL between
+	 * each buffer is audible on the B-block codec (T31/C100/T23) as
+	 * silence gaps - the codec mutes briefly on every ERPL drop.
+	 * Solution: flush + enable replay ONCE on the first feed and
+	 * leave ERPL set; only ingenic_i2s_stop_play() actually stops
+	 * it. The TX FIFO already paces the writes below, so no drain
+	 * is needed between buffers - the next call just refills.
 	 */
+	if (!priv->playing) {
+		aic_rmw(b, AICCR, 0, AICCR_TFLUSH);
+		aic_rmw(b, AICCR, 0, AICCR_ERPL);
+		priv->playing = true;
+	}
+
 	while (n--) {
 		u32 spin = 2000000;
 
@@ -227,6 +252,7 @@ static int ingenic_i2s_tx_data(struct udevice *dev, void *data,
 			AICSR_TFL_SH) >= AIC_TX_FIFO_DEPTH - 1) {
 			if (!--spin) {
 				aic_rmw(b, AICCR, AICCR_ERPL, 0);
+				priv->playing = false;
 				log_err("AIC TX FIFO stalled (no codec BITCLK?)\n");
 				return -ETIMEDOUT;
 			}
@@ -234,14 +260,25 @@ static int ingenic_i2s_tx_data(struct udevice *dev, void *data,
 		writel(*s++, b + AICDR);
 	}
 
-	/* Drain (bounded), then stop replay. */
-	tmo = 2000000;
+	return 0;
+}
+
+int ingenic_i2s_stop_play(struct udevice *dev)
+{
+	struct ingenic_i2s_priv *priv = dev_get_priv(dev);
+	void __iomem *b = priv->base;
+	u32 tmo = 2000000;
+
+	if (!priv->playing)
+		return 0;
+
+	/* Drain any pending samples, then disable replay. */
 	while ((readl(b + AICSR) & AICSR_TFL_MASK) >> AICSR_TFL_SH) {
 		if (!--tmo)
 			break;
 	}
 	aic_rmw(b, AICCR, AICCR_ERPL, 0);
-
+	priv->playing = false;
 	return 0;
 }
 
@@ -277,14 +314,29 @@ static const struct i2s_ops ingenic_i2s_ops = {
  * I2SCDR parent (MPLL) rate per SoC - only needs to be close enough
  * to land the SYSCLK near 12 MHz; the codec re-derives the audio fs.
  * Values per the mainline T-series PLL setup (clk-tXX / tXX pll.c).
+ * spk_cdr_off: 0x60 (T10/T20/T21/T30 unified) or 0x70 (T23/T31/C100
+ * split TX). mic_cdr_off: 0 (unified) or 0x84 (split RX).
  */
-static const struct ingenic_i2s_soc soc_t10  = { .mpll_hz = 1200000000u };
-static const struct ingenic_i2s_soc soc_t20  = { .mpll_hz = 1000000000u };
-static const struct ingenic_i2s_soc soc_t21  = { .mpll_hz =  900000000u };
-static const struct ingenic_i2s_soc soc_t23  = { .mpll_hz = 1200000000u };
-static const struct ingenic_i2s_soc soc_t30  = { .mpll_hz = 1000000000u };
-static const struct ingenic_i2s_soc soc_t31  = { .mpll_hz = 1200000000u };
-static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u };
+#define I2S_CDR_UNIFIED		0x60
+#define I2S_SPK_CDR_SPLIT	0x70
+#define I2S_MIC_CDR_SPLIT	0x84
+static const struct ingenic_i2s_soc soc_t10  = { .mpll_hz = 1200000000u,
+	.spk_cdr_off = I2S_CDR_UNIFIED };
+static const struct ingenic_i2s_soc soc_t20  = { .mpll_hz = 1000000000u,
+	.spk_cdr_off = I2S_CDR_UNIFIED };
+static const struct ingenic_i2s_soc soc_t21  = { .mpll_hz =  900000000u,
+	.spk_cdr_off = I2S_CDR_UNIFIED };
+static const struct ingenic_i2s_soc soc_t23  = { .mpll_hz = 1200000000u,
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
+static const struct ingenic_i2s_soc soc_t30  = { .mpll_hz = 1000000000u,
+	.spk_cdr_off = I2S_CDR_UNIFIED };
+static const struct ingenic_i2s_soc soc_t31  = { .mpll_hz = 1200000000u,
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
+static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
 
 static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t10-aic",  .data = (ulong)&soc_t10 },

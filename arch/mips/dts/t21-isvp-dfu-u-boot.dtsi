@@ -8,9 +8,9 @@
  * the shared start.S, not T31-specific). Builds:
  *
  *   u-boot-spl-t21.bin : SPL with the finalized SFC-NOR boot header.
- *   u-boot-t21.bin     : full 16 MB flash image, headered SPL at 0
- *                        and the LZMA U-Boot at 0x10000.
- *   u-boot-t21-min.bin : same layout, trimmed to the U-Boot blob.
+ *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 and
+ *                              LZMA U-Boot at the SPL-loader
+ *                              offset (no 0xff padding).
  */
 
 / {
@@ -29,25 +29,7 @@
 	};
 
 	flash {
-		filename = "u-boot-t21.bin";
-		pad-byte = <0xff>;
-		size = <0x1000000>;
-
-		spl {
-			type = "blob";
-			offset = <0x0>;
-			filename = "u-boot-spl-t21.bin";
-		};
-
-		u-boot {
-			type = "blob";
-			offset = <0x10000>;
-			filename = "u-boot-lzma.img";
-		};
-	};
-
-	flash-min {
-		filename = "u-boot-t21-min.bin";
+		filename = "u-boot-with-spl-lzma.bin";
 		pad-byte = <0xff>;
 
 		spl {

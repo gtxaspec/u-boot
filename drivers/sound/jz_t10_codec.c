@@ -44,9 +44,12 @@
 #define B_CACR2_03	0x0c
 #define B_CDCR1_04	0x10
 #define B_CDCR2_05	0x14
+#define B_POWER_20	0x80
 #define B_CCR_21	0x84
 #define B_CAACR_22	0x88
+#define B_CMICCR_23	0x8c
 #define B_CANACR_26	0x98
+#define B_CANACR2_27	0x9c
 #define B_CHR_28	0xa0
 #define B_CSRR_44	0x110
 
@@ -57,17 +60,18 @@
 
 /*
  * Speaker-amp GPIO. Parsed from DT (`ingenic,spk-gpio = <&gpb N FLAGS>`)
- * and driven RAW with the proper XBurst1 port stride 0x100 - the only
- * stride this T20 silicon actually responds to (validated by md on
- * PXPIN bit toggling 0 -> 1 after the writes). The earlier attempt
- * used a 0x1000 stride (a convention misused elsewhere in this tree
- * for MSC0/GMAC pin pokes that happen to be no-ops because DT
- * pinctrl already muxes those pins) - those bogus writes landed in
- * unmapped/aliased MMIO and correlated with a deterministic T20X
- * boot hang, so they're gone.
+ * and driven RAW because the XBurst1 GPIO port stride is SoC-specific
+ * and the kernel/U-Boot pinctrl-ingenic uclass would mux differently:
+ *   T10/T20 -> 0x100 (older silicon, validated on T20X HW by md on
+ *              PXPIN bit toggling 0 -> 1)
+ *   T21/T23/T30/T31/C100 -> 0x1000 (newer silicon, kernel
+ *              GPIO_PORT_OFF; using 0x100 here hits aliased/garbage
+ *              MMIO, the GPIO never flips, the amp stays muted and
+ *              T31 produces no audible output even though BITCLK and
+ *              FIFO drain correctly - validated on Wyze V3 by direct
+ *              PXMSK readback after the writes).
  */
 #define GPIO_BASE_PHYS		0xb0010000u
-#define GPIO_PORT_STRIDE	0x100u
 #define G_PXINTC		0x18	/* INT clear  -> not interrupt */
 #define G_PXMSKS		0x24	/* MSK set    -> GPIO (not device) */
 #define G_PXPAT1C		0x38	/* PAT1 clear -> output */
@@ -91,7 +95,15 @@ struct jz_codec_priv {
 	u8		volume;		/* 0..0x1f (CHCR_27[4:0] / CHR_28[4:0]) */
 };
 
-/* Raw GPIO drive at the verified-correct 0x100 stride. */
+/* Raw GPIO drive at the per-SoC port stride. */
+static u32 jz_codec_port_stride(enum jz_codec_soc soc)
+{
+	/* T10/T20 = 0x100; T21/T23/T30/T31/C100 = 0x1000 (kernel
+	 * GPIO_PORT_OFF per arch/mips/xburst/soc-tXX/common/gpio.c). */
+	return (soc == JZ_CODEC_T10 || soc == JZ_CODEC_T20) ? 0x100u
+							    : 0x1000u;
+}
+
 static void jz_codec_spk_drive(struct jz_codec_priv *p, bool on)
 {
 	void __iomem *gpx;
@@ -102,7 +114,7 @@ static void jz_codec_spk_drive(struct jz_codec_priv *p, bool on)
 		return;
 
 	gpx  = (void __iomem *)(GPIO_BASE_PHYS +
-				p->spk_port * GPIO_PORT_STRIDE);
+				p->spk_port * jz_codec_port_stride(p->soc));
 	bit  = BIT(p->spk_pin);
 	high = on ^ p->spk_active_low;	/* XOR: invert if active-low */
 
@@ -244,10 +256,47 @@ static void jz_codec_b_powerup(struct jz_codec_priv *p)
 	}
 	mdelay(20);
 
-	/* Route + volume (B-block uses CHR_28 for replay volume). */
-	codec_set(p, B_CANACR_26, 0, 7, 0xff);
+	/*
+	 * Speaker route (vendor T31/C100 codec_set_speaker): power
+	 * trim, mute mic, walk the analog driver chain step-by-step
+	 * (current source -> reference voltage -> POP control ->
+	 * CHR_28 step 5/6 -> CANACR2_27 bits 7..4 in order -> CHR_28
+	 * step 7 unmute), then write replay volume in CHR_28[0:4],
+	 * then drop CCR_21 to low-power. Per-bit ordering and the
+	 * 10 ms settling delays are analog requirements - blanket
+	 * writes here will keep the output muted.
+	 */
+	codec_set(p, B_POWER_20, 0, 2, 0x7);
+	codec_set(p, B_CMICCR_23, 0, 3, 0xf);
+
+	codec_set(p, B_CANACR_26, 3, 3, 1);
 	mdelay(10);
+	codec_set(p, B_CANACR_26, 2, 2, 1);
+	mdelay(10);
+	codec_set(p, B_CANACR_26, 0, 1, 0x2);
+	mdelay(10);
+
+	codec_set(p, B_CHR_28, 5, 5, 1);
+	mdelay(10);
+	codec_set(p, B_CHR_28, 6, 6, 1);
+	mdelay(10);
+
+	codec_set(p, B_CANACR2_27, 7, 7, 1);
+	mdelay(10);
+	codec_set(p, B_CANACR2_27, 6, 6, 1);
+	mdelay(10);
+	codec_set(p, B_CANACR2_27, 5, 5, 1);
+	mdelay(10);
+	codec_set(p, B_CANACR2_27, 4, 4, 1);
+	mdelay(10);
+	codec_set(p, B_CHR_28, 7, 7, 1);
+	mdelay(10);
+
 	codec_set(p, B_CHR_28, 0, 4, p->volume);
+	mdelay(10);
+
+	codec_set(p, B_CCR_21, 0, 6, 0x1);
+	mdelay(10);
 }
 
 static int jz_codec_set_params(struct udevice *dev, int interface,

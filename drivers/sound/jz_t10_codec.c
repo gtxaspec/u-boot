@@ -318,6 +318,7 @@ static const struct udevice_id jz_codec_ids[] = {
 	{ .compatible = "ingenic,t20-codec",  .data = JZ_CODEC_T20 },
 	{ .compatible = "ingenic,t10-codec",  .data = JZ_CODEC_T10 },
 	{ .compatible = "ingenic,t21-codec",  .data = JZ_CODEC_T30_T21 },
+	{ .compatible = "ingenic,t23-codec",  .data = JZ_CODEC_T31_C100 },
 	{ .compatible = "ingenic,t30-codec",  .data = JZ_CODEC_T30_T21 },
 	{ .compatible = "ingenic,t31-codec",  .data = JZ_CODEC_T31_C100 },
 	{ .compatible = "ingenic,c100-codec", .data = JZ_CODEC_T31_C100 },

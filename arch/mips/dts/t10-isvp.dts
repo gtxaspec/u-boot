@@ -46,3 +46,18 @@
 &otg {
 	status = "okay";
 };
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	/* Speaker-amp enable: SDK default PB31, active-high. Override
+	 * here per board if the amp is on a different pin/polarity. */
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+};
+
+&sound {
+	status = "okay";
+};

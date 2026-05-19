@@ -213,7 +213,7 @@ int checkboard(void)
 	printf("Variant: %s (CPU %d MHz)\n",
 	       CONFIG_T31_VARIANT_NAME, CONFIG_T31_APLL_MHZ);
 #ifdef CONFIG_SPL_T31_USB_BOOT
-	puts("Loader: USB-boot (development; no NOR access)\n");
+	puts("Loader: USB-boot\n");
 #endif
 	return 0;
 }

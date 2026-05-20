@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32, DFU/USB-boot loader variant.
+ *
+ * Identical to t32-isvp.dts except the DWC2 OTG is dr_mode =
+ * "peripheral" so the dwc2_udc_otg gadget binds (dwc2_udc_otg_bind
+ * rejects "host"). Used only by isvp_t32_usbboot_defconfig - the
+ * dev/flash loader that USB-boots and auto-enters DFU. Production
+ * NOR uses t32-isvp.dts (dr_mode="host" for USB host).
+ *
+ * Memory: 64 MB - matches the LQ/VL/ZL M14D5121632A DDR2 default
+ * (T32_DDR_SIZE in t32-ddr.h). 128 MB / 256 MB DDR3 variants
+ * would need their own DFU DT + defconfig pair.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "t32.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t32", "ingenic,t32";
+	model = "Ingenic ISVP-T32 (DDR2 64M, DFU loader)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (M14D5121632A) */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	bus-width = <4>;
+	broken-cd;
+};
+
+&otg {
+	status = "okay";
+	dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
+};

@@ -105,7 +105,7 @@ int usb_ether_receive(struct ueth_data *ueth, int rxsize)
 			   USB_BULK_RECV_TIMEOUT);
 	debug("Rx: len = %u, actual = %u, err = %d\n", rxsize, actual_len, ret);
 	if (ret) {
-		printf("Rx: failed to receive: %d\n", ret);
+		debug("Rx: failed to receive: %d\n", ret);
 		return ret;
 	}
 	if (actual_len > rxsize) {

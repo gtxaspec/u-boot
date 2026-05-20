@@ -6,7 +6,11 @@
  * Copyright (C) 2026 Alfonso Gamboa <gtxent@gmail.com>
  *
  * The SFC is a dedicated SPI-NOR controller found on the Ingenic
- * XBurst1 SoCs (T31 and friends). It speaks the cmd / cmd+data /
+ * XBurst1 SoCs. The register layout and transfer engine are
+ * identical across the T-series (T31/T32/T33/T40/T41); the only
+ * per-SoC differences are the controller base address (taken from
+ * "reg" in the device tree) and the CGU clock that feeds it
+ * (referenced by "clocks"). The SFC speaks the cmd / cmd+data /
  * cmd+addr+data transfer formats and is driven through the SPI-MEM
  * framework.
  *
@@ -37,8 +41,14 @@
 #define sfc_debug(fmt, args...)	debug(fmt, ##args)
 #endif
 
-/* T31 SFC clock rate (SSI functional clock), sourced from MPLL. */
-#define T31_SFC_CLK_HZ		70000000
+/*
+ * Default SFC source clock (sourced from MPLL by the CGU). Honoured
+ * only when the device tree does not supply spi-max-frequency. The
+ * T31 vendor driver picks 70 MHz; the T32/T33 vendor SPLs pick
+ * 25 MHz. The DT cap (typically 50 MHz) is the authoritative value
+ * when present, so this constant only acts as the legacy fallback.
+ */
+#define INGENIC_SFC_FALLBACK_CLK_HZ	24000000
 static inline u32 sfc_readl(struct sfc_priv *sfc, unsigned int off)
 {
 	return readl(sfc->base + off);
@@ -404,8 +414,11 @@ static int sfc_probe(struct udevice *bus)
 	 */
 	ret = clk_get_by_index(bus, 0, &sfc->clk);
 	if (!ret) {
+		ulong target = sfc->max_freq ? sfc->max_freq :
+					       INGENIC_SFC_FALLBACK_CLK_HZ;
+
 		clk_enable(&sfc->clk);
-		clk_set_rate(&sfc->clk, T31_SFC_CLK_HZ);
+		clk_set_rate(&sfc->clk, target);
 		if (!sfc->max_freq) {
 			ulong rate = clk_get_rate(&sfc->clk);
 
@@ -427,6 +440,8 @@ static int sfc_probe(struct udevice *bus)
 
 static const struct udevice_id sfc_ids[] = {
 	{ .compatible = "ingenic,t31-sfc" },
+	{ .compatible = "ingenic,t32-sfc" },
+	{ .compatible = "ingenic,t33-sfc" },
 	{ .compatible = "ingenic,t40-sfc" },
 	{ .compatible = "ingenic,t41-sfc" },
 	{ }

@@ -395,7 +395,7 @@ config SPI_INGENIC
 	help
 	  Enable the Ingenic SFC (SPI Flash Controller) driver. The SFC is
 	  the dedicated SPI-NOR controller found on the Ingenic XBurst1
-	  SoCs (T31 and related parts) and is used to boot from and store
+	  SoCs (T31/T32/T33/T40/T41) and is used to boot from and store
 	  the U-Boot environment in SPI-NOR flash.
 
 config SPI_MXIC

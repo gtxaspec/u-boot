@@ -26,3 +26,27 @@
 &uart1 {
 	status = "okay";
 };
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	bus-width = <4>;
+	broken-cd;	/* no card-detect line wired on the ISVP board */
+};
+
+&otg {
+	status = "okay";
+	/* Host by default; USB-NIC and mass-storage commands need a
+	 * host controller. Switch to "peripheral" via the dedicated
+	 * isvp_t32_usbboot defconfig + DT pair for DFU loads. */
+	dr_mode = "host";
+};

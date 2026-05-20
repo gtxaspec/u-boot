@@ -329,14 +329,12 @@ static void ddrp_training(void)
 	} while (!(stat & 0x1));
 
 #if defined(CONFIG_T32_HWTRAIN)
-	printf("DDR hardware training ...\n");
 	ddrp_training_write_leveling();
 	ddrp_dqs_calibration();
 	ddrp_training_read_training();
 	ddrp_training_write_training();
 #else
 	ddrp_dqs_calibration();
-	printf("DDR soft training ...\n");
 	ddrp_training_read_calib_bypass();
 	ddrp_training_soft_read_train(0x40);
 	ddrp_training_write_train_bypass_dq(0x80);
@@ -481,7 +479,13 @@ static void ddrp_init(u32 ddrc_reset)
 	SET_INNOPHY_REG(reg_pllcpi_bias_fsp2, 0x5);
 	SET_INNOPHY_REG(reg_pllcpi_bias_fsp3, 0x5);
 
-	ddrp_map_set();
+	/*
+	 * Vendor PRJ/ddr_innophy.c skips ddrp_map_set() when SoCID =
+	 * PRJ007 (T32); only PRJ008 (T33) wraps DDR pins through the
+	 * Innophy pin-swap registers. Programming the swap table on
+	 * T32 silicon mis-wires CMD/DQ from the DRAM's POV and DQS
+	 * gating calibration BNE_INNOPHY_REG(calib_end, 0x1) hangs.
+	 */
 
 	ddrc_reset &= ~0x10;	/* ddrc reset ok */
 	writel(ddrc_reset, (void __iomem *)(CPM_BASE + CPM_SRBC0));
@@ -605,11 +609,8 @@ static void ddrc_dfi_init(void)
 void sdram_init(void)
 {
 	enable_cpu_read_ddr();
-
-	printf("sdram init start\n");
 	ddr_clk_init();
 	ddrc_dfi_init();
-	printf("sdram init Finished\n");
 }
 
 phys_size_t t32_sdram_size(void)

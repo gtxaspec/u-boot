@@ -10,13 +10,13 @@
  * no driver model, full U-Boot uses the DM ns16550 driver. The UART
  * is clocked from the 24 MHz EXTAL before pll_init().
  *
- * The GPIO pinmux uses the correct 0x100 port stride (port B =
- * GPIO_BASE + 1 * 0x100) and the exact vendor gpio_set_func() FUNC_0
- * sequence (PXINTC/PXMSKC/PXPAT1C/PXPAT0C), NOT the legacy 0x1000
- * stride - that bug was fatal for the T20 console RX and is avoided
- * here from the start. QEMU does not model pads so this only matters
- * on real silicon; the T33 console UART pin/func should be
- * re-verified against the vendor PRJ gpio table before HW use.
+ * The GPIO pinmux uses the T31-class 0x1000 port stride (port B =
+ * GPIO_BASE + 1 * 0x1000 = 0xb0011000), confirmed by the vendor
+ * drivers/gpio/jz_gpio_common.c: CONFIG_PRJ -> JZGPIO_GROUP_OFFSET
+ * = 0x1000. UART1 pins are PB23/PB24 funcsel 0 per the vendor
+ * PRJ-pinctrl.dtsi uart1_pb node. QEMU does not model pads, so an
+ * incorrect 0x100 stride (the T20 layout) boots fine in emulation
+ * but produces no UART on real T33 silicon.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -58,12 +58,12 @@ static u8 u_rb(unsigned int off)
 }
 
 /*
- * Mux UART1 (PB23 TX, PB24 RX) to device function 0. XBurst1 GPIO
- * port stride is 0x100; port B = GPIO_BASE + 1 * 0x100 = 0xb0010100.
- * Vendor gpio_set_func() FUNC_0: write the pin mask to PXINTC,
- * PXMSKC, PXPAT1C, PXPAT0C (no pull-register writes).
+ * Mux UART1 (PB23 TX, PB24 RX) to device function 0. T31-class
+ * (PRJ) GPIO port stride is 0x1000; port B = GPIO_BASE + 1 *
+ * 0x1000 = 0xb0011000. Vendor gpio_set_func() FUNC_0: write the
+ * pin mask to PXINTC, PXMSKC, PXPAT1C, PXPAT0C (no pull writes).
  */
-#define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x100)	/* port B, 0x100 stride */
+#define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x1000)	/* port B, 0x1000 stride */
 #define G_PXINTC	0x18
 #define G_PXMSKC	0x28
 #define G_PXPAT1C	0x38

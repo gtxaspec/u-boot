@@ -67,10 +67,17 @@
 #define CPM_MESTSEL	0xec
 #define CPM_CPVPCR	0xe0	/* VPLL (programmed on T32/PRJ007) */
 
-/* CLKGR0 gate bits */
-#define CPM_CLKGR0_UART2	BIT(16)
-#define CPM_CLKGR0_UART1	BIT(15)
-#define CPM_CLKGR0_UART0	BIT(14)
+/*
+ * CLKGR0 gate bits - vendor U-Boot 2022.10 arch-PRJ/cpm.h:
+ *   UART0 = bit 11, UART1 = bit 12, UART2 = bit 13.
+ * NOTE: T31 puts these at bits 14/15/16; T32/T33 silicon
+ * uses 11/12/13. Clearing the wrong bit leaves the UART
+ * clock GATED so the UART block sits idle (no console
+ * output) even though the pad mux looks correct.
+ */
+#define CPM_CLKGR0_UART2	BIT(13)
+#define CPM_CLKGR0_UART1	BIT(12)
+#define CPM_CLKGR0_UART0	BIT(11)
 
 /* OST gate lives in CLKGR1 bit 7 (vendor CPM_CLKGR1_OST) */
 #define CPM_CLKGR1_OST		BIT(7)

@@ -30,6 +30,18 @@
 
 #define OST_BASE	0xb2000000
 
+/*
+ * USB PHY internal config registers. Vendor calls the block
+ * USBPHY at 0x10060000; we use the KSEG1 alias here. Vendor
+ * kernel cpm_usb.c writes USBPHY+0x70 (clear bit 3) and
+ * USBPHY+0x78 (set bit 5) at the end of jz_otg_phy_init() with
+ * the comment "host can not identify device". Those writes are
+ * deliberately not in our t32_usb_phy_init() - on the T32LQ
+ * lab board they cause HS bulk-IN XACTERR; standard PHY init
+ * without them enumerates the ASIX cleanly.
+ */
+#define USBPHY_BASE	0xb0060000
+
 /* AHB2 bus peripherals */
 #define NEMC_BASE	0xb3410000
 #define PDMA_BASE	0xb3420000
@@ -62,10 +74,40 @@
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
 #define CPM_DDRCDR	0x2c
-#define CPM_SRBC0	0xc4	/* soft reset/bus control (DDRC/DDRP) */
+#define CPM_USBPCR	0x3c	/* USB PHY control */
+#define CPM_USBRDT	0x40	/* USB reset detect timer */
+#define CPM_USBVBFIL	0x44	/* USB VBUS jitter filter */
+#define CPM_USBPCR1	0x48	/* USB PHY control 1 (ref clock) */
+#define CPM_SRBC0	0xc4	/* soft reset/bus control (DDRC/DDRP/USB) */
+#define CPM_SRBC	CPM_SRBC0
 #define CPM_CPCSR	0xd4
 #define CPM_MESTSEL	0xec
 #define CPM_CPVPCR	0xe0	/* VPLL (programmed on T32/PRJ007) */
+
+/* CLKGR0 OTG core gate (vendor arch-PRJ/cpm.h CPM_CLKGR_OTG) */
+#define CPM_CLKGR0_OTG		BIT(2)
+
+/*
+ * USB PHY control bits (CPM_USBPCR / CPM_USBPCR1 / CPM_USBRDT /
+ * CPM_OPCR). Matches the vendor T32 (PRJ007) kernel cpm_usb.c.
+ * Note: T32 USBPCR seed = 0x8380385a (T31's seed was 0x8200385a).
+ */
+#define USBPCR_USB_MODE_ORG	BIT(31)
+#define USBPCR_IDPULLUP_MASK	(0x3u << 28)
+#define USBPCR_COMMONONN	BIT(25)
+#define USBPCR_VBUSVLDEXT	BIT(24)
+#define USBPCR_VBUSVLDEXTSEL	BIT(23)
+#define USBPCR_POR		BIT(22)
+#define USBPCR_SIDDQ		BIT(21)
+#define USBPCR_OTG_DISABLE	BIT(20)
+
+#define USBRDT_UTMI_RST		BIT(27)
+#define USBRDT_VBFIL_LD_EN	BIT(25)
+#define USBRDT_IDDIG_EN		BIT(24)
+#define USBRDT_IDDIG_REG	BIT(23)
+
+#define OPCR_SPENDN0		BIT(7)
+#define SRBC_USB_SR		BIT(12)
 
 /*
  * CLKGR0 gate bits - vendor U-Boot 2022.10 arch-PRJ/cpm.h:

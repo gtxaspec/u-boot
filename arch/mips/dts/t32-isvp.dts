@@ -50,3 +50,16 @@
 	 * isvp_t32_usbboot defconfig + DT pair for DFU loads. */
 	dr_mode = "host";
 };
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_LOW>;
+};
+
+&sound {
+	status = "okay";
+};

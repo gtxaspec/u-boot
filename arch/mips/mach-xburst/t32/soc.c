@@ -121,9 +121,21 @@ void board_init_f(ulong dummy)
 	pll_init();
 	t32_spl_puts("T32 SPL: PLL configured\n");
 
+	/*
+	 * Ungate the DDR controller clock (CPM_CLKGR0 bit 27).
+	 * Without this the uMCTL2 controller has no APB/AXI clock,
+	 * stays in init state forever, and the PHY-training STAT
+	 * poll spins. Vendor PRJ/clk.c clk_init() clears the same
+	 * bit before any DDR access.
+	 */
+	writel(readl((void __iomem *)(CPM_BASE + CPM_CLKGR0)) & ~BIT(27),
+	       (void __iomem *)(CPM_BASE + CPM_CLKGR0));
+
 	sdram_init();
 	if (dram_verify() == 0)
 		t32_spl_puts("T32 SPL: DDR OK\n");
+	else
+		t32_spl_puts("T32 SPL: DDR verify FAILED\n");
 
 #ifdef CONFIG_SPL_T32_USB_BOOT
 	/*

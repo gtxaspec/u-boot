@@ -32,17 +32,91 @@ _start:
 	 */
 	.word 0x03040506
 	.word 0x55aa5502
+#if defined(CONFIG_SOC_T32) || defined(CONFIG_SOC_T33)
+	/*
+	 * Vendor U-Boot 2022.10 PRJ/start.S SFC_NOR header (T32 = PRJ007,
+	 * T33 = PRJ008). T32/T33 bootroms require 0xffff00aa here; the
+	 * older T10..T31 bootroms accept 0x000000aa, which is why this
+	 * is gated. Layout is 4 .word (16 bytes) + 496-byte pad + 1536-
+	 * byte reserved = 2048-byte header, then SPL code at 0x800.
+	 */
+	.word 0xffff00aa
+	.word 0x00000000
+	.space 496, 0
+#else
 	.word 0x000000aa		/* SPI NOR */
 	.space 500, 0
+#endif
 	.space 1536, 0
 
+#if defined(CONFIG_SOC_T32)
 	/*
-	 * T31 boot pin mux / drive-strength setup, required before the
-	 * console: the mask ROM does not mux the UART (and other) pads,
-	 * so without this the SPL runs but produces no UART output on
-	 * real silicon. Faithful transliteration of the vendor T31 SPL
-	 * start.S (isvp_t31_sfcnor_ddr128M, CONFIG_NET_GMAC path) - do
-	 * not remove or "tidy"; order and values are board-critical.
+	 * T32/PRJ007 GPIO bring-up - faithful port of vendor
+	 * arch/mips/mach-xburst/PRJ/start.S init_gpio_PRJ007 (U-Boot
+	 * 2022.10 T32-2.1.0). Required before the C-level UART pinmux:
+	 * sets Schmitt-trigger enables on PA/PB/PC active pads and
+	 * programs per-pin drive strength (4 mA / 8 mA). Without these
+	 * the UART1 TX pad does not drive the line, so the SPL boots
+	 * and the printf path runs but no character ever appears on
+	 * the console. Values are GPIO-controller bit masks; do not
+	 * rearrange - order matches vendor.
+	 */
+	/* PA10~PA28 Schmitt */
+	li	t8, 0x1ffffc00
+	li	t9, 0xb0010164
+	sw	t8, 0(t9)
+	/* PB00~PB11 PB13~PB31 Schmitt */
+	li	t8, 0xffffefff
+	li	t9, 0xb0011164
+	sw	t8, 0(t9)
+	/* PC00~PC09 PC11~PC29 Schmitt */
+	li	t8, 0x3ffffbff
+	li	t9, 0xb0012164
+	sw	t8, 0(t9)
+	/* PA10~PA15 PA18~PA22 4 mA */
+	li	t8, 0x55500000
+	li	t9, 0xb0010134
+	sw	t8, 0(t9)
+	li	t8, 0x00001550
+	li	t9, 0xb0010144
+	sw	t8, 0(t9)
+	/* PA16~PA17 PA23~PA28 8 mA */
+	li	t8, 0x02aa800a
+	li	t9, 0xb0010144
+	sw	t8, 0(t9)
+	/* PB00~PB03 PB05~PB06 PB08~PB11 PB13~PB15 4 mA */
+	li	t8, 0x54551455
+	li	t9, 0xb0011134
+	sw	t8, 0(t9)
+	/* PB04 PB07 8 mA */
+	li	t8, 0x00008200
+	li	t9, 0xb0011134
+	sw	t8, 0(t9)
+	/* PB16~PB31 4 mA (covers UART1 PB23/PB24) */
+	li	t8, 0x55555555
+	li	t9, 0xb0011144
+	sw	t8, 0(t9)
+	/* PC00~PC01 PC03~PC09 PC12~PC15 4 mA */
+	li	t8, 0x55055545
+	li	t9, 0xb0012134
+	sw	t8, 0(t9)
+	/* PC02 PC11 8 mA */
+	li	t8, 0x00020020
+	li	t9, 0xb0012134
+	sw	t8, 0(t9)
+	/* PC16~PC29 4 mA */
+	li	t8, 0x05555555
+	li	t9, 0xb0012144
+	sw	t8, 0(t9)
+#elif !defined(CONFIG_SOC_T33)
+	/*
+	 * T10..T31 boot pin mux / drive-strength setup, required
+	 * before the console: the mask ROM does not mux the UART (and
+	 * other) pads, so without this the SPL runs but produces no
+	 * UART output on real silicon. Faithful transliteration of
+	 * the vendor T31 SPL start.S (isvp_t31_sfcnor_ddr128M,
+	 * CONFIG_NET_GMAC path) - do not remove or "tidy"; order and
+	 * values are board-critical.
 	 */
 	la	t8, 0xffffffff
 	la	t9, 0xb0010138
@@ -65,6 +139,7 @@ _start:
 	la	t8, 0x55555555
 	la	t9, 0xb0011144
 	sw	t8, 0(t9)
+#endif
 
 	/* Invalidate BTB */
 	mfc0	t0, CP0_CONFIG, 7
@@ -73,13 +148,21 @@ _start:
 	mtc0	t0, CP0_CONFIG, 7
 	nop
 
-	/* XBurst CP0 $12,2: clear bit 31 (faithful to vendor T31 start.S) */
+#if !defined(CONFIG_SOC_T32) && !defined(CONFIG_SOC_T33)
+	/*
+	 * XBurst CP0 $12,2: clear bit 31 (faithful to vendor T31
+	 * start.S). Vendor T32/T33 PRJ/start.S does NOT touch this
+	 * register - the bit is reserved or repurposed on the newer
+	 * XBurst silicon and writing to it can take a Reserved-
+	 * Instruction exception, hanging the SPL silently.
+	 */
 	mfc0	t0, $12, 2
 	nop
 	li	t1, 0x7fffffff
 	and	t0, t0, t1
 	mtc0	t0, $12, 2
 	nop
+#endif
 
 	/* CU0=UM=EXL=IE=0, BEV=ERL=1, IP2~7=1 */
 	li	t0, 0x0040FC04

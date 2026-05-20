@@ -591,6 +591,16 @@ enum {
 #define DDRP_REG_PLLPOSTDIVEN  0x00000000
 #define DDRP_REG_PLLPOSTDIV    0x00000000
 #else					/* T32LQ/VL/ZL DDR2 M14D5121632A 64M 600 (default) */
+/*
+ * Verbatim ddr_creator output from Ingenic SDK
+ * Tassadar-T32/T33-2.1.0.0-20260203, PRJ007_lq_goat_sfcnor_defconfig
+ * (M14D5121632A @ 600 MHz, 64 MB, soft-train). The earlier
+ * snapshot had ADDRMAP1=0x003f1515 (older creator output) and
+ * PLLPOSTDIV(EN)=0; on real T32LQ silicon the PHY DQS-gating
+ * calibration BNE_INNOPHY_REG(calib_end, 0x1) spun forever
+ * without the PHY post-divider enabled, so all three values
+ * are updated to the 20260203 SDK output.
+ */
 #define T32_DDR_TYPE		0x1111
 #define T32_DDR_SIZE		0x04000000U	/* 64 MB */
 #define T32_DDR_FREQ		600000000U
@@ -611,12 +621,12 @@ enum {
 #define DDRC_TIMING7           0x00000101
 #define DDRC_TIMING8           0x00000402
 #define DDRC_TIMING14          0x00000000
-#define DDRC_ADDRMAP1          0x003f1515
+#define DDRC_ADDRMAP1          0x003f0808
 #define DDRC_ADDRMAP2          0x00000000
 #define DDRC_ADDRMAP3          0x00000000
 #define DDRC_ADDRMAP4          0x00001f1f
-#define DDRC_ADDRMAP5          0x04040404
-#define DDRC_ADDRMAP6          0x0f0f0f04
+#define DDRC_ADDRMAP5          0x06060606
+#define DDRC_ADDRMAP6          0x0f0f0f06
 #define DDRC_RFSHCTL3          0x00000002
 #define DDRC_RFSHTMG           0x00490020
 #define DDRC_ODTCFG            0x07020708
@@ -630,8 +640,8 @@ enum {
 #define DDRP_REG_PHY_TRFC      0x00000020
 #define DDRP_REG_PHY_TREFI     0x00000925
 #define DDRP_MEM_SELECT_T      0x00000000
-#define DDRP_REG_PLLPOSTDIVEN  0x00000000
-#define DDRP_REG_PLLPOSTDIV    0x00000000
+#define DDRP_REG_PLLPOSTDIVEN  0x00000001
+#define DDRP_REG_PLLPOSTDIV    0x00000001
 #endif
 
 /*

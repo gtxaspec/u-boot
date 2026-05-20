@@ -10,13 +10,14 @@
  * no driver model, full U-Boot uses the DM ns16550 driver. The UART
  * is clocked from the 24 MHz EXTAL before pll_init().
  *
- * The GPIO pinmux uses the correct 0x100 port stride (port B =
- * GPIO_BASE + 1 * 0x100) and the exact vendor gpio_set_func() FUNC_0
- * sequence (PXINTC/PXMSKC/PXPAT1C/PXPAT0C), NOT the legacy 0x1000
- * stride - that bug was fatal for the T20 console RX and is avoided
- * here from the start. QEMU does not model pads so this only matters
- * on real silicon; the T32 console UART pin/func should be
- * re-verified against the vendor PRJ gpio table before HW use.
+ * The GPIO pinmux uses the T31-class 0x1000 port stride (port B =
+ * GPIO_BASE + 1 * 0x1000 = 0xb0011000), confirmed by the vendor
+ * drivers/gpio/jz_gpio_common.c: CONFIG_PRJ -> JZGPIO_GROUP_OFFSET
+ * = 0x1000. UART1 pins are PB23/PB24 funcsel 0 per the vendor
+ * PRJ-pinctrl.dtsi uart1_pb node. QEMU does not model pads, so an
+ * incorrect 0x100 stride (the T20 layout) boots fine in emulation
+ * but produces no UART on real T32 silicon - the pinmux writes hit
+ * an unmapped window and the pads stay GPIO.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -58,26 +59,46 @@ static u8 u_rb(unsigned int off)
 }
 
 /*
- * Mux UART1 (PB23 TX, PB24 RX) to device function 0. XBurst1 GPIO
- * port stride is 0x100; port B = GPIO_BASE + 1 * 0x100 = 0xb0010100.
- * Vendor gpio_set_func() FUNC_0: write the pin mask to PXINTC,
- * PXMSKC, PXPAT1C, PXPAT0C (no pull-register writes).
+ * Mux UART1 (PB23 TX, PB24 RX) to device function 0. T32 silicon
+ * REQUIRES the shadow-register protocol from vendor jz_gpio_common.c
+ * gpio_set_func(): PXSHDS=1 enables shadow mode, writes to PXINT/
+ * MSK/PAT1/PAT0 *S/*C go to a holding latch, PXUPD=1 commits the
+ * latch atomically, PXSHDC=1 releases shadow mode. Direct writes
+ * to PXINTC/PXMSKC/PXPAT1C/PXPAT0C without the shadow handshake
+ * leave the pad in its reset state (GPIO input) on real T32 - the
+ * SPL boots fine but no character ever reaches the UART pad.
+ * T31-class GPIO port stride is 0x1000; port B = GPIO_BASE +
+ * 1 * 0x1000 = 0xb0011000. Per vendor PRJ-pinctrl.dtsi uart1_pb.
  */
-#define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x100)	/* port B, 0x100 stride */
+#define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x1000)	/* port B, 0x1000 stride */
+#define G_PXINTS	0x14
 #define G_PXINTC	0x18
+#define G_PXMSKS	0x24
 #define G_PXMSKC	0x28
+#define G_PXPAT1S	0x34
 #define G_PXPAT1C	0x38
+#define G_PXPAT0S	0x44
 #define G_PXPAT0C	0x48
+#define G_PXSHDS	0x1d4
+#define G_PXSHDC	0x1d8
+#define G_PXUPD		0x1e4
 #define UART1_PINS	(0x3u << 23)	/* PB23 TX + PB24 RX */
 
 static void t32_uart1_pinmux(void)
 {
 	void __iomem *b = (void __iomem *)GPIO_PORTB_BASE;
 
-	writel(UART1_PINS, b + G_PXINTC);	/* clear INT  */
-	writel(UART1_PINS, b + G_PXMSKC);	/* clear MASK -> device fn */
-	writel(UART1_PINS, b + G_PXPAT1C);	/* PAT1 = 0 \ func 0     */
-	writel(UART1_PINS, b + G_PXPAT0C);	/* PAT0 = 0 /            */
+	writel(1, b + G_PXSHDS);		/* enable shadow */
+	writel(0, b + G_PXINTS);		/* func 0: INT  = 0 */
+	writel(0, b + G_PXMSKS);		/* func 0: MSK  = 0 */
+	writel(0, b + G_PXPAT1S);		/* func 0: PAT1 = 0 */
+	writel(0, b + G_PXPAT0S);		/* func 0: PAT0 = 0 */
+	writel(UART1_PINS, b + G_PXINTC);	/* clear INT bits */
+	writel(UART1_PINS, b + G_PXMSKC);	/* clear MSK bits */
+	writel(UART1_PINS, b + G_PXPAT1C);	/* clear PAT1 bits */
+	writel(UART1_PINS, b + G_PXPAT0C);	/* clear PAT0 bits */
+	writel(1, b + G_PXUPD);			/* commit shadow */
+	writel(1, b + G_PXSHDC);		/* release shadow */
 }
 
 void t32_spl_serial_init(void)

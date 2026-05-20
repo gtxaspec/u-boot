@@ -28,10 +28,12 @@
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <dm/pinctrl.h>
+#include <dm/ofnode.h>
 #include <asm/io.h>
 #include <asm/gpio.h>
 #include <errno.h>
 #include <linux/bitops.h>
+#include <linux/string.h>
 
 #define GPIO_PXPIN	0x00
 #define GPIO_PXINTC	0x18
@@ -80,6 +82,15 @@ static const int t31_i2c1_c[]	    = { 0x48, 0x49 };
 static const int t31_mmc0_1bit[]    = { 0x20, 0x21, 0x22 };
 static const int t31_mmc0_4bit[]    = { 0x23, 0x24, 0x25 };
 static const int t31_sfc_data[]	    = { 0x17, 0x18, 0x1b, 0x1c };
+/*
+ * T32/T33 SFC0: PA23..PA28 (6 pins, function 0). Vendor binding
+ * `sfc0-pa` in PRJ-pinctrl.dtsi:
+ *   ingenic,pinmux = <&gpa 23 28>;
+ *   ingenic,pinmux-funcsel = <PINCTL_FUNCTION0>;
+ * Different shape from T31 (4 pins, function 1) so the same
+ * "sfc-data" group resolves per-SoC at pinmux time.
+ */
+static const int t32_sfc_data[]	    = { 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c };
 static const int t31_mac_rmii[]	    = { 0x26, 0x27, 0x28, 0x29, 0x2a,
 					0x2b, 0x2c, 0x2d, 0x2e };
 static const int t31_cim_mclk[]	    = { 0x0f };
@@ -129,6 +140,7 @@ static const struct t31_function t31_functions[] = {
 
 struct t31_pinctrl_priv {
 	void __iomem *base;
+	bool is_t32_family;	/* T32/T33: 6-pin SFC0 on PA23-28, func 0 */
 };
 
 static int t31_get_groups_count(struct udevice *dev)
@@ -168,10 +180,19 @@ static int t31_pinmux_group_set(struct udevice *dev, unsigned int group,
 {
 	struct t31_pinctrl_priv *p = dev_get_priv(dev);
 	const struct t31_group *g = &t31_groups[group];
+	const int *pins = g->pins;
+	unsigned int npins = g->npins;
+	u8 pin_func = g->func;
 	unsigned int i;
 
-	for (i = 0; i < g->npins; i++)
-		t31_set_pin_fn(p, g->pins[i], g->func);
+	if (p->is_t32_family && !strcmp(g->name, "sfc-data")) {
+		pins = t32_sfc_data;
+		npins = ARRAY_SIZE(t32_sfc_data);
+		pin_func = 0;
+	}
+
+	for (i = 0; i < npins; i++)
+		t31_set_pin_fn(p, pins[i], pin_func);
 
 	return 0;
 }
@@ -198,6 +219,9 @@ static int t31_pinctrl_probe(struct udevice *dev)
 	p->base = dev_remap_addr(dev);
 	if (!p->base)
 		return -EINVAL;
+
+	p->is_t32_family = device_is_compatible(dev, "ingenic,t32-pinctrl") ||
+			   device_is_compatible(dev, "ingenic,t33-pinctrl");
 
 	return 0;
 }

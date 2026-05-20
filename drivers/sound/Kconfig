@@ -26,19 +26,30 @@ config I2S_INGENIC
 	bool "Enable I2S/AIC support for Ingenic XBurst1 SoCs"
 	depends on I2S
 	help
-	  Ingenic XBurst1 SoCs (T10/T20/T21/T30/T31/C100) have an AIC
-	  controller with an on-chip audio codec. This enables PIO
-	  playback (no DMA) through the AIC and the UCLASS_I2S +
+	  Ingenic XBurst1 SoCs (T10/T20/T21/T23/T30/T31/T32/C100) have
+	  an AIC controller with an on-chip audio codec. This enables
+	  PIO playback (no DMA) through the AIC and the UCLASS_I2S +
 	  UCLASS_SOUND glue used by U-Boot's `sound` command. Pair with
-	  SOUND_JZ_T10_CODEC for the codec.
+	  SOUND_JZ_T10_CODEC for the T10..T31/C100 codec block, or
+	  SOUND_T32_CODEC for the T32 codec block (different silicon).
 
 config SOUND_JZ_T10_CODEC
 	bool "Ingenic XBurst1 on-chip audio codec (jz_t10 family)"
 	depends on I2S_INGENIC
 	help
-	  The on-chip audio codec in Ingenic T10/T20/T21/T30/T31/C100,
-	  driven by direct MMIO. Provides DAC -> speaker playback for
-	  the `sound` command.
+	  The on-chip audio codec in Ingenic T10/T20/T21/T23/T30/T31/
+	  C100, driven by direct MMIO. Provides DAC -> speaker playback
+	  for the `sound` command. Not for T32 - that SoC has a
+	  different codec block; use SOUND_T32_CODEC instead.
+
+config SOUND_T32_CODEC
+	bool "Ingenic T32 on-chip audio codec"
+	depends on I2S_INGENIC
+	help
+	  The on-chip audio codec in Ingenic T32 - a different silicon
+	  block from the T10..T31 jz_t10 family (different register
+	  set, codec base 0x10021000). Provides DAC -> speaker
+	  playback for the `sound` command.
 
 config I2S_ROCKCHIP
 	bool "Enable I2S support for Rockchip SoCs"

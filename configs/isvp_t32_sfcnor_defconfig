@@ -80,6 +80,15 @@ CONFIG_CMD_DHCP=y
 CONFIG_NETDEVICES=y
 CONFIG_DM_ETH=y
 
+# Audio: AIC + on-chip codec for U-Boot's `sound` command. The T32
+# codec is a different block from the jz_t10 family (T10..T31/C100),
+# so use SOUND_T32_CODEC, not SOUND_JZ_T10_CODEC.
+CONFIG_SOUND=y
+CONFIG_I2S=y
+CONFIG_I2S_INGENIC=y
+CONFIG_SOUND_T32_CODEC=y
+CONFIG_CMD_SOUND=y
+
 # SPI-NOR (SFC2) - flash chip is GD25Q127 on T32LQ but cover the
 # common XBurst1 NOR vendors so any board will probe.
 CONFIG_MTD=y

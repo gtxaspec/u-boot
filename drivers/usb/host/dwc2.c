@@ -763,13 +763,26 @@ int wait_for_chhltd(struct dwc2_hc_regs *hc_regs, u32 *sub, u8 *toggle)
 {
 	int ret;
 	u32 hcint, hctsiz;
+	unsigned long start = get_timer(0);
 
-	ret = wait_for_bit_le32(&hc_regs->hcint, HCINTMSK_CHHLTD, true,
-				2000, false);
-	if (ret)
-		return ret;
+	while (get_timer(start) < 2000) {
+		hcint = readl(&hc_regs->hcint);
+		if (hcint & HCINTMSK_CHHLTD)
+			break;
+		if (hcint & HCINTMSK_NAK) {
+			setbits_le32(&hc_regs->hcchar, HCCHAR_CHDIS);
+			wait_for_bit_le32(&hc_regs->hcint, HCINTMSK_CHHLTD,
+					  true, 100, false);
+			mdelay(10);
+			hcint = readl(&hc_regs->hcint);
+			break;
+		}
+		udelay(100);
+	}
 
-	hcint = readl(&hc_regs->hcint);
+	if (!(hcint & (HCINTMSK_CHHLTD | HCINTMSK_NAK)))
+		return -ETIMEDOUT;
+
 	hctsiz = readl(&hc_regs->hctsiz);
 	*sub = FIELD_GET(TSIZ_XFERSIZE_MASK, hctsiz);
 	*toggle = FIELD_GET(TSIZ_SC_MC_PID_MASK, hctsiz);

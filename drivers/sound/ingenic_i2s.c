@@ -33,19 +33,35 @@
 #define I2SDIV		0x30
 #define AICDR		0x34
 
-/* AICFR */
+/*
+ * AICFR bit layout. RST/AUSEL/ICDC/LSMP/TFTH/MSB and ENB are at the
+ * same positions across T10..T31 and T32; only the clock-direction
+ * encoding changes (the "T31 family" exposes SYNCD/BCKD/ICS/ISYNCD/
+ * IBCKD - five direction selectors plus an internal-codec-master
+ * picker; T32 collapses that to two RMASTER/TMASTER bits and drops
+ * ICS entirely - the internal codec is always the I2S master when
+ * ICDC=1). Both forms reach the same "codec master, AIC slave"
+ * configuration; the soc descriptor below picks the right set of
+ * bits to clear/set.
+ */
 #define AICFR_ENB	BIT(0)
 #define AICFR_RST	BIT(3)
 #define AICFR_AUSEL	BIT(4)	/* 1 = I2S (not AC-link) */
 #define AICFR_ICDC	BIT(5)	/* internal-codec data path */
 #define AICFR_LSMP	BIT(6)	/* underrun: repeat last sample */
-#define AICFR_ICS	BIT(7)	/* internal codec select */
-#define AICFR_SYNCD	BIT(1)	/* SYNC dir  0=in(slave) */
-#define AICFR_BCKD	BIT(2)	/* BITCLK dir 0=in(slave) */
-#define AICFR_ISYNCD	BIT(9)
-#define AICFR_IBCKD	BIT(10)
 #define AICFR_TFTH_SH	16
 #define AICFR_TFTH_MASK	(0x1fu << AICFR_TFTH_SH)
+
+/* "T31 family" (T10/T20/T21/T23/T30/T31/C100) clock-direction bits. */
+#define AICFR_T31_ICS		BIT(7)	/* internal codec select */
+#define AICFR_T31_SYNCD		BIT(1)	/* SYNC dir  0=in(slave) */
+#define AICFR_T31_BCKD		BIT(2)	/* BITCLK dir 0=in(slave) */
+#define AICFR_T31_ISYNCD	BIT(9)
+#define AICFR_T31_IBCKD		BIT(10)
+
+/* T32 clock-direction bits (replace the SYNCD/BCKD/I*KD/ICS scheme). */
+#define AICFR_T32_RMASTER	BIT(1)	/* RX I2S master mode */
+#define AICFR_T32_TMASTER	BIT(2)	/* TX I2S master mode */
 
 /* AICCR */
 #define AICCR_ERPL	BIT(1)	/* enable replay (TX) */
@@ -92,8 +108,9 @@
  * mirror that.
  */
 #define CPM_BASE		0xb0000000
-#define CPM_CLKGR0		0x20
-#define CPM_CLKGR0_AIC		BIT(11)
+#define CPM_CLKGR0		0x20	/* T32 calls this CLKGR (same offset) */
+#define CPM_CLKGR0_AIC_T31	BIT(11)	/* T10..T31 AIC gate */
+#define CPM_CLKGR0_AIC_T32	BIT(8)	/* T32 AIC gate (vendor CPM_CLKGR_AIC) */
 #define I2SCDR_SRC_MASK		(3u << 30)
 #define I2SCDR_SRC_MPLL		(1u << 30)
 #define I2SCDR_CE		BIT(29)
@@ -113,6 +130,12 @@ struct ingenic_i2s_soc {
 	u32 mpll_hz;		/* I2SCDR parent (MPLL) rate for this SoC */
 	u32 spk_cdr_off;	/* TX clk divider: 0x60 unified or 0x70 spk */
 	u32 mic_cdr_off;	/* RX clk divider: 0 (unified) or 0x84 mic */
+	u32 aic_gate_bit;	/* CLKGR0 bit for AIC gate (T31 bit 11, T32 bit 8) */
+	u32 aic_codec_select;	/* AICFR bits to SET so AIC routes to the
+				 * internal codec (T31: ICS|ICDC; T32: ICDC) */
+	u32 aic_slave_clear;	/* AICFR bits to CLEAR so AIC is the I2S
+				 * clock slave / codec is master (T31:
+				 * SYNCD|BCKD|ISYNCD|IBCKD; T32: RMASTER|TMASTER) */
 };
 
 struct ingenic_i2s_priv {
@@ -147,7 +170,7 @@ static void ingenic_aic_clk_init(struct ingenic_i2s_priv *priv)
 
 	/* Ungate the AIC peripheral clock (gated -> first AIC access
 	 * bus-stalls, same failure class as the MSC0 clock). */
-	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_AIC);
+	clrbits_le32(cpm + CPM_CLKGR0, priv->soc->aic_gate_bit);
 
 	/*
 	 * Program the I2S CGU divider(s): source = MPLL, M = 1, N chosen
@@ -183,13 +206,15 @@ static int ingenic_i2s_init(struct ingenic_i2s_priv *priv)
 	aic_rmw(b, AICFR, AICFR_RST, 0);
 	aic_rmw(b, I2SCR, 0, I2SCR_STPBK | I2SCR_ISTPBK);
 
-	/* I2S unit, I2S format, internal codec as MASTER (ICS|ICDC),
-	 * AIC as the I2S clock slave, feed SYSCLK out to the codec. */
+	/* I2S unit, I2S format, internal codec routed/master, AIC as the
+	 * I2S clock slave, feed SYSCLK out to the codec. The exact AICFR
+	 * bits differ between the T31 family (ICS|ICDC + clear
+	 * SYNCD/BCKD/ISYNCD/IBCKD) and T32 (ICDC + clear RMASTER/TMASTER)
+	 * - both forms end up with the same wire-level config. */
 	aic_rmw(b, AICFR, 0, AICFR_AUSEL);
 	aic_rmw(b, I2SCR, I2SCR_AMSL, 0);
-	aic_rmw(b, AICFR, 0, AICFR_ICS | AICFR_ICDC);
-	aic_rmw(b, AICFR, AICFR_BCKD | AICFR_SYNCD | AICFR_ISYNCD |
-		 AICFR_IBCKD, 0);
+	aic_rmw(b, AICFR, 0, priv->soc->aic_codec_select);
+	aic_rmw(b, AICFR, priv->soc->aic_slave_clear, 0);
 	aic_rmw(b, I2SCR, 0, I2SCR_ESCLK);
 
 	/* 16-bit, signed, little-endian, stereo (no mono->stereo). */
@@ -314,29 +339,74 @@ static const struct i2s_ops ingenic_i2s_ops = {
  * I2SCDR parent (MPLL) rate per SoC - only needs to be close enough
  * to land the SYSCLK near 12 MHz; the codec re-derives the audio fs.
  * Values per the mainline T-series PLL setup (clk-tXX / tXX pll.c).
- * spk_cdr_off: 0x60 (T10/T20/T21/T30 unified) or 0x70 (T23/T31/C100
+ * spk_cdr_off: 0x60 (T10/T20/T21/T30 unified) or 0x70 (T23/T31/C100/T32
  * split TX). mic_cdr_off: 0 (unified) or 0x84 (split RX).
+ *
+ * T10..T31 share the same CLKGR0 bit 11 for the AIC gate and use the
+ * SYNCD/BCKD/ICS/ISYNCD/IBCKD encoding for clock direction. T32 puts
+ * the AIC gate at CLKGR0 bit 8 and uses the RMASTER/TMASTER encoding,
+ * with no separate "internal codec select" (ICS) bit - just ICDC.
  */
 #define I2S_CDR_UNIFIED		0x60
 #define I2S_SPK_CDR_SPLIT	0x70
 #define I2S_MIC_CDR_SPLIT	0x84
+#define T31_CODEC_SEL_BITS	(AICFR_T31_ICS | AICFR_ICDC)
+#define T31_AIC_SLAVE_BITS	(AICFR_T31_BCKD | AICFR_T31_SYNCD | \
+				 AICFR_T31_ISYNCD | AICFR_T31_IBCKD)
+#define T32_CODEC_SEL_BITS	(AICFR_ICDC)
+#define T32_AIC_SLAVE_BITS	(AICFR_T32_RMASTER | AICFR_T32_TMASTER)
+
 static const struct ingenic_i2s_soc soc_t10  = { .mpll_hz = 1200000000u,
-	.spk_cdr_off = I2S_CDR_UNIFIED };
+	.spk_cdr_off = I2S_CDR_UNIFIED,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_t20  = { .mpll_hz = 1000000000u,
-	.spk_cdr_off = I2S_CDR_UNIFIED };
+	.spk_cdr_off = I2S_CDR_UNIFIED,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_t21  = { .mpll_hz =  900000000u,
-	.spk_cdr_off = I2S_CDR_UNIFIED };
+	.spk_cdr_off = I2S_CDR_UNIFIED,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_t23  = { .mpll_hz = 1200000000u,
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
-	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_t30  = { .mpll_hz = 1000000000u,
-	.spk_cdr_off = I2S_CDR_UNIFIED };
+	.spk_cdr_off = I2S_CDR_UNIFIED,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_t31  = { .mpll_hz = 1200000000u,
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
-	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
-	.mic_cdr_off = I2S_MIC_CDR_SPLIT };
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
+
+/*
+ * T32 CGU split I2S: CPM_I2STCDR=0x70 (TX), CPM_I2SRCDR=0x84 (RX) -
+ * same offsets as T31's I2SSPKCDR/I2SMICCDR, same M[28:20]/N[19:0]/
+ * CE[29]/SRC[31:30] layout, so the existing helpers Just Work.
+ * MPLL is 1200 MHz on the "lq" PLL profile (mach-xburst/t32/pll.c).
+ */
+static const struct ingenic_i2s_soc soc_t32  = { .mpll_hz = 1200000000u,
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T32,
+	.aic_codec_select = T32_CODEC_SEL_BITS,
+	.aic_slave_clear = T32_AIC_SLAVE_BITS };
 
 static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t10-aic",  .data = (ulong)&soc_t10 },
@@ -345,6 +415,7 @@ static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t23-aic",  .data = (ulong)&soc_t23 },
 	{ .compatible = "ingenic,t30-aic",  .data = (ulong)&soc_t30 },
 	{ .compatible = "ingenic,t31-aic",  .data = (ulong)&soc_t31 },
+	{ .compatible = "ingenic,t32-aic",  .data = (ulong)&soc_t32 },
 	{ .compatible = "ingenic,c100-aic", .data = (ulong)&soc_c100 },
 	{ }
 };

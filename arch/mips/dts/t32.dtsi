@@ -129,6 +129,42 @@
 	};
 
 	/*
+	 * Audio: AIC (I2S) controller + on-chip codec. PIO playback
+	 * driven by U-Boot's `sound` command. The T32 codec is a
+	 * different silicon block from the jz_t10 family used on
+	 * T10..T31/C100 - different register set, separate driver
+	 * (t32_codec). Speaker-amp enable GPIO is per-board (set via
+	 * ingenic,spk-gpio on the codec node when needed - boards that
+	 * hardwire the amp omit it).
+	 */
+	aic: audio-controller@10020000 {
+		compatible = "ingenic,t32-aic";
+		reg = <0x10020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	codec: audio-codec@10021000 {
+		compatible = "ingenic,t32-codec";
+		reg = <0x10021000 0x140>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	sound: sound {
+		compatible = "ingenic,t32-sound";
+		status = "disabled";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
+	};
+
+	/*
 	 * Pin controller + GPIO. T32 reuses the shared XBurst1
 	 * GPIO/pinmux engine and group tables (same rationale as T23/
 	 * T30); only the controller/gpio compatibles are T32-specific.

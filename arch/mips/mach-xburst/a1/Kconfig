@@ -7,9 +7,9 @@ choice
 	default A1_VARIANT_A1N
 	help
 	  A1 SKU. DDR parameters are transcribed verbatim from the
-	  vendor U-Boot (ddr_reg_values_a1{n,nt,l,x}.c + ddr_innophy.c;
-	  A1A from the vendor ddr_params_creator). Only A1N is validated
-	  on real silicon; the others are build-only transcriptions.
+	  vendor U-Boot (ddr_reg_values_a1{n,nt,l,x}.c + ddr_innophy.c).
+	  Only A1N is validated on real silicon; the others are
+	  build-only transcriptions.
 
 config A1_VARIANT_A1N
 	bool "A1N (DDR3-800 16-bit, 256 MB)"
@@ -36,11 +36,11 @@ config A1_VARIANT_A1L
 	  128 MB. APLL 1104 MHz, MPLL 1608 MHz.
 
 config A1_VARIANT_A1A
-	bool "A1A (DDR3-800 32-bit, 2 GB)"
+	bool "A1A (external DDR, up to 2 GB)"
 	help
-	  A1A: EFUSE chipid 0x4444. DDR3 @ 804 MHz, 32-bit bus, 2 GB
-	  chip - U-Boot uses the low 512 MB (the MIPS32 KSEG0 window).
-	  APLL 1200 MHz, MPLL 1608 MHz.
+	  A1A: EFUSE chipid 0x4444. The A1A SoC takes external DDR up
+	  to 2 GB; APLL 1200 MHz. Until A1A hardware is validated it
+	  reuses the A1X DDR profile (512 MB DDR3-700, MPLL 1400 MHz).
 
 endchoice
 
@@ -53,6 +53,7 @@ config A1_MPLL_MHZ
 	int
 	default 1400 if A1_VARIANT_A1NT
 	default 1400 if A1_VARIANT_A1X
+	default 1400 if A1_VARIANT_A1A
 	default 1608
 
 # Raw CPMPCR register word (M/N/OD1/OD0), from the vendor
@@ -61,6 +62,7 @@ config A1_MPLL_MNOD
 	hex
 	default 0x15e0d100 if A1_VARIANT_A1NT
 	default 0x15e0d100 if A1_VARIANT_A1X
+	default 0x15e0d100 if A1_VARIANT_A1A
 	default 0x08605100
 
 config A1_DRAM_SIZE_MB

@@ -56,7 +56,7 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 #define A1_IH_MAGIC		0x27051956
 #define A1_IH_HDR_LEN		64
-#define A1_UBOOT_SCRATCH	0xa1000000	/* compressed image in DRAM (uncached KSEG1) */
+#define A1_UBOOT_SCRATCH	0x81000000	/* compressed image in DRAM */
 #define A1_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
 #define A1_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
 #define A1_UBOOT_MAX		0x00800000	/* decompressed size bound */
@@ -247,7 +247,18 @@ static void sfc_init(void)
 	tmp &= ~CPM_CLKGR0_SFC0;
 	cpm_writel(tmp, CPM_CLKGR0);
 
-	sfc_clk_set_rate();
+	/*
+	 * After pll_init() MPLL changed to 1608 MHz, so SFC0CDR must
+	 * be reprogrammed. Source=MPLL (bits 31:30=2), div=22
+	 * -> SFC clk = 1608/(22+1) = ~70 MHz.
+	 */
+	{
+		u32 reg = cpm_readl(CPM_SFC0CDR);
+		reg &= ~((3u << 30) | (3 << SFC_CGU_STOP) | 0xff);
+		reg |= (2u << 30) | (1 << SFC_CGU_CE) | 80;
+		cpm_writel(reg, CPM_SFC0CDR);
+		{ volatile int d = 10000; while (d--); }
+	}
 
 	tmp = THRESHOLD << THRESHOLD_OFFSET;
 	jz_sfc_writel(tmp, SFC_GLB);
@@ -321,31 +332,20 @@ void a1_spl_load_uboot(void)
 		return;
 	}
 
-	/* Header + gzip payload into DRAM scratch. */
-	sfc_nor_load(A1_UBOOT_OFFSET, A1_IH_HDR_LEN + ih_size,
+	/* Load uncompressed U-Boot directly (skip LZMA for now) */
+	a1_spl_puts("SFC loading raw...\n");
+	sfc_nor_load(A1_UBOOT_OFFSET, ih_size + A1_IH_HDR_LEN,
 		     A1_UBOOT_SCRATCH);
 
-	/*
-	 * The lean SPL has no heap until here; DRAM is up. This custom
-	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
-	 * ourselves or malloc() stays on the tiny malloc_simple arena
-	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
-	 */
-	mem_malloc_init(A1_SPL_HEAP_BASE, A1_SPL_HEAP_SIZE);
-	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
-
-	out_len = A1_UBOOT_MAX;
-	ret = lzmaBuffToBuffDecompress((unsigned char *)(uintptr_t)ih_load,
-				       &out_len, scratch + A1_IH_HDR_LEN,
-				       (SizeT)ih_size);
-	if (ret) {
-		char m[2] = { (char)('0' + (ret & 7)), 0 };
-		a1_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
-		a1_spl_puts(m);
-		a1_spl_puts("\n");
-		return;
+	/* For raw (non-LZMA) image: just memcpy payload to load addr */
+	{
+		u8 *src = scratch + A1_IH_HDR_LEN;
+		u8 *dst = (u8 *)(uintptr_t)ih_load;
+		u32 i;
+		for (i = 0; i < ih_size; i++)
+			dst[i] = src[i];
 	}
 
-	/* Jump to the load address (== entry for a -T standalone image). */
+	a1_spl_puts("jump!\n");
 	((void (*)(void))(uintptr_t)ih_load)();
 }

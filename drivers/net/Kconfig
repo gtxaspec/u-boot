@@ -200,6 +200,15 @@ config DWC_ETH_XGMAC_SOCFPGA
 	  The Synopsys Designware Ethernet XGMAC IP block with specific
 	  configuration used in Intel SoC FPGA chip.
 
+config DWC_ETH_XGMAC_INGENIC
+	bool "Synopsys DWC Ethernet XGMAC device support for Ingenic A1"
+	select DWC_ETH_XGMAC
+	depends on DM_ETH
+	help
+	  The Synopsys Designware Ethernet XGMAC IP block as integrated in
+	  the Ingenic A1 (XBurst2) SoC. Adds the SoC glue: the GMAC CGU
+	  clock, the MAC PHY-interface mode register and the PHY reset GPIO.
+
 config DRIVER_DM9000
 	bool "Davicom DM9000 controller driver"
 	help

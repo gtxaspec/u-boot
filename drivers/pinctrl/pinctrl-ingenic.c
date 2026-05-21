@@ -152,24 +152,31 @@ static const int a1_uart1_data[] = { 0x46, 0x47 };	/* PC6, PC7   */
 static const int a1_uart2_data[] = { 0x4e, 0x4f };	/* PC14, PC15 */
 static const int a1_sfc_data[]	 = { 0x54, 0x55, 0x56,	/* PC20..PC25 */
 				     0x57, 0x58, 0x59 };
+static const int a1_mac0_data[]  = {			/* PA0..PA14 */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+};
 
 static const struct t31_group a1_groups[] = {
 	GRP("uart0-data", a1_uart0_data, 0),
 	GRP("uart1-data", a1_uart1_data, 0),
 	GRP("uart2-data", a1_uart2_data, 0),
 	GRP("sfc-data",	  a1_sfc_data,	 0),
+	GRP("mac0-data",  a1_mac0_data,	 0),
 };
 
 static const char * const a1_g_uart0[] = { "uart0-data" };
 static const char * const a1_g_uart1[] = { "uart1-data" };
 static const char * const a1_g_uart2[] = { "uart2-data" };
 static const char * const a1_g_sfc[]   = { "sfc-data" };
+static const char * const a1_g_mac0[]  = { "mac0-data" };
 
 static const struct t31_function a1_functions[] = {
 	FUNC("uart0", a1_g_uart0),
 	FUNC("uart1", a1_g_uart1),
 	FUNC("uart2", a1_g_uart2),
 	FUNC("sfc",   a1_g_sfc),
+	FUNC("mac0",  a1_g_mac0),
 };
 
 struct t31_pinctrl_priv {

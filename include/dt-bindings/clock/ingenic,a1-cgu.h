@@ -22,7 +22,7 @@
 #define A1_CLK_UART0		11
 #define A1_CLK_UART1		12
 #define A1_CLK_UART2		13
-#define A1_CLK_OTG		14
+#define A1_CLK_OTG0		14
 #define A1_CLK_GMAC0		15
 #define A1_CLK_GMAC1		16
 #define A1_CLK_TCU		17
@@ -30,5 +30,7 @@
 #define A1_CLK_AIC		19
 #define A1_CLK_DMAC		20
 #define A1_CLK_EFUSE		21
+#define A1_CLK_OTG1		22
+#define A1_CLK_OTG2		23
 
 #endif /* __DT_BINDINGS_CLOCK_A1_CGU_H__ */

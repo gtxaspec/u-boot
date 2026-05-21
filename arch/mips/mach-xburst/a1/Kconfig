@@ -5,43 +5,41 @@ if SOC_A1
 choice
 	prompt "A1 SoC variant"
 	default A1_VARIANT_A1N
+	help
+	  A1 SKU. DDR parameters are transcribed verbatim from the
+	  vendor U-Boot (ddr_reg_values_a1{n,nt,l,x}.c + ddr_innophy.c).
+	  Only A1N is validated on real silicon; the others are
+	  build-only faithful transcriptions.
 
 config A1_VARIANT_A1N
-	bool "A1N (DDR3-800, APLL 1104, 256 MB, 16-bit)"
+	bool "A1N (DDR3-800 16-bit, 256 MB)"
 	help
-	  A1N: EFUSE chipid 0x1111, DDR3 @ 804 MHz, APLL 1104 MHz.
-	  16-bit DDR data width.
+	  A1N: EFUSE chipid 0x1111. DDR3 @ 804 MHz, 16-bit bus,
+	  256 MB. APLL 1104 MHz, MPLL 1608 MHz.
 
 config A1_VARIANT_A1NT
-	bool "A1NT (DDR3-700, APLL 1104, 256 MB)"
+	bool "A1NT (DDR3-700 32-bit, 256 MB)"
 	help
-	  A1NT: EFUSE chipid 0x5555, DDR3 @ 700 MHz, APLL 1104 MHz.
+	  A1NT: EFUSE chipid 0x5555. DDR3 @ 700 MHz, 32-bit bus,
+	  256 MB. APLL 1104 MHz, MPLL 1400 MHz.
 
 config A1_VARIANT_A1X
-	bool "A1X (DDR3-700, APLL 1104, 256 MB)"
+	bool "A1X (DDR3-700 32-bit, 512 MB)"
 	help
-	  A1X: EFUSE chipid 0x2222, DDR3 @ 700 MHz, APLL 1104 MHz.
+	  A1X: EFUSE chipid 0x2222. DDR3 @ 700 MHz, 32-bit bus,
+	  512 MB. APLL 1104 MHz, MPLL 1400 MHz.
 
 config A1_VARIANT_A1L
-	bool "A1L (DDR3-800, APLL 1104, 256 MB, 16-bit)"
+	bool "A1L (DDR3-800 16-bit, 128 MB)"
 	help
-	  A1L: EFUSE chipid 0x3333, DDR3 @ 804 MHz, APLL 1104 MHz.
-	  16-bit DDR data width.
-
-config A1_VARIANT_A1A
-	bool "A1A (DDR3-800, APLL 1200, 256 MB)"
-	help
-	  A1A: EFUSE chipid 0x4444, DDR3 @ 804 MHz, APLL 1200 MHz.
+	  A1L: EFUSE chipid 0x3333. DDR3 @ 804 MHz, 16-bit bus,
+	  128 MB. APLL 1104 MHz, MPLL 1608 MHz.
 
 endchoice
 
 config A1_APLL_MHZ
 	int
-	default 1104 if A1_VARIANT_A1N
-	default 1104 if A1_VARIANT_A1NT
-	default 1104 if A1_VARIANT_A1X
-	default 1104 if A1_VARIANT_A1L
-	default 1200 if A1_VARIANT_A1A
+	default 1104
 
 config A1_MPLL_MHZ
 	int
@@ -49,6 +47,21 @@ config A1_MPLL_MHZ
 	default 1400 if A1_VARIANT_A1NT
 	default 1400 if A1_VARIANT_A1X
 	default 1608 if A1_VARIANT_A1L
-	default 1608 if A1_VARIANT_A1A
+
+# Raw CPMPCR register word (M/N/OD1/OD0), from the vendor
+# config_sys_mpll_mnod - 1608 MHz = M134/N1, 1400 MHz = M350/N3.
+config A1_MPLL_MNOD
+	hex
+	default 0x08605100 if A1_VARIANT_A1N
+	default 0x15e0d100 if A1_VARIANT_A1NT
+	default 0x15e0d100 if A1_VARIANT_A1X
+	default 0x08605100 if A1_VARIANT_A1L
+
+config A1_DRAM_SIZE_MB
+	int
+	default 256 if A1_VARIANT_A1N
+	default 256 if A1_VARIANT_A1NT
+	default 512 if A1_VARIANT_A1X
+	default 128 if A1_VARIANT_A1L
 
 endif

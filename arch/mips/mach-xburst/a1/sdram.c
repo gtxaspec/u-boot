@@ -88,6 +88,36 @@ static void phy_writel_idx(u32 val, u32 idx)
 	writel(val, (void __iomem *)(DDR_PHY_BASE + idx * 4));
 }
 
+static u32 a1_c0_count(void)
+{
+	u32 c;
+
+	__asm__ __volatile__("mfc0 %0, $9; nop" : "=r"(c));
+	return c;
+}
+
+/*
+ * Microsecond delay built on the CP0 Count register. The SPL has no
+ * timer peripheral and udelay() is not available; earlier revisions
+ * used raw busy loops whose duration was unpredictable (compiler,
+ * cache, CPU clock), leaving the DDR PHY reset/training delays too
+ * short and the DRAM marginally trained.
+ *
+ * Count advances at most at the CPU clock (APLL, 1104 MHz); assuming
+ * the full rate makes the delay never shorter than requested - at
+ * worst ~2x long if Count actually runs at CPU/2, which is harmless.
+ * The iteration cap keeps the loop bounded if Count is ever frozen.
+ */
+static void a1_udelay(u32 us)
+{
+	u32 start = a1_c0_count();
+	u32 ticks = us * 1104u;
+	u32 cap = ticks * 8u + 100000u;
+
+	while ((a1_c0_count() - start) < ticks && --cap)
+		;
+}
+
 static void ddr_clk_set(void)
 {
 	void __iomem *cpm = (void __iomem *)CPM_BASE;
@@ -99,35 +129,68 @@ static void ddr_clk_set(void)
 	writel(val, cpm + CPM_CLKGR0);
 
 	/*
-	 * DDR clock rate is set by pll_init (MPLL=1608) + bootrom's DDRCDR
-	 * config (MPLL/2 = 804 MHz). No DRCG toggle needed on A1 - the
-	 * vendor does not touch DRCG in the SPL DDR init path.
+	 * Re-derive the DDR clock from MPLL (vendor clk_set_rate(DDR)).
+	 * pll_init reprogrammed MPLL, so the DDRCDR divider must be
+	 * re-latched: clear the divider [3:0] and the CE/BUSY/STOP
+	 * field [29:24], set divider 1 (DDR = MPLL/2 = 804 MHz) and
+	 * pulse CE, then wait for BUSY to clear. Skipping this leaves
+	 * the DDR clock running off a divider that never re-sampled
+	 * the new MPLL - a jittery clock that mistunes RX calibration.
 	 */
+	val = readl(cpm + CPM_DDRCDR);
+	val &= ~(0xf | (0x3f << 24));
+	val |= (1 << 29) | 0x1;
+	writel(val, cpm + CPM_DDRCDR);
+	{
+		int t = 100000;
+
+		while ((readl(cpm + CPM_DDRCDR) & (1 << 28)) && --t)
+			;
+	}
 }
 
 static void ddrc_reset_phy(void)
 {
 	ddr_writel(0x00f00000, DDRC_CTRL);
-	{ volatile int d = 100000; while (d--); }
-	ddr_writel(0x00800000, DDRC_CTRL);
-	{ volatile int d = 100000; while (d--); }
+	a1_udelay(1000);			/* vendor: mdelay(1) */
+	ddr_writel(0x00800000, DDRC_CTRL);	/* dfi_reset_n low */
+	a1_udelay(1000);			/* vendor: mdelay(1) */
+}
+
+static void phy_rmw(u32 off, u32 mask, u32 val)
+{
+	u32 v = phy_readl(off);
+
+	v &= ~mask;
+	v |= val;
+	phy_writel(v, off);
 }
 
 static void ddrp_pll_init(void)
 {
-	phy_writel(0x0a, PHY_MEM_CFG);
-	phy_writel(0x03, PHY_DQ_WIDTH);
-	phy_writel(0x0d, PHY_RST);
-	phy_writel(0x08, PHY_CWL);
-	phy_writel(0x0b, PHY_CL);
-	phy_writel(0x00, PHY_AL);
-	phy_writel(0x00, PHY_PLL_PD);
+	/*
+	 * Read-modify-write each PHY register (vendor ddrp_pll_init does
+	 * `val &= ~mask; val |= field`). The bootrom leaves meaningful
+	 * state in the upper bits of these PHY registers; a full write
+	 * clobbers it and perturbs the PHY enough that the RX hard
+	 * calibration converges to a marginal point.
+	 */
+	phy_rmw(PHY_MEM_CFG, 0xff, 0x0a);
+	phy_rmw(PHY_DQ_WIDTH, 0x0f, 0x03);
+	phy_rmw(PHY_RST, 0xff, 0x0d);
+	phy_rmw(PHY_CWL, 0x0f, 0x08);
+	phy_rmw(PHY_CL, 0x0f, 0x0b);
+	phy_writel(0x00, PHY_AL);	/* vendor writes AL = 0 outright */
+	phy_rmw(PHY_PLL_PD, 0xff, 0x00);
 
-	u32 ctrl = phy_readl(PHY_PLL_CTRL);
-	phy_writel(ctrl | 0x80, PHY_PLL_CTRL);
-
-	u32 pd = phy_readl(PHY_PLL_PD);
-	phy_writel(pd | 0x20, PHY_PLL_PD);
+	/*
+	 * Innophy PHY PLL band select is rate-dependent (vendor
+	 * ddrp_pll_init): 162-325 MHz -> PLL_CTRL bit7 + PLL_PD 2<<5;
+	 * 325-650 MHz -> PLL_CTRL bit7 + PLL_PD 1<<5; 650-900 MHz ->
+	 * leave both clear. All A1 SKUs run DDR >= 700 MHz (A1N/A1L/A1A
+	 * = 804, A1X/A1NT = 700+), so the 650-900 MHz band always
+	 * applies: PLL_CTRL and PLL_PD stay at their reset/zero value.
+	 */
 
 	while (!(phy_readl(PHY_PLL_LOCK) & 0x4))
 		;
@@ -213,37 +276,37 @@ static void ddrc_dfi_init(void)
 		a1_spl_putc('!');
 	else
 		a1_spl_putc('.');
-	{ volatile int _d = 5000; while (_d--); }
+	a1_udelay(50);				/* vendor: udelay(50) */
 
-	ddr_writel(0x00000000, DDRC_CTRL);
+	ddr_writel(0x00000000, DDRC_CTRL);	/* dfi_reset_n high */
 	ddr_writel(0x4a004a35, DDRC_CFG);
-	{ volatile int _d = 50000; while (_d--); }
-	ddr_writel(0x00000002, DDRC_CTRL);
-	{ volatile int _d = 1000; while (_d--); }
+	a1_udelay(500);				/* vendor: udelay(500) */
+	ddr_writel(0x00000002, DDRC_CTRL);	/* CKE high */
+	a1_udelay(10);				/* vendor: udelay(10) */
 
 	/* MR2 */
 	ddr_writel(0x00000000, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	ddr_writel(0x00018483, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	/* MR3 */
 	ddr_writel(0x00000000, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	ddr_writel(0x00000683, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	/* MR1 (patched with kgd_odt=1, kgd_ds=1) */
 	ddr_writel(0x00000000, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	ddr_writel(0x00006283, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	/* MR0 */
 	ddr_writel(0x00000000, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	ddr_writel(0x01f70083, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 	/* ZQCL CS0 */
 	ddr_writel(0x000000c3, DDRC_LMR);
-	{ volatile int _d = 500; while (_d--); }
+	a1_udelay(5);
 }
 
 static void ddrc_prev_init(void)

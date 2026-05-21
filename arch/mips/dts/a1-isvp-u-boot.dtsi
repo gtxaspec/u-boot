@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-A1 SFC-NOR boot.
+ *
+ * The A1 mask ROM boots from SPI-NOR by reading a headered SPL at
+ * flash offset 0, which then loads U-Boot proper from a fixed offset.
+ * The SFC-NOR boot header is the same format the T31 uses - CRC7 of
+ * the SPL body at byte 9, image length at bytes 12..15 - so the
+ * ingenic-t31-spl binman etype applies unchanged (the vendor
+ * tools/ingenic-tools/spi_checksum.c handles CONFIG_A1 and CONFIG_T31
+ * with one shared SFC code path, SKIP_SIZE 2048).
+ *
+ * 'make' produces:
+ *   u-boot-spl-a1.bin        : SPL with the finalized SFC-NOR boot
+ *                              header, bootable standalone.
+ *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
+ *                              at 0x8000 (the A1 SPL loader's U-Boot
+ *                              offset in a1/sfc.c) - flash at offset 0.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	/*
+	 * Standalone headered SPL: take the freshly built
+	 * spl/u-boot-spl.bin through the SFC-NOR boot-header finalizer.
+	 */
+	u-boot-spl-a1 {
+		filename = "u-boot-spl-a1.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	/*
+	 * Combined SFC-NOR flash image: headered SPL at offset 0, LZMA
+	 * U-Boot at 0x8000 (SPL MAX_SIZE is 0x6000; 0x8000 clears it
+	 * with margin). Trimmed to the end of the last entry; erased
+	 * flash reads 0xff so the rest of the chip is fine to leave
+	 * alone after flashing at offset 0.
+	 */
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-a1.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

@@ -78,6 +78,11 @@
 			function = "sfc";
 			groups = "sfc-data";
 		};
+
+		pins_mac0: mac0 {
+			function = "mac0";
+			groups = "mac0-data";
+		};
 	};
 
 	uart1: serial@b0031000 {
@@ -105,6 +110,28 @@
 			compatible = "jedec,spi-nor";
 			reg = <0>;
 			spi-max-frequency = <50000000>;
+		};
+	};
+
+	gmac0: ethernet@b30b0000 {
+		compatible = "ingenic,a1-gmac";
+		reg = <0xb30b0000 0x10000>;
+		clocks = <&cgu A1_CLK_GMAC0>;
+		phy-mode = "rmii";
+		phy-handle = <&gmac0_phy>;
+		ingenic,mode-reg = <0xb00000c8>;
+		max-speed = <100>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mac0>;
+		status = "okay";
+
+		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			gmac0_phy: ethernet-phy@0 {
+				reg = <0>;
+			};
 		};
 	};
 };

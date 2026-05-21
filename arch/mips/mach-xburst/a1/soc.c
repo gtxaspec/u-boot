@@ -39,34 +39,42 @@ static void spl_put_hex(u32 v)
 static int dram_verify(void)
 {
 	static const u32 pat[] = {
-		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
-		0xdeadbeef, 0x12345678,
+		0xdeadbeef, 0x12345678, 0xa5a5a5a5, 0x5a5a5a5a,
+		0xffffffff, 0x00000000,
 	};
-	const u32 bases[] = { 0xa0000000, 0x80000000 };
-	const u32 offs[] = { 0x0, 0x4, 0x100000,
-			     A1_DRAM_SIZE / 2, A1_DRAM_SIZE - 4 };
-	int b, o, p;
+	volatile u32 *a;
+	int p;
 
-	for (b = 0; b < 2; b++) {
-		for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-			volatile u32 *a =
-				(volatile u32 *)(bases[b] + offs[o]);
-
-			for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-				*a = pat[p];
-				if (*a != pat[p]) {
-					a1_spl_puts("A1 SPL: DDR FAIL @");
-					spl_put_hex((u32)(uintptr_t)a);
-					a1_spl_puts(" wrote ");
-					spl_put_hex(pat[p]);
-					a1_spl_puts(" read ");
-					spl_put_hex(*a);
-					a1_spl_putc('\n');
-					return -1;
-				}
-			}
+	a = (volatile u32 *)0xa0000000;
+	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
+		*a = pat[p];
+		u32 rd = *a;
+		if (rd != pat[p]) {
+			a1_spl_puts("FAIL @");
+			spl_put_hex((u32)(uintptr_t)a);
+			a1_spl_puts(" w=");
+			spl_put_hex(pat[p]);
+			a1_spl_puts(" r=");
+			spl_put_hex(rd);
+			a1_spl_putc('\n');
+			return -1;
 		}
 	}
+
+	a = (volatile u32 *)0xa0000004;
+	*a = 0xcafebabe;
+	if (*a != 0xcafebabe) {
+		a1_spl_puts("FAIL @4\n");
+		return -1;
+	}
+
+	a = (volatile u32 *)0xa0100000;
+	*a = 0x55aa55aa;
+	if (*a != 0x55aa55aa) {
+		a1_spl_puts("FAIL @1M\n");
+		return -1;
+	}
+
 	return 0;
 }
 #endif

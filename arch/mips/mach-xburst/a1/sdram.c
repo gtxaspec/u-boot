@@ -176,19 +176,19 @@ static void ddr_param_write(void)
 	for (i = 0; i < 4; i++)
 		phy_writel_idx(0x20, dqs_b[i]);
 
-	/* DQ per-bit delay A (8 bits, even indices 0x1c2..0x1d0) */
-	for (i = 0; i < 8; i++)
-		phy_writel_idx(0x10, 0x1c2 + i * 2);
-	/* DQ per-bit delay A high (0x1e2..0x1e5) */
-	for (i = 0; i < 4; i++)
-		phy_writel_idx(0x10, 0x1e2 + i);
-
-	/* DQ per-bit delay B (8 bits, even indices 0x222..0x230) */
-	for (i = 0; i < 8; i++)
-		phy_writel_idx(0x07, 0x222 + i * 2);
-	/* DQ per-bit delay B high (0x242..0x245) */
-	for (i = 0; i < 4; i++)
-		phy_writel_idx(0x07, 0x242 + i);
+	/* Per-DQ-bit delay offsets from vendor DQxRxOFFSET table:
+	 * DQ0-7: +0x02,+0x04,...,+0x10 (even, low byte)
+	 * DQ8-15: +0x17,+0x19,...,+0x25 (odd, high byte) */
+	static const u32 dq_off[16] = {
+		0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10,
+		0x17, 0x19, 0x1b, 0x1d, 0x1f, 0x21, 0x23, 0x25,
+	};
+	/* Channel A (base 0x1c0) */
+	for (i = 0; i < 16; i++)
+		phy_writel_idx(0x10, 0x1c0 + dq_off[i]);
+	/* Channel B (base 0x220) */
+	for (i = 0; i < 16; i++)
+		phy_writel_idx(0x07, 0x220 + dq_off[i]);
 
 	/* VREF for all 4 byte lanes */
 	static const u32 vref_idx[] = { 0x147, 0x157, 0x167, 0x177 };

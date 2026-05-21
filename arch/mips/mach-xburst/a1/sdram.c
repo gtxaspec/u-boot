@@ -259,8 +259,6 @@ static void ddr_param_write(void)
 		phy_writel_idx(0x80, vref_idx[i]);
 }
 
-extern void a1_spl_putc(char c);
-
 static void ddrc_dfi_init(void)
 {
 	int timeout;
@@ -272,10 +270,6 @@ static void ddrc_dfi_init(void)
 	timeout = 1000000;
 	while (!(apb_readl(DDRC_DWSTATUS) & 0x1) && --timeout)
 		;
-	if (!timeout)
-		a1_spl_putc('!');
-	else
-		a1_spl_putc('.');
 	a1_udelay(50);				/* vendor: udelay(50) */
 
 	ddr_writel(0x00000000, DDRC_CTRL);	/* dfi_reset_n high */
@@ -363,33 +357,15 @@ static void ddrp_set_rfifo(void)
 	phy_writel(val, DDR_PHY_OFFSET + 0x038);
 }
 
-extern void a1_spl_puts(const char *s);
-
 void sdram_init(void)
 {
-	a1_spl_puts("DDR: clk\n");
 	ddr_clk_set();
-	a1_spl_puts("DDR: clk ok\n");
-
-	a1_spl_puts("DDR: rst\n");
 	ddrc_reset_phy();
-
-	a1_spl_puts("DDR: pll\n");
 	ddrp_pll_init();
-
-	a1_spl_puts("DDR: phy\n");
 	ddr_param_write();
-
-	a1_spl_puts("DDR: dfi\n");
 	ddrc_dfi_init();
-
-	a1_spl_puts("DDR: prev\n");
 	ddrc_prev_init();
-
-	a1_spl_puts("DDR: cal\n");
 	ddrp_hardware_calibration();
-
-	a1_spl_puts("DDR: post\n");
 	ddrc_post_init();
 
 	ddr_writel(0x40000c41, DDRC_AUTOSR_CNT);
@@ -398,5 +374,4 @@ void sdram_init(void)
 	apb_writel(0x00000001, DDRC_PREGPRO);
 
 	ddrp_set_rfifo();
-	a1_spl_puts("DDR: done\n");
 }

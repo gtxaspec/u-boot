@@ -360,7 +360,6 @@ void a1_spl_load_uboot(void)
 	}
 
 	/* Load uncompressed U-Boot directly (skip LZMA for now) */
-	a1_spl_puts("SFC loading raw...\n");
 	sfc_nor_load(A1_UBOOT_OFFSET, ih_size + A1_IH_HDR_LEN,
 		     A1_UBOOT_SCRATCH);
 

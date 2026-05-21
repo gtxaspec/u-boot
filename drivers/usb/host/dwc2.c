@@ -761,28 +761,33 @@ static int dwc_otg_submit_rh_msg(struct dwc2_priv *priv, struct usb_device *dev,
 
 int wait_for_chhltd(struct dwc2_hc_regs *hc_regs, u32 *sub, u8 *toggle)
 {
-	int ret;
 	u32 hcint, hctsiz;
-	unsigned long start = get_timer(0);
+	int ret;
 
-	while (get_timer(start) < 2000) {
-		hcint = readl(&hc_regs->hcint);
-		if (hcint & HCINTMSK_CHHLTD)
-			break;
-		if (hcint & HCINTMSK_NAK) {
-			setbits_le32(&hc_regs->hcchar, HCCHAR_CHDIS);
-			wait_for_bit_le32(&hc_regs->hcint, HCINTMSK_CHHLTD,
-					  true, 100, false);
-			mdelay(10);
-			hcint = readl(&hc_regs->hcint);
-			break;
-		}
-		udelay(100);
+	/*
+	 * Wait for the host channel to halt. In internal-DMA mode the
+	 * DWC2 core retries a NAKed non-periodic transfer on its own, so
+	 * a transfer that has data to move completes (CHHLTD) with no
+	 * software help and the NAKs never surface. If CHHLTD does not
+	 * arrive the channel is NAK-polling a device with nothing to
+	 * transfer - e.g. a USB-NIC bulk-IN with no packet buffered - so
+	 * force-halt it (CHENA|CHDIS) and report a retriable -EAGAIN.
+	 *
+	 * Do NOT force-halt on the raw NAK interrupt: that aborts the
+	 * core's own retry mid-flight and races packet arrival, which
+	 * silently drops USB-NIC frames unless a long per-NAK delay keeps
+	 * the abort clear of the data.
+	 */
+	ret = wait_for_bit_le32(&hc_regs->hcint, HCINTMSK_CHHLTD, true,
+				10, false);
+	if (ret) {
+		setbits_le32(&hc_regs->hcchar, HCCHAR_CHENA | HCCHAR_CHDIS);
+		wait_for_bit_le32(&hc_regs->hcint, HCINTMSK_CHHLTD, true,
+				  100, false);
+		return -EAGAIN;
 	}
 
-	if (!(hcint & (HCINTMSK_CHHLTD | HCINTMSK_NAK)))
-		return -ETIMEDOUT;
-
+	hcint = readl(&hc_regs->hcint);
 	hctsiz = readl(&hc_regs->hctsiz);
 	*sub = FIELD_GET(TSIZ_XFERSIZE_MASK, hctsiz);
 	*toggle = FIELD_GET(TSIZ_SC_MC_PID_MASK, hctsiz);

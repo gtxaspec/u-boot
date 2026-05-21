@@ -20,6 +20,7 @@
 #include <reset.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
+#include <asm/addrspace.h>
 #include <linux/delay.h>
 #include <dm/device_compat.h>
 #include "dwc_eth_xgmac.h"
@@ -125,6 +126,18 @@ static int xgmac_probe_resources_a1(struct udevice *dev)
 		return ret;
 	}
 
+	/*
+	 * The A1 has no cache-coherent DMA path. Re-point the XGMAC
+	 * descriptor rings and packet buffers at the uncached KSEG1
+	 * window so the CPU and the DMA engine always agree on memory
+	 * contents - the vendor a1_xgmac.c does the same. virt_to_phys()
+	 * still yields the correct physical address from a KSEG1 pointer.
+	 */
+	xgmac->tx_descs   = (void *)CKSEG1ADDR((unsigned long)xgmac->tx_descs);
+	xgmac->rx_descs   = (void *)CKSEG1ADDR((unsigned long)xgmac->rx_descs);
+	xgmac->tx_dma_buf = (void *)CKSEG1ADDR((unsigned long)xgmac->tx_dma_buf);
+	xgmac->rx_dma_buf = (void *)CKSEG1ADDR((unsigned long)xgmac->rx_dma_buf);
+
 	return 0;
 }
 
@@ -200,13 +213,26 @@ static int xgmac_get_enetaddr_a1(struct udevice *dev)
 	return !is_valid_ethaddr(pdata->enetaddr);
 }
 
+static int xgmac_remove_resources_a1(struct udevice *dev)
+{
+	struct xgmac_priv *xgmac = dev_get_priv(dev);
+
+	/* Undo the KSEG1 aliasing so the core can free() the originals. */
+	xgmac->tx_descs   = (void *)CKSEG0ADDR((unsigned long)xgmac->tx_descs);
+	xgmac->rx_descs   = (void *)CKSEG0ADDR((unsigned long)xgmac->rx_descs);
+	xgmac->tx_dma_buf = (void *)CKSEG0ADDR((unsigned long)xgmac->tx_dma_buf);
+	xgmac->rx_dma_buf = (void *)CKSEG0ADDR((unsigned long)xgmac->rx_dma_buf);
+
+	return 0;
+}
+
 static struct xgmac_ops xgmac_a1_ops = {
 	.xgmac_inval_desc = xgmac_inval_desc_generic,
 	.xgmac_flush_desc = xgmac_flush_desc_generic,
 	.xgmac_inval_buffer = xgmac_inval_buffer_generic,
 	.xgmac_flush_buffer = xgmac_flush_buffer_generic,
 	.xgmac_probe_resources = xgmac_probe_resources_a1,
-	.xgmac_remove_resources = xgmac_null_ops,
+	.xgmac_remove_resources = xgmac_remove_resources_a1,
 	.xgmac_stop_resets = xgmac_null_ops,
 	.xgmac_start_resets = xgmac_start_resets_a1,
 	.xgmac_stop_clks = xgmac_stop_clks_a1,
@@ -222,6 +248,16 @@ struct xgmac_config xgmac_a1_config = {
 	.config_mac = XGMAC_MAC_RXQ_CTRL0_RXQ0EN_ENABLED_DCB,
 	.config_mac_mdio = XGMAC_MAC_MDIO_ADDRESS_CR_400_500,
 	.axi_bus_width = XGMAC_AXI_WIDTH_64,
+	/*
+	 * A1 DMA: no EAME (32-bit addressing only), a single outstanding
+	 * read/write and 32-beat bursts. Mirrors the vendor a1_xgmac.c,
+	 * which leaves EAME off; the mainline default (EAME + max OSR)
+	 * stalls the A1 AXI bus as soon as the DMA runs.
+	 */
+	.dma_sysbus_mode = (1 << XGMAC_DMA_SYSBUS_MODE_WR_OSR_LMT_SHIFT) |
+			   (1 << XGMAC_DMA_SYSBUS_MODE_RD_OSR_LMT_SHIFT) |
+			   XGMAC_DMA_SYSBUS_MODE_UNDEF |
+			   XGMAC_DMA_SYSBUS_MODE_BLEN32,
 	.interface = dev_read_phy_mode,
 	.ops = &xgmac_a1_ops,
 };

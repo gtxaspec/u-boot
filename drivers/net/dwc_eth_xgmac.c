@@ -707,6 +707,9 @@ static int xgmac_start(struct udevice *dev)
 	       XGMAC_DMA_SYSBUS_MODE_BLEN4 |
 	       XGMAC_DMA_SYSBUS_MODE_BLEN32;
 
+	if (xgmac->config->dma_sysbus_mode)
+		val = xgmac->config->dma_sysbus_mode;
+
 	writel(val, &xgmac->dma_regs->sysbus_mode);
 
 	/* Set up descriptors */
@@ -723,7 +726,7 @@ static int xgmac_start(struct udevice *dev)
 	for (i = 0; i < XGMAC_DESCRIPTORS_RX; i++) {
 		rx_desc = (struct xgmac_desc *)xgmac_get_desc(xgmac, i, true);
 
-		address = (uintptr_t)(xgmac->rx_dma_buf +
+		address = virt_to_phys(xgmac->rx_dma_buf +
 					(i * XGMAC_MAX_PACKET_SIZE));
 
 		rx_desc->des0 = lower_32_bits(address);
@@ -737,14 +740,14 @@ static int xgmac_start(struct udevice *dev)
 						       XGMAC_MAX_PACKET_SIZE);
 	}
 
-	address = (ulong)xgmac_get_desc(xgmac, 0, false);
+	address = virt_to_phys(xgmac_get_desc(xgmac, 0, false));
 	writel(upper_32_bits(address),
 	       &xgmac->dma_regs->ch0_txdesc_list_haddress);
 	writel(lower_32_bits(address),
 	       &xgmac->dma_regs->ch0_txdesc_list_address);
 	writel(XGMAC_DESCRIPTORS_TX - 1,
 	       &xgmac->dma_regs->ch0_txdesc_ring_length);
-	address = (ulong)xgmac_get_desc(xgmac, 0, true);
+	address = virt_to_phys(xgmac_get_desc(xgmac, 0, true));
 	writel(upper_32_bits(address),
 	       &xgmac->dma_regs->ch0_rxdesc_list_haddress);
 	writel(lower_32_bits(address),
@@ -769,7 +772,7 @@ static int xgmac_start(struct udevice *dev)
 	 * that's not distinguishable from none of the descriptors being
 	 * available.
 	 */
-	last_rx_desc = (ulong)xgmac_get_desc(xgmac, XGMAC_DESCRIPTORS_RX - 1, true);
+	last_rx_desc = virt_to_phys(xgmac_get_desc(xgmac, XGMAC_DESCRIPTORS_RX - 1, true));
 	writel(last_rx_desc, &xgmac->dma_regs->ch0_rxdesc_tail_pointer);
 
 	xgmac->started = true;
@@ -872,8 +875,8 @@ static int xgmac_send(struct udevice *dev, void *packet, int length)
 	xgmac->tx_desc_idx++;
 	xgmac->tx_desc_idx %= XGMAC_DESCRIPTORS_TX;
 
-	tx_desc->des0 = lower_32_bits((ulong)xgmac->tx_dma_buf);
-	tx_desc->des1 = upper_32_bits((ulong)xgmac->tx_dma_buf);
+	tx_desc->des0 = lower_32_bits(virt_to_phys(xgmac->tx_dma_buf));
+	tx_desc->des1 = upper_32_bits(virt_to_phys(xgmac->tx_dma_buf));
 	tx_desc->des2 = length;
 	/*
 	 * Make sure that if HW sees the _OWN write below, it will see all the
@@ -883,7 +886,7 @@ static int xgmac_send(struct udevice *dev, void *packet, int length)
 	tx_desc->des3 = XGMAC_DESC3_OWN | XGMAC_DESC3_FD | XGMAC_DESC3_LD | length;
 	xgmac->config->ops->xgmac_flush_desc(tx_desc);
 
-	writel((ulong)xgmac_get_desc(xgmac, xgmac->tx_desc_idx, false),
+	writel(virt_to_phys(xgmac_get_desc(xgmac, xgmac->tx_desc_idx, false)),
 	       &xgmac->dma_regs->ch0_txdesc_tail_pointer);
 
 	start_time = get_timer(0);
@@ -954,7 +957,7 @@ static int xgmac_free_pkt(struct udevice *dev, uchar *packet, int length)
 			mb();
 			xgmac->config->ops->xgmac_flush_desc(rx_desc);
 			xgmac->config->ops->xgmac_inval_buffer(packet, length);
-			address = (ulong)(xgmac->rx_dma_buf +
+			address = virt_to_phys(xgmac->rx_dma_buf +
 					(idx * XGMAC_MAX_PACKET_SIZE));
 			rx_desc->des0 = lower_32_bits(address);
 			rx_desc->des1 = upper_32_bits(address);
@@ -968,7 +971,7 @@ static int xgmac_free_pkt(struct udevice *dev, uchar *packet, int length)
 			rx_desc->des3 = XGMAC_DESC3_OWN;
 			xgmac->config->ops->xgmac_flush_desc(rx_desc);
 		}
-		writel((ulong)rx_desc, &xgmac->dma_regs->ch0_rxdesc_tail_pointer);
+		writel(virt_to_phys(rx_desc), &xgmac->dma_regs->ch0_rxdesc_tail_pointer);
 	}
 
 	xgmac->rx_desc_idx++;

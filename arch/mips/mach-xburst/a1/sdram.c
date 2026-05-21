@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic A1 DDR3 Innophy init (SPL)
+ * Ingenic A1 DDR3 Innophy init (SPL) - per-variant.
  *
  * Faithful transliteration of the vendor ddr_innophy.c sdram_init()
- * path for A1N (DDR3-800, 256 MB, 16-bit datawidth). The vendor
- * ddr_innophy.c is 3727 lines; this is the minimal subset needed
- * to bring up DDR on A1N with hardware calibration.
+ * path. Register values are transcribed verbatim from the vendor:
+ * the per-SKU struct a1_ddr_params (ddr_reg_values_a1{n,nt,l,x}.c)
+ * and the per-SKU ddr3_param_t PHY tuning (ddr_innophy.c).
  *
- * Register values come from the vendor ddr_params_creator output
- * (ddr_reg_values_a1n.c) and the per-variant ddr3_param_t tuning
- * (a1n_ddr3_param in ddr_innophy.c).
+ * Four A1 SKUs, selected by the CONFIG_A1_VARIANT_* Kconfig choice:
+ *   A1N  - DDR3-800, 16-bit, 256 MB
+ *   A1NT - DDR3-700, 32-bit, 256 MB
+ *   A1X  - DDR3-700, 32-bit, 512 MB
+ *   A1L  - DDR3-800, 16-bit, 128 MB
+ * (A1A exists in the vendor headers but was never finished - no board
+ * target, no DDR table - so it is not offered.)
+ *
+ * Only A1N is validated on real silicon; the other three are
+ * build-only, faithful transcriptions to be brought up on hardware.
  */
 
 #include <asm/io.h>
@@ -29,7 +36,7 @@
 #define DDRC_MMAP1	0x80
 #define DDRC_HREGPRO	0xd8
 
-/* DDRC APB registers at DDRC_BASE + DDR_PHY_OFFSET + 0x1000 */
+/* DDRC APB registers at DDRC_APB_BASE (0xb3012000) */
 #define DDRC_APB_BASE	0xb3012000
 #define DDRC_DWCFG	0x00
 #define DDRC_DWSTATUS	0x04
@@ -44,14 +51,127 @@
 #define PHY_TRAIN_CTRL	0x008
 #define PHY_CL		0x014
 #define PHY_AL		0x018
-#define PHY_CWL	0x01c
+#define PHY_CWL		0x01c
 #define PHY_DQ_WIDTH	0x034
-#define PHY_PLL_FBDIV	0x140
-#define PHY_PLL_CTRL	0x144
-#define PHY_PLL_PDIV	0x148
 #define PHY_PLL_PD	0x14c
 #define PHY_PLL_LOCK	0x180
 #define PHY_CALIB_DONE	0x184
+/* B-channel read-delay registers - 32-bit DDR soft calibration only */
+#define PHY_CALIB_BL1	0x280
+#define PHY_CALIB_BL2	0x284
+#define PHY_CALIB_BH1	0x2c0
+#define PHY_CALIB_BH2	0x2c4
+
+/*
+ * The DDRC_LMR (load mode register) command word, as built by the
+ * vendor DDRC_LMR_MR() macro: DLMR(2) | START(1) | CMD_LMR(2<<6) plus
+ * the 16-bit MR data at bit 12 and the 3-bit bank at bit 9.
+ */
+#define LMR_BASE	0x83		/* DLMR | START | CMD_LMR */
+#define LMR_ZQCL	0xc3		/* DLMR | START | CMD_ZQCL_CS0 */
+
+struct a1_ddr_variant {
+	/* DDRC controller registers */
+	u32 cfg;
+	u32 tim[5];
+	u32 mmap0, mmap1;
+	u32 refcnt;
+	u32 autosr_cnt;
+	u32 remap[5];
+	u32 mr[4];		/* raw DDR3 mode register values MR0..MR3 */
+	/* Innophy PHY tuning (vendor ddr3_param_t) */
+	u8 cl, cwl;
+	u8 odt_pd, odt_pu;
+	u8 drvcmd_pd, drvcmd_pu;
+	u8 drvcmdck_pd, drvcmdck_pu;
+	u8 dq_drv_a_pd, dq_drv_a_pu;
+	u8 dq_drv_b_pd, dq_drv_b_pu;
+	u8 dq_a, dq_b;
+	u8 vref;
+	u8 kgd_odt, kgd_ds;
+	u8 dqs_a, dqs_b;
+	bool dw32;		/* true: 32-bit data bus; false: 16-bit */
+};
+
+#if defined(CONFIG_A1_VARIANT_A1N)
+static const struct a1_ddr_variant a1_ddr = {
+	.cfg = 0x4a004a35,
+	.tim = { 0x07130d08, 0x0809070b, 0x030c040c, 0x252b1f07, 0x80069055 },
+	.mmap0 = 0x000020f0, .mmap1 = 0x00003000,
+	.refcnt = 0x41c30081, .autosr_cnt = 0x40000c41,
+	.remap = { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
+	.mr = { 0x00001f70, 0x00010002, 0x00020018, 0x00030000 },
+	.cl = 0x0b, .cwl = 0x08,
+	.odt_pd = 1, .odt_pu = 0,
+	.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+	.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+	.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+	.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+	.dq_a = 0x10, .dq_b = 0x07, .vref = 0x80,
+	.kgd_odt = 1, .kgd_ds = 1,
+	.dqs_a = 0x20, .dqs_b = 0x20,
+	.dw32 = false,
+};
+#elif defined(CONFIG_A1_VARIANT_A1NT)
+static const struct a1_ddr_variant a1_ddr = {
+	.cfg = 0x2a002a35,
+	.tim = { 0x07120c08, 0x0809060b, 0x030a040a, 0x20261b06, 0x80058054 },
+	.mmap0 = 0x000020f0, .mmap1 = 0x00003000,
+	.refcnt = 0x67a90081, .autosr_cnt = 0x26000aab,
+	.remap = { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
+	.mr = { 0x00001d70, 0x00010002, 0x00020018, 0x00030000 },
+	.cl = 0x0b, .cwl = 0x08,
+	.odt_pd = 3, .odt_pu = 1,
+	.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+	.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+	.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+	.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+	.dq_a = 0x10, .dq_b = 0x0f, .vref = 0x80,
+	.kgd_odt = 2, .kgd_ds = 1,
+	.dqs_a = 0x20, .dqs_b = 0x21,
+	.dw32 = true,
+};
+#elif defined(CONFIG_A1_VARIANT_A1X)
+static const struct a1_ddr_variant a1_ddr = {
+	.cfg = 0x4a004a35,
+	.tim = { 0x07120c08, 0x0809060b, 0x030a040a, 0x20261b06, 0x80058054 },
+	.mmap0 = 0x000020e0, .mmap1 = 0x00004000,
+	.refcnt = 0x79a90081, .autosr_cnt = 0x38000aab,
+	.remap = { 0x03100f0e, 0x07060504, 0x0b0a0908, 0x01000d0c, 0x13121102 },
+	.mr = { 0x00001d70, 0x00010002, 0x00020018, 0x00030000 },
+	.cl = 0x0b, .cwl = 0x08,
+	.odt_pd = 5, .odt_pu = 11,
+	.drvcmd_pd = 0x1e, .drvcmd_pu = 0x1e,
+	.drvcmdck_pd = 0x1e, .drvcmdck_pu = 0x1e,
+	.dq_drv_a_pd = 0x0f, .dq_drv_a_pu = 0x0f,
+	.dq_drv_b_pd = 0x0f, .dq_drv_b_pu = 0x0f,
+	.dq_a = 0x0f, .dq_b = 0x0d, .vref = 0xa0,
+	.kgd_odt = 2, .kgd_ds = 0,
+	.dqs_a = 0x21, .dqs_b = 0x21,
+	.dw32 = true,
+};
+#elif defined(CONFIG_A1_VARIANT_A1L)
+static const struct a1_ddr_variant a1_ddr = {
+	.cfg = 0x2a002a35,
+	.tim = { 0x07130d08, 0x0708070a, 0x030c040c, 0x21281d07, 0x80059045 },
+	.mmap0 = 0x000020f8, .mmap1 = 0x00002800,
+	.refcnt = 0x41c30081, .autosr_cnt = 0x40000c41,
+	.remap = { 0x030e0d0c, 0x07060504, 0x0b0a0908, 0x0f020100, 0x13121110 },
+	.mr = { 0x00001f60, 0x00010002, 0x00020018, 0x00030000 },
+	.cl = 0x0a, .cwl = 0x07,
+	.odt_pd = 1, .odt_pu = 1,
+	.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+	.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+	.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+	.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+	.dq_a = 0x0e, .dq_b = 0x0e, .vref = 0x80,
+	.kgd_odt = 1, .kgd_ds = 1,
+	.dqs_a = 0x1c, .dqs_b = 0x1c,
+	.dw32 = false,
+};
+#else
+#error "A1: no DDR variant selected (CONFIG_A1_VARIANT_*)"
+#endif
 
 static void ddr_writel(u32 val, u32 off)
 {
@@ -103,19 +223,25 @@ static u32 a1_c0_count(void)
  * cache, CPU clock), leaving the DDR PHY reset/training delays too
  * short and the DRAM marginally trained.
  *
- * Count advances at most at the CPU clock (APLL, 1104 MHz); assuming
- * the full rate makes the delay never shorter than requested - at
- * worst ~2x long if Count actually runs at CPU/2, which is harmless.
- * The iteration cap keeps the loop bounded if Count is ever frozen.
+ * Count advances at most at the CPU clock (APLL); assuming the full
+ * rate makes the delay never shorter than requested - at worst ~2x
+ * long if Count actually runs at CPU/2, which is harmless. The
+ * iteration cap keeps the loop bounded if Count is ever frozen.
  */
 static void a1_udelay(u32 us)
 {
 	u32 start = a1_c0_count();
-	u32 ticks = us * 1104u;
+	u32 ticks = us * (CONFIG_A1_APLL_MHZ);
 	u32 cap = ticks * 8u + 100000u;
 
 	while ((a1_c0_count() - start) < ticks && --cap)
 		;
+}
+
+/* Build the DDRC_LMR command word for a raw DDR3 mode register value. */
+static u32 lmr_mr(u32 mr)
+{
+	return LMR_BASE | ((mr & 0xffff) << 12) | (((mr >> 16) & 0x7) << 9);
 }
 
 static void ddr_clk_set(void)
@@ -132,10 +258,10 @@ static void ddr_clk_set(void)
 	 * Re-derive the DDR clock from MPLL (vendor clk_set_rate(DDR)).
 	 * pll_init reprogrammed MPLL, so the DDRCDR divider must be
 	 * re-latched: clear the divider [3:0] and the CE/BUSY/STOP
-	 * field [29:24], set divider 1 (DDR = MPLL/2 = 804 MHz) and
-	 * pulse CE, then wait for BUSY to clear. Skipping this leaves
-	 * the DDR clock running off a divider that never re-sampled
-	 * the new MPLL - a jittery clock that mistunes RX calibration.
+	 * field [29:24], set divider 1 (DDR = MPLL/2) and pulse CE,
+	 * then wait for BUSY to clear. Skipping this leaves the DDR
+	 * clock running off a divider that never re-sampled the new
+	 * MPLL - a jittery clock that mistunes RX calibration.
 	 */
 	val = readl(cpm + CPM_DDRCDR);
 	val &= ~(0xf | (0x3f << 24));
@@ -174,22 +300,22 @@ static void ddrp_pll_init(void)
 	 * state in the upper bits of these PHY registers; a full write
 	 * clobbers it and perturbs the PHY enough that the RX hard
 	 * calibration converges to a marginal point.
+	 *
+	 * DQ width: 0x3 = 16-bit, 0xf = 32-bit (vendor reg1f [3:0]).
 	 */
 	phy_rmw(PHY_MEM_CFG, 0xff, 0x0a);
-	phy_rmw(PHY_DQ_WIDTH, 0x0f, 0x03);
+	phy_rmw(PHY_DQ_WIDTH, 0x0f, a1_ddr.dw32 ? 0x0f : 0x03);
 	phy_rmw(PHY_RST, 0xff, 0x0d);
-	phy_rmw(PHY_CWL, 0x0f, 0x08);
-	phy_rmw(PHY_CL, 0x0f, 0x0b);
+	phy_rmw(PHY_CWL, 0x0f, a1_ddr.cwl);
+	phy_rmw(PHY_CL, 0x0f, a1_ddr.cl);
 	phy_writel(0x00, PHY_AL);	/* vendor writes AL = 0 outright */
 	phy_rmw(PHY_PLL_PD, 0xff, 0x00);
 
 	/*
 	 * Innophy PHY PLL band select is rate-dependent (vendor
-	 * ddrp_pll_init): 162-325 MHz -> PLL_CTRL bit7 + PLL_PD 2<<5;
-	 * 325-650 MHz -> PLL_CTRL bit7 + PLL_PD 1<<5; 650-900 MHz ->
-	 * leave both clear. All A1 SKUs run DDR >= 700 MHz (A1N/A1L/A1A
-	 * = 804, A1X/A1NT = 700+), so the 650-900 MHz band always
-	 * applies: PLL_CTRL and PLL_PD stay at their reset/zero value.
+	 * ddrp_pll_init): the 650-900 MHz band leaves PLL_CTRL and
+	 * PLL_PD at their reset/zero value. All A1 SKUs run DDR in
+	 * 700-804 MHz, so that band always applies.
 	 */
 
 	while (!(phy_readl(PHY_PLL_LOCK) & 0x4))
@@ -204,68 +330,67 @@ static void ddr_param_write(void)
 	int i;
 
 	for (i = 0; i < 4; i++) {
-		phy_writel_idx(1, odt_pd_idx[i]);
-		phy_writel_idx(0, odt_pu_idx[i]);
+		phy_writel_idx(a1_ddr.odt_pd, odt_pd_idx[i]);
+		phy_writel_idx(a1_ddr.odt_pu, odt_pu_idx[i]);
 	}
 
 	/* CMD drive strength */
-	phy_writel_idx(0x0e, 0x130);
-	phy_writel_idx(0x0e, 0x131);
+	phy_writel_idx(a1_ddr.drvcmd_pd, 0x130);
+	phy_writel_idx(a1_ddr.drvcmd_pu, 0x131);
 	/* CK drive strength */
-	phy_writel_idx(0x0e, 0x132);
-	phy_writel_idx(0x0e, 0x133);
+	phy_writel_idx(a1_ddr.drvcmdck_pd, 0x132);
+	phy_writel_idx(a1_ddr.drvcmdck_pu, 0x133);
 
 	/* DQ drive A lanes (pull-down/up) */
 	static const u32 drv_a_pd[] = { 0x142, 0x152 };
 	static const u32 drv_a_pu[] = { 0x143, 0x153 };
 	for (i = 0; i < 2; i++) {
-		phy_writel_idx(0x14, drv_a_pd[i]);
-		phy_writel_idx(0x14, drv_a_pu[i]);
+		phy_writel_idx(a1_ddr.dq_drv_a_pd, drv_a_pd[i]);
+		phy_writel_idx(a1_ddr.dq_drv_a_pu, drv_a_pu[i]);
 	}
 	/* DQ drive B lanes */
 	static const u32 drv_b_pd[] = { 0x162, 0x172 };
 	static const u32 drv_b_pu[] = { 0x163, 0x173 };
 	for (i = 0; i < 2; i++) {
-		phy_writel_idx(0x14, drv_b_pd[i]);
-		phy_writel_idx(0x14, drv_b_pu[i]);
+		phy_writel_idx(a1_ddr.dq_drv_b_pd, drv_b_pd[i]);
+		phy_writel_idx(a1_ddr.dq_drv_b_pu, drv_b_pu[i]);
 	}
 
 	/* DQS A delay */
 	static const u32 dqs_a[] = { 0x1d2, 0x1e7, 0x1ea, 0x1eb };
 	for (i = 0; i < 4; i++)
-		phy_writel_idx(0x20, dqs_a[i]);
+		phy_writel_idx(a1_ddr.dqs_a, dqs_a[i]);
 	/* DQS B delay */
 	static const u32 dqs_b[] = { 0x232, 0x247, 0x24a, 0x24b };
 	for (i = 0; i < 4; i++)
-		phy_writel_idx(0x20, dqs_b[i]);
+		phy_writel_idx(a1_ddr.dqs_b, dqs_b[i]);
 
-	/* Per-DQ-bit delay offsets from vendor DQxRxOFFSET table:
-	 * DQ0-7: +0x02,+0x04,...,+0x10 (even, low byte)
-	 * DQ8-15: +0x17,+0x19,...,+0x25 (odd, high byte) */
+	/* Per-DQ-bit delay offsets from vendor DQxRxOFFSET table */
 	static const u32 dq_off[16] = {
 		0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10,
 		0x17, 0x19, 0x1b, 0x1d, 0x1f, 0x21, 0x23, 0x25,
 	};
 	/* Channel A (base 0x1c0) */
 	for (i = 0; i < 16; i++)
-		phy_writel_idx(0x10, 0x1c0 + dq_off[i]);
+		phy_writel_idx(a1_ddr.dq_a, 0x1c0 + dq_off[i]);
 	/* Channel B (base 0x220) */
 	for (i = 0; i < 16; i++)
-		phy_writel_idx(0x07, 0x220 + dq_off[i]);
+		phy_writel_idx(a1_ddr.dq_b, 0x220 + dq_off[i]);
 
 	/* VREF for all 4 byte lanes */
 	static const u32 vref_idx[] = { 0x147, 0x157, 0x167, 0x177 };
 	for (i = 0; i < 4; i++)
-		phy_writel_idx(0x80, vref_idx[i]);
+		phy_writel_idx(a1_ddr.vref, vref_idx[i]);
 }
 
 static void ddrc_dfi_init(void)
 {
 	int timeout;
+	u32 mr1;
 
-	/* DFI init handshake (16-bit bus) */
-	apb_writel(0x08, DDRC_DWCFG);
-	apb_writel(0x00, DDRC_DWCFG);
+	/* DFI init handshake: dfi_init_start + bus width (32-bit: |1) */
+	apb_writel(a1_ddr.dw32 ? 0x09 : 0x08, DDRC_DWCFG);
+	apb_writel(a1_ddr.dw32 ? 0x01 : 0x00, DDRC_DWCFG);
 
 	timeout = 1000000;
 	while (!(apb_readl(DDRC_DWSTATUS) & 0x1) && --timeout)
@@ -273,7 +398,7 @@ static void ddrc_dfi_init(void)
 	a1_udelay(50);				/* vendor: udelay(50) */
 
 	ddr_writel(0x00000000, DDRC_CTRL);	/* dfi_reset_n high */
-	ddr_writel(0x4a004a35, DDRC_CFG);
+	ddr_writel(a1_ddr.cfg, DDRC_CFG);
 	a1_udelay(500);				/* vendor: udelay(500) */
 	ddr_writel(0x00000002, DDRC_CTRL);	/* CKE high */
 	a1_udelay(10);				/* vendor: udelay(10) */
@@ -281,63 +406,122 @@ static void ddrc_dfi_init(void)
 	/* MR2 */
 	ddr_writel(0x00000000, DDRC_LMR);
 	a1_udelay(5);
-	ddr_writel(0x00018483, DDRC_LMR);
+	ddr_writel(lmr_mr(a1_ddr.mr[2]), DDRC_LMR);
 	a1_udelay(5);
 	/* MR3 */
 	ddr_writel(0x00000000, DDRC_LMR);
 	a1_udelay(5);
-	ddr_writel(0x00000683, DDRC_LMR);
+	ddr_writel(lmr_mr(a1_ddr.mr[3]), DDRC_LMR);
 	a1_udelay(5);
-	/* MR1 (patched with kgd_odt=1, kgd_ds=1) */
+	/* MR1 - patched with kgd_odt (A9/A6/A2) and kgd_ds (A5/A1) */
+	mr1 = (a1_ddr.mr[1] & 0xfffffd99)
+	    | (((a1_ddr.kgd_odt >> 2) & 1) << 9)
+	    | (((a1_ddr.kgd_odt >> 1) & 1) << 6)
+	    | ((a1_ddr.kgd_odt & 1) << 2)
+	    | (((a1_ddr.kgd_ds >> 1) & 1) << 5)
+	    | ((a1_ddr.kgd_ds & 1) << 1);
 	ddr_writel(0x00000000, DDRC_LMR);
 	a1_udelay(5);
-	ddr_writel(0x00006283, DDRC_LMR);
+	ddr_writel(lmr_mr(mr1), DDRC_LMR);
 	a1_udelay(5);
 	/* MR0 */
 	ddr_writel(0x00000000, DDRC_LMR);
 	a1_udelay(5);
-	ddr_writel(0x01f70083, DDRC_LMR);
+	ddr_writel(lmr_mr(a1_ddr.mr[0]), DDRC_LMR);
 	a1_udelay(5);
 	/* ZQCL CS0 */
-	ddr_writel(0x000000c3, DDRC_LMR);
+	ddr_writel(LMR_ZQCL, DDRC_LMR);
 	a1_udelay(5);
 }
 
 static void ddrc_prev_init(void)
 {
-	ddr_writel(0x07130d08, DDRC_TIM(1));
-	ddr_writel(0x0809070b, DDRC_TIM(2));
-	ddr_writel(0x030c040c, DDRC_TIM(3));
-	ddr_writel(0x252b1f07, DDRC_TIM(4));
-	ddr_writel(0x80069055, DDRC_TIM(5));
-	ddr_writel(0x000020f0, DDRC_MMAP0);
-	ddr_writel(0x00003000, DDRC_MMAP1);
+	ddr_writel(a1_ddr.tim[0], DDRC_TIM(1));
+	ddr_writel(a1_ddr.tim[1], DDRC_TIM(2));
+	ddr_writel(a1_ddr.tim[2], DDRC_TIM(3));
+	ddr_writel(a1_ddr.tim[3], DDRC_TIM(4));
+	ddr_writel(a1_ddr.tim[4], DDRC_TIM(5));
+	ddr_writel(a1_ddr.mmap0, DDRC_MMAP0);
+	ddr_writel(a1_ddr.mmap1, DDRC_MMAP1);
 	ddr_writel(0x00008092, DDRC_CTRL);
+}
+
+/*
+ * 32-bit DDR only: the hardware calibration tunes the A-channel read
+ * delay but not the B-channel (upper 16 bits) - the BL/BH delay
+ * registers are "soft calibration only". Sweep the B-channel delay
+ * across its range, test a DRAM scratch buffer through the uncached
+ * window, and centre the delay on the passing window. Mirrors the
+ * vendor dw32 soft-calibration loop in ddr_innophy.c.
+ */
+static void ddrp_bchan_soft_calib(void)
+{
+	volatile u32 *buf = (volatile u32 *)0xa0100000;	/* uncached DRAM */
+	const u32 pat = 0xf0f0f0f0;
+	int c, first = -1, last = -1, sel;
+	int i, ok;
+
+	for (c = 0; c < 0x3ff; c++) {
+		phy_writel((c >> 7) & 0x7, PHY_CALIB_BL1);
+		phy_writel(((c & 0x1f) << 3) | ((c >> 5) & 0x3), PHY_CALIB_BL2);
+		phy_writel((c >> 7) & 0x7, PHY_CALIB_BH1);
+		phy_writel(((c & 0x1f) << 3) | ((c >> 5) & 0x3), PHY_CALIB_BH2);
+
+		for (i = 0; i < 4096; i++)
+			buf[i] = pat;
+		ok = 1;
+		for (i = 0; i < 4096; i++) {
+			if ((buf[i] & 0xffff0000) != (pat & 0xffff0000)) {
+				ok = 0;
+				break;
+			}
+		}
+		if (ok) {
+			if (first < 0)
+				first = c;
+			last = c;
+		}
+	}
+
+	if (first < 0) {
+		/* no passing window - vendor fallback */
+		phy_writel(0x1c, PHY_CALIB_BL1);
+		phy_writel(0x1c, PHY_CALIB_BH1);
+		return;
+	}
+
+	/* centre on the passing window (the vendor picks calv[m/2]) */
+	sel = (first + last) / 2;
+	phy_writel((sel >> 7) & 0x7, PHY_CALIB_BL1);
+	phy_writel(((sel & 0x1f) << 3) | ((sel >> 5) & 0x3), PHY_CALIB_BL2);
+	phy_writel((sel >> 7) & 0x7, PHY_CALIB_BH1);
+	phy_writel(((sel & 0x1f) << 3) | ((sel >> 5) & 0x3), PHY_CALIB_BH2);
 }
 
 static void ddrp_hardware_calibration(void)
 {
+	u32 done = a1_ddr.dw32 ? 0xf : 0x3;	/* 4 vs 2 byte lanes */
+
 	phy_writel(0x00, PHY_TRAIN_CTRL);
 	phy_readl(PHY_TRAIN_CTRL);
 	phy_writel(0x01, PHY_TRAIN_CTRL);
 
-	while ((phy_readl(PHY_CALIB_DONE) & 0xf) != 0x3)
+	while ((phy_readl(PHY_CALIB_DONE) & 0xf) != done)
 		;
 
 	u32 ctrl = phy_readl(PHY_TRAIN_CTRL);
+
 	phy_writel(ctrl & ~0x01, PHY_TRAIN_CTRL);
 }
 
 static void ddrc_post_init(void)
 {
-	ddr_writel(0x41c30081, DDRC_REFCNT);
+	int i;
 
-	/* Address remap (vendor A1N remap array) */
-	apb_writel(0x030f0e0d, DDRC_REMAP(1));
-	apb_writel(0x07060504, DDRC_REMAP(2));
-	apb_writel(0x0b0a0908, DDRC_REMAP(3));
-	apb_writel(0x0201000c, DDRC_REMAP(4));
-	apb_writel(0x13121110, DDRC_REMAP(5));
+	ddr_writel(a1_ddr.refcnt, DDRC_REFCNT);
+
+	for (i = 0; i < 5; i++)
+		apb_writel(a1_ddr.remap[i], DDRC_REMAP(i + 1));
 
 	ddr_writel(0x0000b092, DDRC_CTRL);
 	apb_writel(0x11111111, DDRC_CGUC0);
@@ -368,7 +552,10 @@ void sdram_init(void)
 	ddrp_hardware_calibration();
 	ddrc_post_init();
 
-	ddr_writel(0x40000c41, DDRC_AUTOSR_CNT);
+	if (a1_ddr.dw32)
+		ddrp_bchan_soft_calib();
+
+	ddr_writel(a1_ddr.autosr_cnt, DDRC_AUTOSR_CNT);
 	ddr_writel(0x00000000, DDRC_AUTOSR_EN);
 	ddr_writel(0x00000001, DDRC_HREGPRO);
 	apb_writel(0x00000001, DDRC_PREGPRO);

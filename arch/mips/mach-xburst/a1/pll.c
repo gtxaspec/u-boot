@@ -20,8 +20,13 @@
 
 #define A1_APLL_M	(CONFIG_A1_APLL_MHZ / 12)
 #define A1_APLL_MNOD	((A1_APLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-#define A1_MPLL_M	(CONFIG_A1_MPLL_MHZ / 12)
-#define A1_MPLL_MNOD	((A1_MPLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+/*
+ * MPLL: the (M = MHz/12, N = 1) encoding only covers rates that are a
+ * multiple of 12 MHz. A1NT/A1X run MPLL 1400 MHz (M = 350, N = 3), so
+ * the raw CPMPCR register word is carried per-variant in the Kconfig
+ * (transcribed from the vendor config_sys_mpll_mnod).
+ */
+#define A1_MPLL_MNOD	CONFIG_A1_MPLL_MNOD
 #define A1_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define A1_EPLL_MNOD	((125 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 
@@ -29,10 +34,6 @@ static_assert(CONFIG_A1_APLL_MHZ % 12 == 0,
 	      "A1_APLL_MHZ must be a multiple of 12");
 static_assert(A1_APLL_M >= 16 && A1_APLL_M <= 2500,
 	      "A1 APLL M out of range");
-static_assert(CONFIG_A1_MPLL_MHZ % 12 == 0,
-	      "A1_MPLL_MHZ must be a multiple of 12");
-static_assert(24 * A1_MPLL_M >= 1250 && 24 * A1_MPLL_M <= 5000,
-	      "A1 MPLL Fvco (24*M) out of 1250-5000 MHz");
 
 static void cpm_writel(u32 val, unsigned int off)
 {

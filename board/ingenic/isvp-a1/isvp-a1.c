@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-A1 board (DDR3 256 MB, SFC NOR)
+ * Ingenic ISVP-A1 board (DDR3, SFC NOR)
  */
 
 #include <init.h>
@@ -12,7 +12,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	gd->ram_size = 256 << 20;
+	gd->ram_size = (ulong)CONFIG_A1_DRAM_SIZE_MB << 20;
 	return 0;
 }
 

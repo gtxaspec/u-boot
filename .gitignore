@@ -142,3 +142,6 @@ __pycache__
 
 # Clang's compilation database file
 /compile_commands.json
+a1-*.bin
+a1-spl-*.txt
+a1-spl-*.json

@@ -44,14 +44,16 @@ static int dram_verify(void)
 		0xffffffff, 0x00000000,
 	};
 	volatile u32 *a;
+	u32 off;
 	int p;
 
+	/* Pattern test at the base word (uncached - direct to DRAM). */
 	a = (volatile u32 *)0xa0000000;
 	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
 		*a = pat[p];
 		u32 rd = *a;
 		if (rd != pat[p]) {
-			a1_spl_puts("FAIL @");
+			a1_spl_puts("FAIL pat @");
 			spl_put_hex((u32)(uintptr_t)a);
 			a1_spl_puts(" w=");
 			spl_put_hex(pat[p]);
@@ -62,18 +64,26 @@ static int dram_verify(void)
 		}
 	}
 
-	a = (volatile u32 *)0xa0000004;
-	*a = 0xcafebabe;
-	if (*a != 0xcafebabe) {
-		a1_spl_puts("FAIL @4\n");
-		return -1;
+	/*
+	 * Address-in-data sweep across all 256 MB, one word per 1 MB.
+	 * The whole range is written before any of it is read back, so
+	 * this also catches address aliasing - a marginally trained
+	 * DRAM can pass a single-location test yet still alias.
+	 */
+	for (off = 0; off < A1_DRAM_SIZE; off += 0x100000) {
+		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
+		*a = 0xa0000000u + off;
 	}
-
-	a = (volatile u32 *)0xa0100000;
-	*a = 0x55aa55aa;
-	if (*a != 0x55aa55aa) {
-		a1_spl_puts("FAIL @1M\n");
-		return -1;
+	for (off = 0; off < A1_DRAM_SIZE; off += 0x100000) {
+		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
+		if (*a != 0xa0000000u + off) {
+			a1_spl_puts("FAIL sweep @");
+			spl_put_hex((u32)(uintptr_t)a);
+			a1_spl_puts(" r=");
+			spl_put_hex(*a);
+			a1_spl_putc('\n');
+			return -1;
+		}
 	}
 
 	return 0;

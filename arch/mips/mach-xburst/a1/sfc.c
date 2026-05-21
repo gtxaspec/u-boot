@@ -289,6 +289,33 @@ static void sfc_nor_load(unsigned int src_addr, unsigned int count,
 
 extern void a1_spl_puts(const char *s);
 
+/*
+ * Enter U-Boot proper through its uncached KSEG1 alias.
+ *
+ * The bootrom runs the SPL from cache-as-SRAM at 0x80001000 and locks
+ * those lines (XBurst2 cache 0x1C Fill+Lock); any Index cache op walks
+ * every set/way, hits the locked lines and hangs the CPU. U-Boot proper
+ * is copied into DRAM through the uncached KSEG1 alias, so it is fully
+ * resident in DRAM - we enter it at its KSEG1 address and no cache
+ * flush is needed; the locked SPL lines are never touched.
+ */
+static void __attribute__((noreturn))
+a1_jump_to_uboot(unsigned long target)
+{
+	unsigned long kseg1 = (target & 0x1fffffff) | 0xa0000000;
+
+	asm volatile(
+		".set push\n"
+		".set noreorder\n"
+		"jr    %0\n"
+		" nop\n"
+		".set pop\n"
+		: : "r"(kseg1)
+		: "memory"
+	);
+	__builtin_unreachable();
+}
+
 static u32 hdr_be32(const u8 *p)
 {
 	return ((u32)p[0] << 24) | ((u32)p[1] << 16) |
@@ -337,15 +364,21 @@ void a1_spl_load_uboot(void)
 	sfc_nor_load(A1_UBOOT_OFFSET, ih_size + A1_IH_HDR_LEN,
 		     A1_UBOOT_SCRATCH);
 
-	/* For raw (non-LZMA) image: just memcpy payload to load addr */
+	/*
+	 * Copy payload to DRAM through the uncached KSEG1 alias so the
+	 * whole image lands directly in DRAM - nothing left stranded in
+	 * L1/L2. This sidesteps the bootrom's locked cache-as-SRAM: the
+	 * SPL can never run an Index dcache flush without hanging, and a
+	 * cached copy would leave part of U-Boot in L2.
+	 */
 	{
 		u8 *src = scratch + A1_IH_HDR_LEN;
-		u8 *dst = (u8 *)(uintptr_t)ih_load;
+		u8 *dst = (u8 *)(uintptr_t)((ih_load & 0x1fffffff) |
+					    0xa0000000);
 		u32 i;
 		for (i = 0; i < ih_size; i++)
 			dst[i] = src[i];
 	}
 
-	a1_spl_puts("jump!\n");
-	((void (*)(void))(uintptr_t)ih_load)();
+	a1_jump_to_uboot(ih_load);
 }

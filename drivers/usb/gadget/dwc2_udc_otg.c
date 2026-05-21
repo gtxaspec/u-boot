@@ -472,6 +472,14 @@ static void reconfig_usbd(struct dwc2_udc *dev)
 	u32 max_hw_ep;
 	int pdata_hw_ep;
 
+#if CONFIG_IS_ENABLED(USB_GADGET_DWC2_OTG_FORCE_DEV_MODE)
+	/*
+	 * Force device mode before the soft-reset so the core latches
+	 * peripheral mode regardless of the OTG ID pin. Required on
+	 * boards that wire the OTG ID pin to A-device (e.g. Ingenic T32).
+	 */
+	setbits_le32(&reg->global_regs.gusbcfg, GUSBCFG_FORCEDEVMODE);
+#endif
 	dwc2_core_reset(reg);
 
 	debug("Resetting OTG controller\n");
@@ -495,7 +503,28 @@ static void reconfig_usbd(struct dwc2_udc *dev)
 	if (dev->pdata->usb_gusbcfg)
 		dflt_gusbcfg = dev->pdata->usb_gusbcfg;
 
+#if CONFIG_IS_ENABLED(USB_GADGET_DWC2_OTG_FORCE_DEV_MODE)
+	/*
+	 * Keep device mode forced across the GUSBCFG re-write, then wait
+	 * for the core to leave host mode (GINTSTS.CurMod -> device).
+	 */
+	dflt_gusbcfg |= GUSBCFG_FORCEDEVMODE;
 	writel(dflt_gusbcfg, &reg->global_regs.gusbcfg);
+	{
+		int t;
+
+		for (t = 0; t < 1000; t++) {
+			if (!(readl(&reg->global_regs.gintsts) &
+			      GINTSTS_CURMODE_HOST))
+				break;
+			udelay(100);
+		}
+		if (t == 1000)
+			printf("dwc2: timed out forcing device mode\n");
+	}
+#else
+	writel(dflt_gusbcfg, &reg->global_regs.gusbcfg);
+#endif
 
 	/* 3. Put the OTG device core in the disconnected state.*/
 	setbits_le32(&reg->device_regs.dctl, DCTL_SFTDISCON);

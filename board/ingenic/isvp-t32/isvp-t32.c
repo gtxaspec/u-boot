@@ -109,6 +109,46 @@ static void t32_usb_phy_init(void)
 	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
 	mdelay(10);
 }
+
+/*
+ * dwc2_udc_otg weak-hook override, called from udc_enable() when the
+ * DFU/g_dnl gadget starts. board_init() ran t32_usb_phy_init() which
+ * left the PHY in host/OTG mode (USBPCR.USB_MODE_ORG set); reconfigure
+ * it for device mode here: clear USB_MODE_ORG and force the external
+ * VBUS-valid on (this board has no OTG VBUS sense) so the device core
+ * sees session-valid (GOTGCTL.BSesVld).
+ *
+ * This is necessary but not sufficient: the dwc2 OTG core also samples
+ * the OTG ID pin, which the T32LQ wires to A-device, so the core would
+ * still come up in host mode. dwc2_udc_otg's reconfig_usbd() sets
+ * GUSBCFG.FORCEDEVMODE to override that (the T32 USB-boot defconfig
+ * selects CONFIG_USB_GADGET_DWC2_OTG_FORCE_DEV_MODE). USBPCR1 (PHY
+ * ref-clock / word interface) is mode-independent and already correct
+ * from t32_usb_phy_init(), so it is left untouched.
+ */
+struct dwc2_udc;
+void otg_phy_init(struct dwc2_udc *dev)
+{
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	u32 v;
+
+	(void)dev;
+
+	v = readl(cpm + CPM_USBPCR);
+	v &= ~(USBPCR_USB_MODE_ORG | USBPCR_OTG_DISABLE);
+	v |= USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL;
+	writel(v, cpm + CPM_USBPCR);
+
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+
+	/* PHY power-on reset pulse. */
+	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(30);
+	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
+	udelay(300);
+
+	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
+}
 #endif
 
 int board_init(void)

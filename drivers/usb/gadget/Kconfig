@@ -140,6 +140,15 @@ config USB_GADGET_DWC2_OTG_PHY_BUS_WIDTH_8
 	  Set the Designware USB2.0 high-speed OTG controller
 	  PHY interface width to 8 bits, rather than the default (16 bits).
 
+config USB_GADGET_DWC2_OTG_FORCE_DEV_MODE
+	bool "DesignWare USB2.0 HS OTG controller force device mode"
+	help
+	  Set GUSBCFG.FORCEDEVMODE so the OTG core comes up in device
+	  mode regardless of the OTG ID pin. Needed on boards that wire
+	  the ID pin to A-device (host) yet must run the gadget, e.g. the
+	  Ingenic T32 USB-boot/DFU loader. Leave disabled unless a board
+	  is known to need it.
+
 endif # USB_GADGET_DWC2_OTG
 
 config USB_GADGET_OS_DESCRIPTORS

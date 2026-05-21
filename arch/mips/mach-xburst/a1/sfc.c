@@ -17,8 +17,9 @@
  * header, SFC-reads the exact compressed payload and LZMA-decompresses
  * it to CONFIG_TEXT_BASE, then jumps. Reading the exact size from the
  * header (not a fixed window) retires the old truncation landmine.
- * The Makefile caps the LZMA dictionary at 1 MiB so the decoder's
- * dictionary malloc fits the SPL heap.
+ * The decoder allocates only its ~32 KiB probability table (the
+ * dictionary is the output buffer); a1_spl_load_uboot() points
+ * malloc_simple at a DRAM window so that allocation always succeeds.
  *
  * DRAM is already up (sdram_init() ran) so 0x80100000 is valid.
  *
@@ -364,13 +365,18 @@ void a1_spl_load_uboot(void)
 		     A1_UBOOT_SCRATCH);
 
 	/*
-	 * The lean SPL has no heap until here; DRAM is up. This custom
-	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
-	 * ourselves or malloc() stays on the tiny malloc_simple arena
-	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
+	 * The lean SPL never runs the normal SPL malloc init. dlmalloc is
+	 * unusable here - even after mem_malloc_init() sets a correct 2 MiB
+	 * arena it returns NULL for every request - so route malloc() to
+	 * the simple bump allocator instead: point it at the 2 MiB DRAM
+	 * window and clear GD_FLG_FULL_MALLOC_INIT. malloc_simple is a
+	 * trivial base+offset allocator and cannot fail for the single
+	 * ~32 KiB probability-table allocation the LZMA decoder makes.
 	 */
-	mem_malloc_init(A1_SPL_HEAP_BASE, A1_SPL_HEAP_SIZE);
-	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
+	gd->malloc_base = A1_SPL_HEAP_BASE;
+	gd->malloc_limit = A1_SPL_HEAP_SIZE;
+	gd->malloc_ptr = 0;
+	gd->flags &= ~GD_FLG_FULL_MALLOC_INIT;
 
 	/*
 	 * Decompress straight to the uncached KSEG1 alias of the load

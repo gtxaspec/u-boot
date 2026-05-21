@@ -22,6 +22,7 @@ void a1_spl_serial_init(void);
 void a1_spl_puts(const char *s);
 void a1_spl_putc(char c);
 void __weak sdram_init(void) { }
+void a1_spl_load_uboot(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -111,7 +112,8 @@ void board_init_f(ulong dummy)
 	if (dram_verify() == 0)
 		a1_spl_puts("A1 SPL: DDR OK\n");
 
-	a1_spl_puts("A1 SPL: halting (no SFC loader yet)\n");
+	a1_spl_puts("A1 SPL: loading U-Boot...\n");
+	a1_spl_load_uboot();
 	for (;;)
 		;
 }

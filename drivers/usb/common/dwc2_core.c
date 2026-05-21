@@ -16,8 +16,16 @@ int dwc2_core_reset(struct dwc2_core_regs *regs)
 	int ret;
 	bool host_mode = false;
 
-	if (!(readl(&regs->global_regs.gotgctl) & GOTGCTL_CONID_B) ||
-	    (readl(&regs->global_regs.gusbcfg) & GUSBCFG_FORCEHOSTMODE))
+	/*
+	 * GUSBCFG.FORCEDEVMODE takes precedence: a peripheral-only driver
+	 * may force device mode even when the OTG ID pin reads A-device.
+	 * Without this the host-mode confirmation below would spuriously
+	 * time out. (No effect unless something set FORCEDEVMODE.)
+	 */
+	if (readl(&regs->global_regs.gusbcfg) & GUSBCFG_FORCEDEVMODE)
+		host_mode = false;
+	else if (!(readl(&regs->global_regs.gotgctl) & GOTGCTL_CONID_B) ||
+		 (readl(&regs->global_regs.gusbcfg) & GUSBCFG_FORCEHOSTMODE))
 		host_mode = true;
 
 	/* Core Soft Reset */

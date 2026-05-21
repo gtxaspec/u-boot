@@ -1,10 +1,11 @@
-menu "Ingenic XBurst1 T-series platforms"
+menu "Ingenic XBurst T-series platforms"
 	depends on ARCH_XBURST
 
 config SYS_VENDOR
 	default "ingenic"
 
 config SYS_SOC
+	default "a1" if SOC_A1
 	default "t10" if SOC_T10
 	default "t20" if SOC_T20
 	default "t21" if SOC_T21
@@ -15,8 +16,23 @@ config SYS_SOC
 	default "t33" if SOC_T33
 
 choice
-	prompt "Ingenic XBurst1 SoC select"
+	prompt "Ingenic SoC select"
 	default SOC_T31
+
+config SOC_A1
+	bool "Ingenic A1 (XBurst2)"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select BINMAN
+	help
+	  Ingenic A1 XBurst2 dual-core camera SoC: 24 MHz EXTAL,
+	  APLL/MPLL/VPLL/EPLL, Innophy DDR3, SFC SPI-flash boot via
+	  on-chip mask ROM. Variants: A1N (DDR3-800 256M 16-bit),
+	  A1NT (DDR3-700), A1X (DDR3-700), A1L (DDR3-800 16-bit),
+	  A1A (DDR3-800 APLL 1200).
 
 config SOC_T10
 	bool "Ingenic T10"
@@ -133,6 +149,7 @@ config SOC_T33
 
 endchoice
 
+source "arch/mips/mach-xburst/a1/Kconfig"
 source "arch/mips/mach-xburst/t10/Kconfig"
 source "arch/mips/mach-xburst/t20/Kconfig"
 source "arch/mips/mach-xburst/t21/Kconfig"
@@ -145,6 +162,12 @@ source "arch/mips/mach-xburst/t33/Kconfig"
 choice
 	prompt "Board select"
 	default TARGET_ISVP_T31
+
+config TARGET_ISVP_A1
+	bool "Ingenic ISVP-A1 reference board"
+	select SOC_A1
+	help
+	  Ingenic ISVP A1 reference board, DDR3 256 MB, SFC NOR boot.
 
 config TARGET_ISVP_T10
 	bool "Ingenic ISVP-T10 reference board"
@@ -198,6 +221,7 @@ config TARGET_ISVP_T33
 
 endchoice
 
+source "board/ingenic/isvp-a1/Kconfig"
 source "board/ingenic/isvp-t10/Kconfig"
 source "board/ingenic/isvp-t20/Kconfig"
 source "board/ingenic/isvp-t21/Kconfig"

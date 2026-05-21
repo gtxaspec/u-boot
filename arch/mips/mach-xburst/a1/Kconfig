@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: GPL-2.0+
+
+if SOC_A1
+
+choice
+	prompt "A1 SoC variant"
+	default A1_VARIANT_A1N
+
+config A1_VARIANT_A1N
+	bool "A1N (DDR3-800, APLL 1104, 256 MB, 16-bit)"
+	help
+	  A1N: EFUSE chipid 0x1111, DDR3 @ 804 MHz, APLL 1104 MHz.
+	  16-bit DDR data width.
+
+config A1_VARIANT_A1NT
+	bool "A1NT (DDR3-700, APLL 1104, 256 MB)"
+	help
+	  A1NT: EFUSE chipid 0x5555, DDR3 @ 700 MHz, APLL 1104 MHz.
+
+config A1_VARIANT_A1X
+	bool "A1X (DDR3-700, APLL 1104, 256 MB)"
+	help
+	  A1X: EFUSE chipid 0x2222, DDR3 @ 700 MHz, APLL 1104 MHz.
+
+config A1_VARIANT_A1L
+	bool "A1L (DDR3-800, APLL 1104, 256 MB, 16-bit)"
+	help
+	  A1L: EFUSE chipid 0x3333, DDR3 @ 804 MHz, APLL 1104 MHz.
+	  16-bit DDR data width.
+
+config A1_VARIANT_A1A
+	bool "A1A (DDR3-800, APLL 1200, 256 MB)"
+	help
+	  A1A: EFUSE chipid 0x4444, DDR3 @ 804 MHz, APLL 1200 MHz.
+
+endchoice
+
+config A1_APLL_MHZ
+	int
+	default 1104 if A1_VARIANT_A1N
+	default 1104 if A1_VARIANT_A1NT
+	default 1104 if A1_VARIANT_A1X
+	default 1104 if A1_VARIANT_A1L
+	default 1200 if A1_VARIANT_A1A
+
+config A1_MPLL_MHZ
+	int
+	default 1608 if A1_VARIANT_A1N
+	default 1400 if A1_VARIANT_A1NT
+	default 1400 if A1_VARIANT_A1X
+	default 1608 if A1_VARIANT_A1L
+	default 1608 if A1_VARIANT_A1A
+
+endif

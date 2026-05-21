@@ -28,6 +28,19 @@
 		u-boot,dm-pre-reloc;
 	};
 
+	tcu: timer@b0002000 {
+		compatible = "ingenic,a1-tcu", "simple-mfd";
+		reg = <0xb0002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		watchdog: watchdog@b0002000 {
+			compatible = "ingenic,a1-watchdog";
+			reg = <0xb0002000 0x10>;
+		};
+	};
+
 	uart1: serial@b0031000 {
 		compatible = "ingenic,jz4780-uart", "ns16550a";
 		reg = <0xb0031000 0x100>;

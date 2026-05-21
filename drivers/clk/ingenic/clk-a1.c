@@ -32,14 +32,15 @@
 #define CPM_CLKGR0		0x30
 #define CPM_CLKGR1		0x38
 #define CPM_SFC0CDR		0x90
+#define CPM_MAC0CDR		0xc0
+#define CPM_MAC1CDR		0xd0
 
 #define EXT_RATE		24000000UL
 #define RTC_RATE		32768UL
 
-/* CDR source field [31:30]: 0=sclka(~apll) 1=mpll 2=vpll */
+/* CDR source field [31:30]: 0=sclka(~apll) 1=mpll 2=vpll 3=epll */
 #define CDR_SRC_SHIFT		30
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
-#define CDR_SRC_MPLL		(1u << CDR_SRC_SHIFT)
 #define CDR_DIV_MASK		0xffu
 
 struct a1_clk_desc {
@@ -49,6 +50,7 @@ struct a1_clk_desc {
 	u8 stop;	/* clock-stop bit in cdr */
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
+	u8 src;		/* CDR source select [31:30]: 1=MPLL, 3=EPLL */
 };
 
 #define NO_GATE 0xffff
@@ -60,7 +62,7 @@ struct a1_clk_desc {
  * drivers (MMC, GMAC) are ported.
  */
 static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
-	[A1_CLK_SFC]   = { CPM_SFC0CDR, 28, 27, 26, CPM_CLKGR0, 24 },
+	[A1_CLK_SFC]   = { CPM_SFC0CDR, 28, 27, 26, CPM_CLKGR0, 24, 1 },
 	[A1_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
 	[A1_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
 	[A1_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
@@ -71,8 +73,8 @@ static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
 	[A1_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
 	[A1_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR0, 6 },
 	[A1_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
-	[A1_CLK_GMAC0] = { 0, 0, 0, 0, CPM_CLKGR1, 8 },
-	[A1_CLK_GMAC1] = { 0, 0, 0, 0, CPM_CLKGR1, 10 },
+	[A1_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 8, 3 },
+	[A1_CLK_GMAC1] = { CPM_MAC1CDR, 29, 28, 27, CPM_CLKGR1, 10, 3 },
 	[A1_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR1, 3 },
 	[A1_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
 };
@@ -117,6 +119,8 @@ static ulong a1_parent_rate(struct a1_cgu_priv *p, u32 cdr)
 		return pll_rate(p, CPM_CPMPCR);	/* MPLL */
 	case 2:
 		return pll_rate(p, CPM_CPVPCR);	/* VPLL */
+	case 3:
+		return pll_rate(p, CPM_CPEPCR);	/* EPLL */
 	default:
 		return pll_rate(p, CPM_CPAPCR);	/* sclka ~ APLL */
 	}
@@ -171,8 +175,21 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 	if (!d->cdr || !rate)
 		return -ENOSYS;
 
-	/* Source the leaf clock from MPLL (matches the vendor cgu set). */
-	parent = pll_rate(p, CPM_CPMPCR);
+	/* CDR source is the clock's fixed parent (SFC = MPLL, GMAC = EPLL). */
+	switch (d->src) {
+	case 1:
+		parent = pll_rate(p, CPM_CPMPCR);	/* MPLL */
+		break;
+	case 2:
+		parent = pll_rate(p, CPM_CPVPCR);	/* VPLL */
+		break;
+	case 3:
+		parent = pll_rate(p, CPM_CPEPCR);	/* EPLL */
+		break;
+	default:
+		parent = pll_rate(p, CPM_CPAPCR);	/* sclka ~ APLL */
+		break;
+	}
 
 	div = DIV_ROUND_CLOSEST(parent, rate);
 	if (!div)
@@ -182,7 +199,7 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
-	v |= CDR_SRC_MPLL | BIT(d->ce) | (div - 1);
+	v |= ((u32)d->src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
 	cpm_w(p, d->cdr, v);
 
 	while (cpm_r(p, d->cdr) & BIT(d->busy))

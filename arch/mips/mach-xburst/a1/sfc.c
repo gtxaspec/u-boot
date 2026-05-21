@@ -359,24 +359,38 @@ void a1_spl_load_uboot(void)
 		return;
 	}
 
-	/* Load uncompressed U-Boot directly (skip LZMA for now) */
-	sfc_nor_load(A1_UBOOT_OFFSET, ih_size + A1_IH_HDR_LEN,
+	/* Header + LZMA payload into DRAM scratch. */
+	sfc_nor_load(A1_UBOOT_OFFSET, A1_IH_HDR_LEN + ih_size,
 		     A1_UBOOT_SCRATCH);
 
 	/*
-	 * Copy payload to DRAM through the uncached KSEG1 alias so the
-	 * whole image lands directly in DRAM - nothing left stranded in
-	 * L1/L2. This sidesteps the bootrom's locked cache-as-SRAM: the
-	 * SPL can never run an Index dcache flush without hanging, and a
-	 * cached copy would leave part of U-Boot in L2.
+	 * The lean SPL has no heap until here; DRAM is up. This custom
+	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
+	 * ourselves or malloc() stays on the tiny malloc_simple arena
+	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
 	 */
-	{
-		u8 *src = scratch + A1_IH_HDR_LEN;
-		u8 *dst = (u8 *)(uintptr_t)((ih_load & 0x1fffffff) |
-					    0xa0000000);
-		u32 i;
-		for (i = 0; i < ih_size; i++)
-			dst[i] = src[i];
+	mem_malloc_init(A1_SPL_HEAP_BASE, A1_SPL_HEAP_SIZE);
+	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
+
+	/*
+	 * Decompress straight to the uncached KSEG1 alias of the load
+	 * address. The bootrom locks the SPL cache-as-SRAM lines, so the
+	 * image must land directly in DRAM - a cached write would strand
+	 * part of it in L1/L2 and the SPL cannot run an Index dcache
+	 * flush without hanging. a1_jump_to_uboot() enters via KSEG1.
+	 */
+	out_len = A1_UBOOT_MAX;
+	ret = lzmaBuffToBuffDecompress(
+		(unsigned char *)(uintptr_t)((ih_load & 0x1fffffff) |
+					     0xa0000000),
+		&out_len, scratch + A1_IH_HDR_LEN, (SizeT)ih_size);
+	if (ret) {
+		char m[2] = { (char)('0' + (ret & 7)), 0 };
+
+		a1_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
+		a1_spl_puts(m);
+		a1_spl_puts("\n");
+		return;
 	}
 
 	a1_jump_to_uboot(ih_load);

@@ -1199,10 +1199,18 @@ static const struct eth_ops xgmac_ops = {
 };
 
 static const struct udevice_id xgmac_ids[] = {
+#if IS_ENABLED(CONFIG_DWC_ETH_XGMAC_SOCFPGA)
 	{
 		.compatible = "intel,socfpga-dwxgmac",
 		.data = (ulong)&xgmac_socfpga_config
 	},
+#endif
+#if IS_ENABLED(CONFIG_DWC_ETH_XGMAC_INGENIC)
+	{
+		.compatible = "ingenic,a1-gmac",
+		.data = (ulong)&xgmac_a1_config
+	},
+#endif
 	{ }
 };
 

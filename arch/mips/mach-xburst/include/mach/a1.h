@@ -101,6 +101,50 @@
 #define CPM_CLKGR1_GMAC0	BIT(8)
 #define CPM_CLKGR1_GMAC1	BIT(10)
 
+/* USB OTG PHY control (CPM); three identical OTG cores - OTG0/1/2 */
+#define CPM_USB0PCR	0x50	/* USB0 PHY control */
+#define CPM_USB0RDT	0x54	/* USB0 reset-detect timer */
+#define CPM_USB0VBFIL	0x58	/* USB0 VBUS jitter filter */
+#define CPM_USB0PCR1	0x5c	/* USB0 PHY control 1 */
+#define CPM_USB1PCR	0x60
+#define CPM_USB1RDT	0x64
+#define CPM_USB1VBFIL	0x68
+#define CPM_USB1PCR1	0x6c
+#define CPM_USB2PCR	0x70
+#define CPM_USB2RDT	0x74
+#define CPM_USB2VBFIL	0x78
+#define CPM_USB2PCR1	0x7c
+
+/* CPM_USBnPCR bits (identical layout for all three instances) */
+#define USBPCR_USB_MODE		BIT(31)
+#define USBPCR_IDPULLUP_MASK	(0x3u << 28)
+#define USBPCR_COMMONONN	BIT(25)
+#define USBPCR_VBUSVLDEXT	BIT(24)
+#define USBPCR_VBUSVLDEXTSEL	BIT(23)
+#define USBPCR_POR		BIT(22)
+#define USBPCR_SIDDQ		BIT(21)
+#define USBPCR_OTG_DISABLE	BIT(20)
+
+/* CPM_USBnPCR1 bits */
+#define USBPCR1_IDPULLUP_ZEAR	BIT(30)
+#define USBPCR1_DPPULLDOWN	BIT(29)
+#define USBPCR1_DMPULLDOWN	BIT(28)
+#define USBPCR1_WORD_IF0	BIT(19)
+
+/* CPM_USBnRDT bits */
+#define USBRDT_UTMI_RST		BIT(27)
+#define USBRDT_VBFIL_LD_EN	BIT(25)
+
+/* CPM_SRBC0 USB core soft-reset bits */
+#define SRBC_USB0_SR		BIT(17)
+#define SRBC_USB1_SR		BIT(12)
+#define SRBC_USB2_SR		BIT(16)
+
+/* CPM_OPCR USB PHY suspend-disable (SPENDN) bits */
+#define OPCR_SPENDN0		BIT(7)
+#define OPCR_SPENDN1		BIT(6)
+#define OPCR_SPENDN2		BIT(5)
+
 /* PLL control register layout (CPAPCR/CPMPCR/CPEPCR/CPVPCR) */
 #define PLL_PLLEN	BIT(0)
 #define PLL_PLLON	BIT(3)

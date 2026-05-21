@@ -6,9 +6,97 @@
 #include <init.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
+#include <linux/delay.h>
 #include <mach/a1.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+#ifdef CONFIG_USB
+/*
+ * Per-OTG-instance CPM register layout. The A1 has three identical
+ * Synopsys DWC2 USB OTG cores; each core's PHY is controlled from CPM
+ * and has its own USBPCR/USBPCR1/USBVBFIL/USBRDT register set, clock
+ * gate bit, core soft-reset bit and PHY suspend-disable bit.
+ */
+struct a1_otg_phy {
+	u16 pcr, pcr1, vbfil, rdt;
+	u32 clkgr_bit;	/* CPM_CLKGR0 gate bit */
+	u32 srbc_bit;	/* CPM_SRBC0 core soft-reset bit */
+	u32 spendn_bit;	/* CPM_OPCR PHY suspend-disable bit */
+};
+
+static const struct a1_otg_phy a1_otg[3] = {
+	{ CPM_USB0PCR, CPM_USB0PCR1, CPM_USB0VBFIL, CPM_USB0RDT,
+	  CPM_CLKGR0_OTG0, SRBC_USB0_SR, OPCR_SPENDN0 },
+	{ CPM_USB1PCR, CPM_USB1PCR1, CPM_USB1VBFIL, CPM_USB1RDT,
+	  CPM_CLKGR0_OTG1, SRBC_USB1_SR, OPCR_SPENDN1 },
+	{ CPM_USB2PCR, CPM_USB2PCR1, CPM_USB2VBFIL, CPM_USB2RDT,
+	  CPM_CLKGR0_OTG2, SRBC_USB2_SR, OPCR_SPENDN2 },
+};
+
+/*
+ * Bring up one USB OTG PHY for host mode. Faithful transliteration of
+ * the vendor board/ingenic/isvp_a1/usb_init.c board_usb{,1,2}_init() -
+ * the board sequence the working vendor U-Boot runs. Ungate the OTG
+ * clock, CPM-SRBC soft-reset the core, program the USBPCR1 PHY
+ * pull-down / word-interface bits, clear USBVBFIL, set the USBRDT
+ * VBUS-filter load, select USB host mode in USBPCR, then run POR +
+ * UTMI_RST wrapped in an SRBC pulse with the vendor's exact delays.
+ * The XBurst2 USB PHY lives in CPM, so doing this in board_init -
+ * before the dwc2 driver probes on `usb start` - leaves the PHY live
+ * for the host core init.
+ */
+static void a1_usb_phy_init(const struct a1_otg_phy *otg)
+{
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	u32 v;
+
+	/* Feed the clock to the OTG core, then let it settle. */
+	clrbits_le32(cpm + CPM_CLKGR0, otg->clkgr_bit);
+	mdelay(100);
+
+	/* Soft-reset the OTG core via CPM SRBC. */
+	setbits_le32(cpm + CPM_SRBC0, otg->srbc_bit);
+	udelay(40);
+	clrbits_le32(cpm + CPM_SRBC0, otg->srbc_bit);
+
+	/* USBPCR1: PHY pull-down / ID pull-up, 16-bit word interface. */
+	setbits_le32(cpm + otg->pcr1,
+		     USBPCR1_DMPULLDOWN | USBPCR1_DPPULLDOWN |
+		     USBPCR1_IDPULLUP_ZEAR);
+	clrbits_le32(cpm + otg->pcr1, USBPCR1_WORD_IF0);
+	v = readl(cpm + otg->pcr1);
+	v &= ~(0x7u << 23);		/* vendor PHY signal-tuning field */
+	v |= (5u << 23);
+	writel(v, cpm + otg->pcr1);
+
+	writel(0, cpm + otg->vbfil);
+	setbits_le32(cpm + otg->rdt, USBRDT_VBFIL_LD_EN);
+
+	/* Select USB host mode; clear OTG-disable / SIDDQ / external VBUS. */
+	v = readl(cpm + otg->pcr);
+	v |= USBPCR_USB_MODE | USBPCR_COMMONONN;
+	v &= ~(USBPCR_OTG_DISABLE | USBPCR_SIDDQ | USBPCR_IDPULLUP_MASK |
+	       USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL);
+	writel(v, cpm + otg->pcr);
+
+	/* PHY reset: POR + UTMI_RST wrapped by an SRBC pulse. */
+	setbits_le32(cpm + otg->pcr, USBPCR_POR);
+	clrbits_le32(cpm + otg->rdt, USBRDT_UTMI_RST);
+	setbits_le32(cpm + CPM_SRBC0, otg->srbc_bit);
+	udelay(10);
+	clrbits_le32(cpm + otg->pcr, USBPCR_POR);
+	udelay(20);
+	setbits_le32(cpm + CPM_OPCR, otg->spendn_bit);
+	mdelay(10);
+
+	udelay(950);
+	setbits_le32(cpm + otg->rdt, USBRDT_UTMI_RST);
+	udelay(20);
+	clrbits_le32(cpm + CPM_SRBC0, otg->srbc_bit);
+	mdelay(10);
+}
+#endif /* CONFIG_USB */
 
 int dram_init(void)
 {
@@ -18,6 +106,13 @@ int dram_init(void)
 
 int board_init(void)
 {
+#ifdef CONFIG_USB
+	int i;
+
+	/* All three OTG cores are wired as USB host on the ISVP-A1. */
+	for (i = 0; i < 3; i++)
+		a1_usb_phy_init(&a1_otg[i]);
+#endif
 	return 0;
 }
 

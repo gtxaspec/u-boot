@@ -134,4 +134,28 @@
 			};
 		};
 	};
+
+	otg0: usb@b3600000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3600000 0x40000>;
+		clocks = <&cgu A1_CLK_OTG0>;
+		dr_mode = "host";
+		status = "okay";
+	};
+
+	otg1: usb@b3640000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3640000 0x40000>;
+		clocks = <&cgu A1_CLK_OTG1>;
+		dr_mode = "host";
+		status = "okay";
+	};
+
+	otg2: usb@b3680000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3680000 0x40000>;
+		clocks = <&cgu A1_CLK_OTG2>;
+		dr_mode = "host";
+		status = "okay";
+	};
 };

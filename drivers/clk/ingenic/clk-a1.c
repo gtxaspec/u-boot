@@ -20,7 +20,7 @@
 #include <linux/bitops.h>
 #include <dt-bindings/clock/ingenic,a1-cgu.h>
 
-#define A1_CLK_COUNT		(A1_CLK_EFUSE + 1)
+#define A1_CLK_COUNT		(A1_CLK_OTG2 + 1)
 
 /* CPM at physical 0x10000000, reached through the uncached KSEG1 window. */
 #define A1_CPM_BASE		0xb0000000
@@ -69,7 +69,9 @@ static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
 	[A1_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 8 },
 	[A1_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 9 },
 	[A1_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 10 },
-	[A1_CLK_OTG]   = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
+	[A1_CLK_OTG0]  = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
+	[A1_CLK_OTG1]  = { 0, 0, 0, 0, CPM_CLKGR0, 12 },
+	[A1_CLK_OTG2]  = { 0, 0, 0, 0, CPM_CLKGR0, 13 },
 	[A1_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
 	[A1_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR0, 6 },
 	[A1_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },

@@ -3,6 +3,7 @@
 extra-$(CONFIG_XPL_BUILD)	:= start.o
 
 obj-y				+= cpu.o
+obj-$(CONFIG_SOC_A1)		+= a1/
 obj-$(CONFIG_SOC_T10)		+= t10/
 obj-$(CONFIG_SOC_T20)		+= t20/
 obj-$(CONFIG_SOC_T21)		+= t21/

@@ -1,0 +1,15 @@
+if TARGET_ISVP_A1
+
+config SYS_BOARD
+	default "isvp-a1"
+
+config SYS_VENDOR
+	default "ingenic"
+
+config SYS_CONFIG_NAME
+	default "isvp-a1"
+
+config TEXT_BASE
+	default 0x80100000
+
+endif

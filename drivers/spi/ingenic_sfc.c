@@ -439,6 +439,7 @@ static int sfc_probe(struct udevice *bus)
 }
 
 static const struct udevice_id sfc_ids[] = {
+	{ .compatible = "ingenic,a1-sfc" },
 	{ .compatible = "ingenic,t31-sfc" },
 	{ .compatible = "ingenic,t32-sfc" },
 	{ .compatible = "ingenic,t33-sfc" },

@@ -1,5 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0+
 
+config CLK_INGENIC_A1
+	bool "Ingenic A1 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic A1 (XBurst2) SoC Clock/Power
+	  Manager (CGU). Same M/N/OD1/OD0 PLL encoding as the T-series;
+	  the CGU register map differs (CLKGR0=0x30/CLKGR1=0x38,
+	  dedicated SFC0 divider). Provides rate/gate control for the
+	  leaf peripheral clocks (SFC, MMC, GMAC) that U-Boot drives.
+
 config CLK_INGENIC_T10
 	bool "Ingenic T10 CGU clock driver"
 	depends on CLK && ARCH_XBURST

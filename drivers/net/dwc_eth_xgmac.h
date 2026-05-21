@@ -241,6 +241,7 @@ struct xgmac_config {
 	int config_mac;
 	int config_mac_mdio;
 	unsigned int axi_bus_width;
+	unsigned int dma_sysbus_mode;
 	phy_interface_t (*interface)(const struct udevice *dev);
 	struct xgmac_ops *ops;
 };

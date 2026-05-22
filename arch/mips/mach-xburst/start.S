@@ -184,11 +184,13 @@ _start:
 	mtc0	t1, CP0_CAUSE
 
 	/*
-	 * Stack setup: XBurst1 (T10..T33) relies on the bootrom-provided
-	 * sp. XBurst2 (A1) needs an explicit stack pointer - the vendor
-	 * A1 SPL sets sp from CONFIG_SPL_STACK.
+	 * Stack setup. XBurst1 (T10..T33) and the A1 USB-boot SPL keep
+	 * the bootrom-provided sp: the SPL runs as a normal nested call,
+	 * and a plain board_init_f return (jr ra) resumes the mask ROM
+	 * cleanly. The A1 NOR-boot SPL switches to its own larger stack -
+	 * the bootrom sp has too little headroom for the LZMA decompress.
 	 */
-#if defined(CONFIG_SOC_A1)
+#if defined(CONFIG_SOC_A1) && !defined(CONFIG_SPL_A1_USB_BOOT)
 	lui	sp, 0x8000
 	ori	sp, sp, 0x8000
 #endif

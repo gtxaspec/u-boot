@@ -11,7 +11,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#ifdef CONFIG_USB
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 /*
  * Per-OTG-instance CPM register layout. The A1 has three identical
  * Synopsys DWC2 USB OTG cores; each core's PHY is controlled from CPM
@@ -96,7 +96,43 @@ static void a1_usb_phy_init(const struct a1_otg_phy *otg)
 	clrbits_le32(cpm + CPM_SRBC0, otg->srbc_bit);
 	mdelay(10);
 }
-#endif /* CONFIG_USB */
+
+/*
+ * dwc2_udc_otg weak-hook override, called from udc_enable() when the
+ * DFU/g_dnl gadget starts. board_init() ran a1_usb_phy_init() on all
+ * three OTG cores in host/OTG mode (USBPCR.USB_MODE set). The DFU
+ * gadget runs on OTG0 (the mask-ROM USB-boot port); reconfigure that
+ * PHY for device mode: clear USB_MODE and force the external
+ * VBUS-valid on (no OTG VBUS sense on this board) so the device core
+ * sees session-valid. The dwc2 OTG core also samples the OTG ID pin,
+ * so dwc2_udc_otg's reconfig_usbd() additionally sets
+ * GUSBCFG.FORCEDEVMODE (CONFIG_USB_GADGET_DWC2_OTG_FORCE_DEV_MODE).
+ */
+struct dwc2_udc;
+void otg_phy_init(struct dwc2_udc *dev)
+{
+	void __iomem *cpm = (void __iomem *)CPM_BASE;
+	const struct a1_otg_phy *otg = &a1_otg[0];	/* OTG0 = DFU port */
+	u32 v;
+
+	(void)dev;
+
+	v = readl(cpm + otg->pcr);
+	v &= ~(USBPCR_USB_MODE | USBPCR_OTG_DISABLE);
+	v |= USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL;
+	writel(v, cpm + otg->pcr);
+
+	setbits_le32(cpm + CPM_OPCR, otg->spendn_bit);
+
+	/* PHY power-on reset pulse. */
+	setbits_le32(cpm + otg->pcr, USBPCR_POR);
+	udelay(30);
+	clrbits_le32(cpm + otg->pcr, USBPCR_POR);
+	udelay(300);
+
+	clrbits_le32(cpm + CPM_CLKGR0, otg->clkgr_bit);
+}
+#endif /* CONFIG_USB || CONFIG_USB_GADGET */
 
 int dram_init(void)
 {
@@ -106,10 +142,14 @@ int dram_init(void)
 
 int board_init(void)
 {
-#ifdef CONFIG_USB
+#if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 	int i;
 
-	/* All three OTG cores are wired as USB host on the ISVP-A1. */
+	/*
+	 * Bring up all three OTG PHYs in host mode. The DFU loader
+	 * overrides OTG0 to device mode later via otg_phy_init() when
+	 * the gadget starts.
+	 */
 	for (i = 0; i < 3; i++)
 		a1_usb_phy_init(&a1_otg[i]);
 #endif

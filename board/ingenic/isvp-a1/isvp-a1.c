@@ -159,5 +159,8 @@ int board_init(void)
 int checkboard(void)
 {
 	puts("Board: Ingenic ISVP-A1 (XBurst2)\n");
+#ifdef CONFIG_SPL_A1_USB_BOOT
+	puts("Loader: USB-boot\n");
+#endif
 	return 0;
 }

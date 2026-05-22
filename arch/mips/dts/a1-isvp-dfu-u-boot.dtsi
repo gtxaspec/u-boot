@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-A1 DFU loader.
+ *
+ * The USB-boot path uploads spl/u-boot-spl.bin + u-boot.bin directly
+ * via the mask ROM (tools/t31-usbboot.py - the protocol is generic
+ * across XBurst1 and XBurst2), so the binman flash images here are
+ * not used in the USB-boot flow. They are kept consistent with the
+ * production a1-isvp layout (headered SPL at 0, LZMA U-Boot at
+ * 0x8000) so a stray 'make' still produces a sensible flash image.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-a1 {
+		filename = "u-boot-spl-a1.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-a1.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

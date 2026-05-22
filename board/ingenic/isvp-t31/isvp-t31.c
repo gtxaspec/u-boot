@@ -12,6 +12,8 @@
 #include <mach/t31.h>
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <usb.h>
+#include <dm/ofnode.h>
+#include <linux/usb/otg.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -169,13 +171,15 @@ void otg_phy_init(struct dwc2_udc *dev)
 	writel(v, cpm + CPM_USBPCR1);
 
 	/*
-	 * Device mode: USB_MODE_ORG cleared, OTG block enabled, and the
-	 * external VBUS-valid forced on (this board has no OTG VBUS
-	 * sense) so the device core sees session-valid.
+	 * Device mode: USB_MODE_ORG cleared, OTG block disabled so the
+	 * dwc2 core does not sample the OTG ID pin and come up in host
+	 * mode (the Z55 board reads the ID as A-device), and the external
+	 * VBUS-valid forced on (this board has no OTG VBUS sense) so the
+	 * device core sees session-valid.
 	 */
 	v = readl(cpm + CPM_USBPCR);
-	v &= ~(USBPCR_USB_MODE_ORG | USBPCR_OTG_DISABLE);
-	v |= USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL;
+	v &= ~USBPCR_USB_MODE_ORG;
+	v |= USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL | USBPCR_OTG_DISABLE;
 	writel(v, cpm + CPM_USBPCR);
 
 	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
@@ -202,7 +206,21 @@ int board_init(void)
 {
 	t31_msc0_init();
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
-	t31_usb_phy_init();
+	/*
+	 * Only the host build (dr_mode="host", t31-isvp.dts) does the
+	 * host PHY bring-up here. The DFU loader (t31-isvp-dfu.dts,
+	 * dr_mode="peripheral") must NOT run the host sequence - its
+	 * SRBC core reset / UTMI_RST staging leaves the PHY mid-host
+	 * and the gadget then fails to enumerate; the dwc2_udc_otg
+	 * weak hook otg_phy_init() does the device PHY init instead.
+	 */
+	{
+		ofnode otg = ofnode_path("/usb@13500000");
+
+		if (ofnode_valid(otg) &&
+		    usb_get_dr_mode(otg) == USB_DR_MODE_HOST)
+			t31_usb_phy_init();
+	}
 #endif
 	return 0;
 }

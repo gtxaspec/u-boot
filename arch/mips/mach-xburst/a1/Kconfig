@@ -73,4 +73,14 @@ config A1_DRAM_SIZE_MB
 	default 128 if A1_VARIANT_A1L
 	default 512 if A1_VARIANT_A1A
 
+config SPL_A1_USB_BOOT
+	bool "A1 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  PLLs and DDR, then return to the bootrom (jr ra) instead of
+	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
+	  U-Boot proper over USB. Used by the USB-boot / DFU loader
+	  defconfig (isvp_a1_usbboot_defconfig). Development only.
+
 endif

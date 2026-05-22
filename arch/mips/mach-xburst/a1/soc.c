@@ -24,6 +24,7 @@ void a1_spl_puts(const char *s);
 void a1_spl_putc(char c);
 void __weak sdram_init(void) { }
 void a1_spl_load_uboot(void);
+void a1_spl_sfc_clk_init(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -123,10 +124,25 @@ void board_init_f(ulong dummy)
 	if (dram_verify() == 0)
 		a1_spl_puts("A1 SPL: DDR OK\n");
 
+#ifdef CONFIG_SPL_A1_USB_BOOT
+	/*
+	 * USB-boot stage1: clocks and DDR are up. Also bring up the SFC0
+	 * clock so U-Boot proper (uploaded into DRAM next) can probe the
+	 * SPI-NOR - the NOR-boot SPL gets this via sfc_nor_load(). Then
+	 * return into the mask ROM: start.S keeps the bootrom sp for this
+	 * build, so the SPL ran as a normal nested call and a plain
+	 * return (jr ra) resumes the bootrom USB loop, which uploads
+	 * U-Boot proper.
+	 */
+	a1_spl_sfc_clk_init();
+	a1_spl_puts("A1 SPL: returning to mask ROM (USB boot)\n");
+	return;
+#else
 	a1_spl_puts("A1 SPL: loading U-Boot...\n");
 	a1_spl_load_uboot();
 	for (;;)
 		;
+#endif
 }
 #endif /* CONFIG_XPL_BUILD */
 

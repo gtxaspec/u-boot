@@ -288,6 +288,17 @@ static void sfc_nor_load(unsigned int src_addr, unsigned int count,
 		 words_of_spl);
 }
 
+/*
+ * Bring up the SFC0 clock + controller without doing a NOR read. The
+ * USB-boot SPL calls this so U-Boot proper, uploaded into DRAM after
+ * the SPL returns, inherits a clocked SFC and can probe the SPI-NOR.
+ * The NOR-boot SPL gets the same setup via sfc_nor_load() -> sfc_init().
+ */
+void a1_spl_sfc_clk_init(void)
+{
+	sfc_init();
+}
+
 extern void a1_spl_puts(const char *s);
 
 /*

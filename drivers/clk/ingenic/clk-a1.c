@@ -62,7 +62,7 @@ struct a1_clk_desc {
  * drivers (MMC, GMAC) are ported.
  */
 static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
-	[A1_CLK_SFC]   = { CPM_SFC0CDR, 28, 27, 26, CPM_CLKGR0, 24, 1 },
+	[A1_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 24, 1 },
 	[A1_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
 	[A1_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
 	[A1_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 15 },

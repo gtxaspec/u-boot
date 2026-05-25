@@ -7,7 +7,7 @@
 
 / {
 	compatible = "ingenic,isvp-t23", "ingenic,t23";
-	model = "Ingenic ISVP-T23 (DDR2 64M, SFC NOR)";
+	model = "Ingenic ISVP-T23 (SFC NOR)";
 
 	aliases {
 		serial1 = &uart1;

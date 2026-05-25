@@ -52,8 +52,6 @@
 
 &msc0 {
 	status = "okay";
-	bus-width = <4>;
-	broken-cd;
 };
 
 &otg {

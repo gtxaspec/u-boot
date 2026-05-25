@@ -39,8 +39,6 @@
 
 &msc0 {
 	status = "okay";
-	bus-width = <4>;
-	broken-cd;	/* no card-detect line wired on the ISVP board */
 };
 
 &otg {

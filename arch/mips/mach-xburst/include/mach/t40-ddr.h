@@ -87,6 +87,12 @@
 #define REG_DDR_CFG		(DDRC_BASE + DDRC_CFG)
 #define REG_DDR_LMR		(DDRC_BASE + DDRC_LMR)
 
+/* Vendor T40 DFI init: APB region DWCFG (offset 0) + DWSTATUS (offset 4) */
+#define DDRC_DWCFG		(DDR_APB_BASE + 0x00)
+#define DDRC_DWSTATUS		(DDR_APB_BASE + 0x04)
+#define DDRC_DWCFG_DFI_INIT_START	(1 << 3)
+#define DDRC_DWSTATUS_DFI_INIT_COMP	(1 << 0)
+
 /* CPM offset for the DDR clock divider + DLL reset (same as T31). */
 #define CPM_DRCG		0xd0
 

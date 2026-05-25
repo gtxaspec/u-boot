@@ -30,6 +30,7 @@ void t40_spl_putc(char c);
 void __weak sdram_init(void) { }
 void t40_spl_load_uboot(void);
 void t40_spl_sfc_clk_init(void);
+int timer_init(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -111,6 +112,7 @@ void board_init_f(ulong dummy)
 	pll_init();
 	t40_spl_puts("T40 SPL: PLL configured\n");
 
+	timer_init();
 	sdram_init();
 	if (dram_verify() == 0)
 		t40_spl_puts("T40 SPL: DDR OK\n");

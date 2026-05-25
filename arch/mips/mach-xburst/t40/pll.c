@@ -19,14 +19,23 @@
 #include <asm/io.h>
 #include <mach/t40.h>
 
-#define T40_APLL_M	117	/* 1404 MHz = 24 * 117 / (1 * 1 * 2) */
+/*
+ * APLL 600 MHz: M=50, N=1, OD1=2, OD0=1 (= vendor T40 INGE descriptor
+ * value 0x03205101, which the bootrom programs for us before SPL
+ * entry). Re-writing the same M/N/OD here is a no-op on the PLL but
+ * keeps the SPL self-contained.
+ */
+#define T40_APLL_M	50	/* 600 MHz = 24 * 50 / (1 * 1 * 2) */
 #define T40_APLL_MNOD	((T40_APLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 
 /*
- * MPLL 1000 MHz: 24 * 125 / (1 * 3 * 1) - OD1=3, not the usual 2.
- * (125 << 20) | (1 << 14) | (3 << 11) | (1 << 8)
+ * MPLL 1200 MHz: M=100, N=1, OD1=2, OD0=1 (= vendor T40 INGE
+ * descriptor value 0x06405101). Matches what the bootrom INGE
+ * descriptor table programs - using the same M/N/OD ensures the
+ * PLL_PLLON poll exits quickly instead of hanging on M/N values the
+ * silicon can't lock onto.
  */
-#define T40_MPLL_MNOD	((125 << 20) | (1 << 14) | (3 << 11) | (1 << 8))
+#define T40_MPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 
 static void cpm_writel(u32 val, unsigned int off)
 {

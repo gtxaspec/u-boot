@@ -16,7 +16,7 @@
 
 / {
 	compatible = "ingenic,isvp-t21", "ingenic,t21";
-	model = "Ingenic ISVP-T21 (DDR2 64M, DFU loader)";
+	model = "Ingenic ISVP-T21 (DFU loader)";
 
 	aliases {
 		serial1 = &uart1;

@@ -86,3 +86,13 @@ config CLK_INGENIC_T33
 	  (dedicated SFC0 divider, ce/busy/stop = 29/28/27, different
 	  CLKGR* gate map). Provides rate/gate control for the leaf
 	  peripheral clocks (SFC, MMC, GMAC) that U-Boot drives.
+
+config CLK_INGENIC_T40
+	bool "Ingenic T40 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T40 (XBurst2) SoC Clock/Power
+	  Manager (CGU). Initial cut is structurally identical to A1
+	  (same XBurst2 CGU layout) with T40-specific register offsets
+	  in mach/t40.h. Will diverge as T40-specific peripherals get
+	  wired up.

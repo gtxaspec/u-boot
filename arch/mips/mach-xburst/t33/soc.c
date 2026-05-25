@@ -6,8 +6,8 @@
  * console, PLLs, DDR, then load U-Boot proper. Stage 1 brings up
  * console + PLL and (CONFIG_SPL_T33_USB_BOOT) returns to the mask
  * ROM; the Innophy DDR2 (Stage 2) + SFC NOR-boot (Stage 3) land
- * next. Forward-ported from the vendor U-Boot 2022.10 PRJ spl.c
- * (PRJ008 = T33); full U-Boot uses driver model.
+ * next. Forward-ported from the vendor U-Boot 2022.10 T33 spl.c;
+ * full U-Boot uses driver model.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -104,10 +104,10 @@ void board_init_f(ulong dummy)
 	socid = readl((void __iomem *)T33_SOCID_ADDR);
 	t33_spl_puts("T33 SPL: SOCID ");
 	spl_put_hex(socid);
-	t33_spl_puts(socid == T33_SOCID ? " (T33/PRJ008)\n" : " (unexpected)\n");
+	t33_spl_puts(socid == T33_SOCID ? " (T33)\n" : " (unexpected)\n");
 
 	/*
-	 * Vendor PRJ spl.c pre-PLL pokes: clear the OST gate bit (the
+	 * Vendor T33 spl.c pre-PLL pokes: clear the OST gate bit (the
 	 * vendor clears CPM_CLKGR1_OST within CLKGR0), disable the
 	 * watchdog, and set the low MESTSEL bits.
 	 */

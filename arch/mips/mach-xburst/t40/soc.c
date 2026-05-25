@@ -81,18 +81,27 @@ void board_init_f(ulong dummy)
 {
 	gd = &gdata;
 
+	/* Disable watchdog */
+	writel(0, (void __iomem *)(WDT_BASE + 0x04));
+
 	/*
-	 * T40 CCU IFU-simple-loop disable (vendor t40.c board_init_f):
-	 *   CCU 0xb2200fe0 |= 0x18
-	 * The bit set differs from A1 (which uses 0x78); T40 only needs
-	 * bits 3..4. WDT disable is intentionally omitted here - the
-	 * vendor T40 SPL does not touch the WDT in early bring-up, and
-	 * the T40 WDT/TCU block requires a magic-key unlock so a naive
-	 * write hangs the CPU.
+	 * XBurst2 CCU tweaks - mirrors A1's HW-validated sequence (T40 is
+	 * the XBurst2 sibling of A1, NOT XBurst1, so the same prefetcher-
+	 * trust / IFU-loop quirks apply on real silicon):
+	 *   CCU +0xfe0: |= 0x78  disable IFU simple loop (bits 6:3)
+	 *   CCU +0x060: |= 0x10  disable L1 prefetcher trust (bit 4)
+	 *
+	 * The vendor T40 U-Boot 2013 source only writes 0x18 to +0xfe0 and
+	 * does not touch +0x060 - that source was QEMU-shaped and not
+	 * proven against real T40NN silicon; mirroring A1's HW-validated
+	 * sequence is what makes the SPL alive on real T40NN silicon.
 	 */
 	{
 		u32 v = readl((void __iomem *)(CCU_BASE + 0xfe0));
-		writel(v | 0x18, (void __iomem *)(CCU_BASE + 0xfe0));
+		writel(v | 0x78, (void __iomem *)(CCU_BASE + 0xfe0));
+
+		v = readl((void __iomem *)(CCU_BASE + 0x060));
+		writel(v | 0x10, (void __iomem *)(CCU_BASE + 0x060));
 	}
 
 	clk_ungate_uart(T40_CONSOLE_UART);

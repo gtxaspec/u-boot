@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0+
 # Copyright (c) 2026 Thingino
 #
-# Entry-type module for the Ingenic T31 SFC-NOR SPL boot header
+# Entry-type module for the Ingenic T-series SFC-NOR SPL boot header
 #
 
 from binman.etype.blob import Entry_blob
+from dtoc import fdt_util
 from u_boot_pylib import tools
 
 # T31 mask-ROM SFC-NOR header layout, from the vendor
@@ -14,6 +15,19 @@ from u_boot_pylib import tools
 SKIP_SIZE = 2048		# CRC body starts here (header is 2048 bytes)
 CRC_POSITION = 9		# CRC7 byte offset in the header
 SPL_LENGTH_POSITION = 12	# little-endian u32 total image length
+
+# INGE params header offset / structure, from vendor
+# tools/ingenic-tools/spl_params_fixer.c. The T40 mask ROM (and the
+# T31 mask ROM with SPL_PARAMS_FIXER) reads this header to learn the
+# SPL size so it can size the pre-load zero-fill correctly. Without
+# it the T40 bootrom uses a 0x19000-byte default that overflows the
+# 32 KB on-chip SRAM into uninitialised DDR and wedges before the
+# SPL is entered.
+INGE_OFFSET = 0x100
+INGE_MAGIC = 0x45474e49		# 'INGE' little-endian
+INGE_DESC_OFFSET = 0x120	# bootrom CPM descriptor table starts here
+INGE_DESC_SIZE = 20		# 5 x u32 per descriptor entry
+INGE_BLOCK_MAX = 0x100		# total INGE block (header + descriptors) ceiling
 
 # CRC7 syndrome table, identical to tools/mkt31spl.c.
 crc7_syndrome_table = [
@@ -53,28 +67,54 @@ crc7_syndrome_table = [
 
 
 class Entry_ingenic_t31_spl(Entry_blob):
-    """Ingenic T31 SPL with a finalized SFC-NOR boot header
+    """Ingenic T-series SPL with a finalized SFC-NOR boot header
 
     Properties / Entry arguments:
         - filename: Filename of SPL binary to read (default
           'spl/u-boot-spl.bin')
+        - ingenic,inge-descriptors: (optional) flat list of u32 cells,
+          5 per descriptor: (set_addr, poll_addr, value, poll_h_mask,
+          poll_l_mask). The bootrom applies these between loading the
+          SPL into SRAM and jumping to it - typically to program
+          APLL/MPLL/CPCCR/SFC clocks before the SPL touches any
+          clock-dependent peripheral. Used by T40 (XBurst2) where the
+          UART clock at fresh boot is not 24 MHz EXTAL; T31/A1 boards
+          can omit the property and the bootrom skips the table.
 
-    The Ingenic T31 mask ROM boots from SPI-NOR flash by reading a fixed
-    2048-byte header at the start of the SPL. The boot magic words are
-    emitted by start.S; this entry finalizes the remaining header fields
-    so the mask ROM accepts and copies the image:
+    The Ingenic T-series mask ROM boots from SPI-NOR flash by reading a
+    fixed 2048-byte header at the start of the SPL. The boot magic words
+    are emitted by start.S; this entry finalizes the remaining header
+    fields so the mask ROM accepts and copies the image:
 
-        - byte 9: CRC7 of the SPL body (offset 2048 to end of file)
-        - bytes 12..15: total image length, little-endian u32
+        - byte 9:         CRC7 of the SPL body (offset 2048 to end of file)
+        - bytes 12..15:   total image length, little-endian u32
+        - bytes 0x100+:   INGE params header (magic, size, optional CPM
+                          descriptor table for bootrom clock programming)
 
     This is a faithful reimplementation of the vendor
-    tools/ingenic-tools/spi_checksum.c and matches tools/mkt31spl.c
-    (the standalone, hardware-validated reference) byte for byte. The
-    headered SPL is typically placed at offset 0 of the SFC-NOR flash,
-    with U-Boot proper following at a later offset.
+    tools/ingenic-tools/spi_checksum.c + spl_params_fixer.c, and matches
+    tools/mkt31spl.c (the standalone, hardware-validated reference) byte
+    for byte. The headered SPL is typically placed at offset 0 of the
+    SFC-NOR flash, with U-Boot proper following at a later offset.
     """
     def __init__(self, section, etype, node):
         super().__init__(section, etype, node)
+
+    def ReadNode(self):
+        super().ReadNode()
+        # fdt_util has no generic u32-list reader; GetPhandleList decodes
+        # any u32 cell array, which is exactly what we need here.
+        self.inge_descriptors = (
+            fdt_util.GetPhandleList(self._node, 'ingenic,inge-descriptors')
+            or [])
+        if len(self.inge_descriptors) % 5 != 0:
+            self.Raise("'ingenic,inge-descriptors' must be a multiple of "
+                       "5 u32 values (set, poll, val, hmask, lmask)")
+        # Header (32 bytes) + descriptors + terminator (20 bytes) <= 256
+        descriptors_bytes = (len(self.inge_descriptors) // 5 + 1) * INGE_DESC_SIZE
+        if 0x20 + descriptors_bytes > INGE_BLOCK_MAX:
+            self.Raise("'ingenic,inge-descriptors' table too large for "
+                       "256-byte INGE block")
 
     def GetDefaultFilename(self):
         return 'spl/u-boot-spl.bin'
@@ -93,6 +133,37 @@ class Entry_ingenic_t31_spl(Entry_blob):
         data[CRC_POSITION] = crc & 0xff
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             size.to_bytes(4, 'little')
+
+        # INGE params header at offset 0x100. Bytes 0x100..0x107 are
+        # the magic and length (always emitted). Bytes 0x108..0x11f
+        # are pll_freq + cpccr + nand_timing; left as 0 to match the
+        # FPGA-mode default in the vendor spl_params_fixer (the actual
+        # clock programming is done by the descriptors below, or by
+        # the SPL's own pll_init() if no descriptors are present).
+        # Length is rounded up to 512 to match vendor convention.
+        inge_length = (size + 511) & ~511
+        data[INGE_OFFSET:INGE_OFFSET + 4] = \
+            INGE_MAGIC.to_bytes(4, 'little')
+        data[INGE_OFFSET + 4:INGE_OFFSET + 8] = \
+            inge_length.to_bytes(4, 'little')
+
+        # Optional bootrom CPM descriptor table at offset 0x120. Each
+        # 20-byte entry is (set_addr, poll_addr, value, poll_h_mask,
+        # poll_l_mask). The bootrom walks the table, writes `value` to
+        # `set_addr`, then polls `poll_addr` until `(*poll_addr &
+        # poll_h_mask) != 0` (or skips the poll if both masks are 0).
+        # The table is terminated by (0xffffffff, 0xffffffff, 0, 0, 0).
+        # This block is the bootrom's "configure clocks before SPL"
+        # hook - used by T40 to program APLL/MPLL/CPCCR/SFC.
+        if self.inge_descriptors:
+            off = INGE_DESC_OFFSET
+            for val in self.inge_descriptors:
+                data[off:off + 4] = (val & 0xffffffff).to_bytes(4, 'little')
+                off += 4
+            # Terminator
+            data[off:off + 4] = (0xffffffff).to_bytes(4, 'little')
+            data[off + 4:off + 8] = (0xffffffff).to_bytes(4, 'little')
+            data[off + 8:off + 20] = b'\x00' * 12
 
         self.SetContents(bytes(data))
         return True

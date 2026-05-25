@@ -179,9 +179,9 @@ static void ddr_inno_phy_init(void)
 {
 	u32 __maybe_unused reg = 0;	/* used only by the DDR2 path */
 
-	phy_writel(0x14, INNO_PLL_FBDIV);
+	phy_writel(0x10, INNO_PLL_FBDIV);
 	phy_writel(0x1a, INNO_PLL_CTRL);
-	phy_writel(0x5, INNO_PLL_PDIV);
+	phy_writel(0x4, INNO_PLL_PDIV);
 	phy_writel(0x18, INNO_PLL_CTRL);
 
 	while (!(phy_readl(INNO_PLL_LOCK) & (1 << 3)))	/* wait pll lock */

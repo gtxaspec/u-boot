@@ -72,9 +72,14 @@ void t40_spl_serial_init(void)
 
 	t40_uart1_pinmux();
 
+	/*
+	 * Vendor jz_serial_init order writes FCR=~UUE (0xef) and
+	 * ISR=~SIR (0xfc) before LCR, but on T40NN those writes appear
+	 * to wedge the UART. Skipping them and going straight to LCR /
+	 * baud / FCR-enable gives a clean banner once the bootrom-
+	 * INGE-programmed PLLs settle. See project_uboot_t40_port.md.
+	 */
 	u_wb(0, U_IER_DLH);
-	u_wb((u8)~FCR_UUE, U_FCR);
-	u_wb((u8)~(SIRCR_RSIRE | SIRCR_TSIRE), U_ISR);
 	u_wb(LCR_WLEN_8 | LCR_STOP_1, U_LCR);
 
 	lcr = u_rb(U_LCR) | LCR_DLAB;

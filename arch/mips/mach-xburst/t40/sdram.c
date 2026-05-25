@@ -22,6 +22,7 @@
 #include <mach/t40.h>
 #include <mach/t40-ddr.h>
 
+void t40_spl_puts(const char *s);
 
 #define ddr_writel(v, reg)	writel((v), (void __iomem *)(DDRC_BASE + (reg)))
 #define ddr_readl(reg)		readl((void __iomem *)(DDRC_BASE + (reg)))
@@ -167,25 +168,97 @@ static void phy_calibration(void)
 {
 	int m;
 
+	t40_spl_puts("cal1\n");
 	m = phy_readl(INNO_TRAINING_CTRL);
 	m = 0xa1;
 	phy_writel(m, INNO_TRAINING_CTRL);
+	t40_spl_puts("cal2 trig\n");
 	while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xcc)))
 		;
+	t40_spl_puts("cal3 done\n");
 	phy_writel(0xa0, INNO_TRAINING_CTRL);
+	t40_spl_puts("cal4 off\n");
+}
+
+/* read-modify-write a PHY register bit range (idx is the reg index, *4 */
+static void phy_set_range(u32 idx, u32 start, u32 num, u32 val)
+{
+	void __iomem *p = (void __iomem *)(DDR_PHY_BASE + idx * 4);
+	u32 mask = ((1u << num) - 1) << start;
+	u32 v = readl(p);
+
+	v = (v & ~mask) | ((val << start) & mask);
+	writel(v, p);
+}
+
+/* T40N driver-strength + on-die termination - vendor T40N branch of
+ * ddr_phy_cfg_driver_odt(). Required for signal integrity; without
+ * this, DDR2 reads come back as garbage even with the controller and
+ * PHY correctly programmed. */
+static void t40n_phy_driver_odt(void)
+{
+	const u32 drvcmd = 0x4, drvclk = 0x9;
+	const u32 odt = 0x5, drval = 0x3, drvah = 0x3;
+
+	/* cmd / ck drive strength */
+	phy_set_range(0xb0, 0, 5, drvcmd);
+	phy_set_range(0xb1, 0, 5, drvcmd);
+	phy_set_range(0xb2, 0, 5, drvclk);
+	phy_set_range(0xb3, 0, 5, drvclk);
+	/* DQ ODT, channel A */
+	phy_set_range(0xc0, 0, 5, odt);
+	phy_set_range(0xc1, 0, 5, odt);
+	phy_set_range(0xd0, 0, 5, odt);
+	phy_set_range(0xd1, 0, 5, odt);
+	/* DQ ODT, channel B */
+	phy_set_range(0xe0, 0, 5, odt);
+	phy_set_range(0xe1, 0, 5, odt);
+	phy_set_range(0xf0, 0, 5, odt);
+	phy_set_range(0xf1, 0, 5, odt);
+	/* DQ driver strength, channel A */
+	phy_set_range(0xc2, 0, 5, drval);
+	phy_set_range(0xc3, 0, 5, drval);
+	phy_set_range(0xd2, 0, 5, drvah);
+	phy_set_range(0xd3, 0, 5, drvah);
+	/* DQ driver strength, channel B */
+	phy_set_range(0xe2, 0, 5, drval);
+	phy_set_range(0xe3, 0, 5, drval);
+	phy_set_range(0xf2, 0, 5, drvah);
+	phy_set_range(0xf3, 0, 5, drvah);
 }
 
 static void ddr_inno_phy_init(void)
 {
 	u32 __maybe_unused reg = 0;	/* used only by the DDR2 path */
 
+	t40_spl_puts("phy1\n");
+	/* Vendor T40 ddr_phy_init: reset PHY then config driver/ODT
+	 * BEFORE programming PLLs / CL / CWL. PHY register indices are
+	 * 4-byte-aligned; vendor writes use `0xb3011000 + idx*4` so we
+	 * use phy_writel(v, idx*4). */
+	phy_writel(0x0d, 0x00);				/* INNO_PHY_RST */
+	t40n_phy_driver_odt();
+	/* Vendor T40N DLL bypass values (ddr_phy_init T40N branch). */
+	phy_writel(0xc, 0x54 * 4);	/* byte0 dq dll */
+	phy_writel(0xc, 0x64 * 4);	/* byte1 dq dll */
+	phy_writel(0xc, 0x84 * 4);	/* byte2 dq dll */
+	phy_writel(0xc, 0x94 * 4);	/* byte3 dq dll */
+	phy_writel(0x1, 0x55 * 4);	/* byte0 dqs dll */
+	phy_writel(0x1, 0x65 * 4);	/* byte1 dqs dll */
+	phy_writel(0x1, 0x85 * 4);	/* byte2 dqs dll */
+	phy_writel(0x1, 0x95 * 4);	/* byte3 dqs dll */
+	phy_writel(0xc, 0x15 * 4);	/* cmd dll */
+	phy_writel(0x1, 0x16 * 4);	/* ck dll */
+
 	phy_writel(0x10, INNO_PLL_FBDIV);
 	phy_writel(0x1a, INNO_PLL_CTRL);
 	phy_writel(0x4, INNO_PLL_PDIV);
 	phy_writel(0x18, INNO_PLL_CTRL);
+	t40_spl_puts("phy2 plls\n");
 
 	while (!(phy_readl(INNO_PLL_LOCK) & (1 << 3)))	/* wait pll lock */
 		;
+	t40_spl_puts("phy3 lock\n");
 
 	phy_writel(0x0, INNO_TRAINING_CTRL);
 	phy_writel(0x03, INNO_DQ_WIDTH);
@@ -210,15 +283,21 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x00, INNO_AL);
 #endif
 
-	writel(0, (void __iomem *)DDR_APB_PHY_INIT);	/* start high */
-	while (!(readl((void __iomem *)DDR_APB_PHY_INIT) & (1 << 2)))	/* pll locked */
+	t40_spl_puts("phy4 mr\n");
+	/*
+	 * Vendor T40 DFI init (ddrc_dfi_init in arch/mips/cpu/xburst2/
+	 * ddr_innophy.c): write DFI_INIT_START bit to DWCFG with the
+	 * buswidth bit (16-bit = 0); clear DWCFG; poll DWSTATUS for
+	 * DFI_INIT_COMP. Our earlier code wrote to PHY_INIT (0x8c) and
+	 * polled the wrong bit - PHY_INIT is a different register, the
+	 * actual handshake is on DWCFG/DWSTATUS.
+	 */
+	writel(DDRC_DWCFG_DFI_INIT_START, (void __iomem *)DDRC_DWCFG);
+	writel(0, (void __iomem *)DDRC_DWCFG);
+	while (!(readl((void __iomem *)DDRC_DWSTATUS) & DDRC_DWSTATUS_DFI_INIT_COMP))
 		;
-	writel(0, (void __iomem *)REG_DDR_CTRL);
-
-	while (!(readl((void __iomem *)DDR_APB_PHY_INIT) & (1 << 1)))	/* init_complete */
-		;
-	while (!readl((void __iomem *)T40_INIT_COMP))
-		;
+	t40_spl_puts("phy5 dfi-init\n");
+	udelay(50);
 	writel(0, (void __iomem *)REG_DDR_CTRL);
 
 #if defined(CONFIG_T31_DDR3)
@@ -254,78 +333,76 @@ static void ddr_inno_phy_init(void)
 		;
 	writel(0xa1, (void __iomem *)(DDR_PHY_BASE + 0x08));
 #else
-	writel(0x400001, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	writel(0x211, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	writel(0x311, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	writel(0x111, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	reg = ((DDRP_MR0_VALUE) << 12) | 0x011;
-	writel(reg, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
+	/*
+	 * DDR2 LMR sequence - vendor T40 ddr_innophy.c ddrc_dfi_init()
+	 * DDR2 branch (udelay-paced, no polls; the poll-based T31
+	 * sequence stalls because bit 0 doesn't auto-clear here).
+	 *
+	 * Vendor LMR cmd encoding for MRn (where DDR_MR{n}_VALUE is
+	 * MRn's mode-register value):
+	 *   cmd = (1 << 1) | START(bit 0) | LMR_CMD |
+	 *         ((mr & 0x1fff) << DDR_ADDR_BIT) |
+	 *         (((mr >> 13) & 0x3) << BA_BIT)
+	 * Vendor START bit = bit 0, LMR_CMD constant = 0x011 (PCHG=
+	 * 0x400001/0x400003, REF=0x400009, LMR=0x011 in the cmd field).
+	 */
+	t40_spl_puts("lmr1\n");
+	writel(0x400003, (void __iomem *)REG_DDR_LMR);
+	udelay(100);
+	t40_spl_puts("lmr2\n");
+	writel(0x211, (void __iomem *)REG_DDR_LMR);	/* MR2 */
+	udelay(5);
+	t40_spl_puts("lmr3\n");
+	writel(0x311, (void __iomem *)REG_DDR_LMR);	/* MR3 */
+	udelay(5);
+	t40_spl_puts("lmr4\n");
+	writel(0x111, (void __iomem *)REG_DDR_LMR);	/* MR1 */
+	udelay(5);
+	t40_spl_puts("lmr5\n");
+	reg = ((DDRP_MR0_VALUE & 0x1fff) << 12) | 0x011;
+	writel(reg, (void __iomem *)REG_DDR_LMR);	/* MR0 */
+	udelay(5);
+	t40_spl_puts("lmr6\n");
+	writel(0x400003, (void __iomem *)REG_DDR_LMR);	/* PCHG */
+	udelay(5);
+	writel(0x400009, (void __iomem *)REG_DDR_LMR);	/* REF */
+	udelay(5);
+	writel(0x400009, (void __iomem *)REG_DDR_LMR);	/* REF */
 	udelay(5 * 1000);
-
-	writel(0x400001, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	writel(0x400009, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-
-	writel(0x400009, (void __iomem *)REG_DDR_LMR);
-	while ((0x1 & readl((void __iomem *)REG_DDR_LMR)) == 1)
-		;
-	udelay(5 * 1000);
+	t40_spl_puts("lmr7\n");
 #endif
 
-	phy_calibration();
-
-#if defined(CONFIG_T31_DDR3)
-	writel(0x50, (void __iomem *)(DDR_PHY_BASE + 0x004));
-#else
-	writel(0x51, (void __iomem *)(DDR_PHY_BASE + 0x004));
-#endif
-	writel(0x24, (void __iomem *)(DDR_PHY_BASE + 0x028));
-
-	while (((readl((void __iomem *)(DDR_PHY_BASE + 0x190)) & 0xe0) <= 0x20) &&
-	       ((readl((void __iomem *)(DDR_PHY_BASE + 0x194)) & 0xe0) <= 0x20)) {
-		writel((readl((void __iomem *)(DDR_PHY_BASE + 0x04)) | 0x40),
-		       (void __iomem *)(DDR_PHY_BASE + 0x04));
-		writel(((readl((void __iomem *)(DDR_PHY_BASE + 0x28)) & ~(0xe)) | 0x6),
-		       (void __iomem *)(DDR_PHY_BASE + 0x28));
-		break;
-	}
+	/* Vendor T40 skips phy_calibration in the default config; the
+	 * call here came from the T31 path. Skip until we know it's
+	 * needed. */
+	t40_spl_puts("phy-cal skipped\n");
 }
 
 /* DDR2 sdram init (innophy DDR2 path of the vendor sdram_init()) */
 void sdram_init(void)
 {
+	t40_spl_puts("sdram1\n");
 	ddr_clk_set_rate();
+	t40_spl_puts("sdram2 clk\n");
 	reset_dll();
+	t40_spl_puts("sdram3 dll\n");
 
 	reset_controller();
+	t40_spl_puts("sdram4 rst\n");
 
 	ddr_inno_phy_init();
+	t40_spl_puts("sdram5 phy\n");
 
 	ddr_controller_init();
+	t40_spl_puts("sdram6 ctrl\n");
 
 	/* open remap function */
 	mem_remap();
+	t40_spl_puts("sdram7 remap\n");
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);
 
 	ddr_writel(ddr_readl(DDRC_STATUS) & ~DDRC_DSTATUS_MISS, DDRC_STATUS);
 	ddr_writel(0, DDRC_DLP);
+	t40_spl_puts("sdram8 done\n");
 }

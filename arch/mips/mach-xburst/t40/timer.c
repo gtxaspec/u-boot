@@ -24,8 +24,6 @@
 #define G_OSTCCR_PRESCALE_4	0x1
 #define G_OST_RATE		(24000000 / 4)
 
-#ifndef CONFIG_XPL_BUILD
-
 static u32 gost_readl(u32 off)
 {
 	return readl((void __iomem *)(G_OST_BASE + off));
@@ -58,5 +56,3 @@ ulong notrace get_tbclk(void)
 {
 	return G_OST_RATE;
 }
-
-#endif /* !CONFIG_XPL_BUILD */

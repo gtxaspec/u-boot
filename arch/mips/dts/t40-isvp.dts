@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+
+#include <dt-bindings/clock/ingenic,t40-cgu.h>
+
+/ {
+	compatible = "ingenic,t40";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x10000000>;
+	};
+
+	cgu: clock-controller@b0000000 {
+		compatible = "ingenic,t40-cgu";
+		reg = <0xb0000000 0x1000>;
+		#clock-cells = <1>;
+		u-boot,dm-pre-reloc;
+	};
+
+	pinctrl: pinctrl@b0010000 {
+		compatible = "ingenic,t40-pinctrl";
+		reg = <0xb0010000 0x8000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		gpa: gpio@0 {
+			compatible = "ingenic,t40-gpio";
+			reg = <0>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpb: gpio@1 {
+			compatible = "ingenic,t40-gpio";
+			reg = <1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpc: gpio@2 {
+			compatible = "ingenic,t40-gpio";
+			reg = <2>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpd: gpio@3 {
+			compatible = "ingenic,t40-gpio";
+			reg = <3>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpe: gpio@4 {
+			compatible = "ingenic,t40-gpio";
+			reg = <4>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		pins_uart1: uart1 {
+			function = "uart1";
+			groups = "uart1-data";
+		};
+
+		pins_sfc: sfc {
+			function = "sfc";
+			groups = "sfc-data";
+		};
+
+		pins_mac0: mac0 {
+			function = "mac0";
+			groups = "mac0-data";
+		};
+	};
+
+	uart1: serial@b0031000 {
+		compatible = "ingenic,jz4780-uart", "ns16550a";
+		reg = <0xb0031000 0x100>;
+		reg-shift = <2>;
+		clock-frequency = <24000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_uart1>;
+		status = "okay";
+	};
+
+	sfc: spi@b3440000 {
+		compatible = "ingenic,t40-sfc";
+		reg = <0xb3440000 0x10000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&cgu T40_CLK_SFC>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_sfc>;
+		spi-max-frequency = <50000000>;
+		status = "okay";
+
+		flash@0 {
+			compatible = "jedec,spi-nor";
+			reg = <0>;
+			spi-max-frequency = <50000000>;
+		};
+	};
+
+	gmac0: ethernet@b30b0000 {
+		compatible = "ingenic,t40-gmac";
+		reg = <0xb30b0000 0x10000>;
+		clocks = <&cgu T40_CLK_GMAC0>;
+		phy-mode = "rmii";
+		phy-handle = <&gmac0_phy>;
+		ingenic,mode-reg = <0xb00000c8>;
+		max-speed = <100>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mac0>;
+		status = "okay";
+
+		mdio {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			gmac0_phy: ethernet-phy@0 {
+				reg = <0>;
+			};
+		};
+	};
+
+	otg0: usb@b3600000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3600000 0x40000>;
+		clocks = <&cgu T40_CLK_OTG0>;
+		dr_mode = "host";
+		status = "okay";
+	};
+
+	otg1: usb@b3640000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3640000 0x40000>;
+		clocks = <&cgu T40_CLK_OTG1>;
+		dr_mode = "host";
+		status = "okay";
+	};
+
+	otg2: usb@b3680000 {
+		compatible = "snps,dwc2";
+		reg = <0xb3680000 0x40000>;
+		clocks = <&cgu T40_CLK_OTG2>;
+		dr_mode = "host";
+		status = "okay";
+	};
+};

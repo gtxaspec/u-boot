@@ -95,6 +95,12 @@ static const int t31_sfc_data[]	    = { 0x17, 0x18, 0x1b, 0x1c };
  * "sfc-data" group resolves per-SoC at pinmux time.
  */
 static const int t32_sfc_data[]	    = { 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c };
+/*
+ * T32 SFC1 = PC2..PC7, function 1. Boards that don't use the second
+ * NOR still want the pins claimed so the floating GPIO drivers don't
+ * couple noise into the adjacent MSC0 data lines.
+ */
+static const int t32_sfc1_data[]    = { 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
 static const int t31_mac_rmii[]	    = { 0x26, 0x27, 0x28, 0x29, 0x2a,
 					0x2b, 0x2c, 0x2d, 0x2e };
 static const int t31_cim_mclk[]	    = { 0x0f };
@@ -114,6 +120,7 @@ static const struct t31_group t31_groups[] = {
 	GRP("mmc0-1bit",    t31_mmc0_1bit,    0),
 	GRP("mmc0-4bit",    t31_mmc0_4bit,    0),
 	GRP("sfc-data",	    t31_sfc_data,     1),
+	GRP("sfc1-data",    t32_sfc1_data,    1),
 	GRP("mac-rmii",	    t31_mac_rmii,     0),
 	GRP("cim-mclk",	    t31_cim_mclk,     0),
 };
@@ -127,6 +134,7 @@ static const char * const t31_g_i2c1[]	= {
 	"i2c1-data-a", "i2c1-data-b", "i2c1-data-c" };
 static const char * const t31_g_mmc0[]	= { "mmc0-1bit", "mmc0-4bit" };
 static const char * const t31_g_sfc[]	= { "sfc-data" };
+static const char * const t31_g_sfc1[]	= { "sfc1-data" };
 static const char * const t31_g_mac[]	= { "mac-rmii" };
 static const char * const t31_g_cim[]	= { "cim-mclk" };
 
@@ -138,6 +146,7 @@ static const struct t31_function t31_functions[] = {
 	FUNC("i2c1",  t31_g_i2c1),
 	FUNC("mmc0",  t31_g_mmc0),
 	FUNC("sfc",   t31_g_sfc),
+	FUNC("sfc1",  t31_g_sfc1),
 	FUNC("mac",   t31_g_mac),
 	FUNC("cim",   t31_g_cim),
 };

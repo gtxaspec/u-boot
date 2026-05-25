@@ -391,9 +391,15 @@ static const struct dwmac_ingenic_data t21_gmac_data = {
 	.inner_phy = true,
 };
 
+static const struct dwmac_ingenic_data t40_gmac_data = {
+	.mpll_hz = 1000000000u,		/* T40 MPLL (t40/pll.c) */
+	.inner_phy = false,		/* external RMII PHY */
+};
+
 static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
+	{ .compatible = "ingenic,t40-gmac", .data = (ulong)&t40_gmac_data },
 	{ }
 };
 

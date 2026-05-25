@@ -55,28 +55,32 @@ struct t32_clk_desc {
 	u8 ce;		/* clock-change-enable bit in cdr */
 	u8 busy;	/* divider-busy bit in cdr */
 	u8 stop;	/* clock-stop bit in cdr */
-	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, 0xffff = no gate */
+	u8 h_freq;	/* extra /2 bit position (NO_HFREQ = none) */
+	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
 };
 
-#define NO_GATE 0xffff
+#define NO_GATE  0xffff
+#define NO_HFREQ 0xff
 
 /*
  * Leaf clocks U-Boot's drivers reference by the canonical binding ID.
- * All T32 CDRs use ce/busy/stop = 29/28/27. Gate bits (set = disabled):
- * CLKGR0 - SFC0 17, MSC0 3, MSC1 4, OTG 2, UART0 11, UART1 12, TCU 26;
- * CLKGR1 - GMAC 0, OST 7.
+ * All T32 CDRs use ce/busy/stop = 29/28/27. MSC0 and MSC1 carry an
+ * additional H_FREQ /2 bit at position 20 of the CDR, used to reach
+ * the sub-MHz card clock the SDHCI core wants for SD init. Gate bits
+ * (set = disabled): CLKGR0 - SFC0 17, MSC0 3, MSC1 4, OTG 2, UART0
+ * 11, UART1 12, TCU 26; CLKGR1 - GMAC 0, OST 7.
  */
 static const struct t32_clk_desc t32_clks[T32_CLK_COUNT] = {
-	[T32_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 17 },
-	[T32_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 3 },
-	[T32_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 4 },
-	[T32_CLK_GMAC]  = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 0 },
-	[T32_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
-	[T32_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 12 },
-	[T32_CLK_OTG]   = { 0, 0, 0, 0, CPM_CLKGR0, 2 },
-	[T32_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 26 },
-	[T32_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR1, 7 },
+	[T32_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, NO_HFREQ, CPM_CLKGR0, 17 },
+	[T32_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, 20,       CPM_CLKGR0, 3 },
+	[T32_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, 20,       CPM_CLKGR0, 4 },
+	[T32_CLK_GMAC]  = { CPM_MACCDR,  29, 28, 27, NO_HFREQ, CPM_CLKGR1, 0 },
+	[T32_CLK_UART0] = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 11 },
+	[T32_CLK_UART1] = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 12 },
+	[T32_CLK_OTG]   = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 2 },
+	[T32_CLK_TCU]   = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 26 },
+	[T32_CLK_OST]   = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR1, 7 },
 };
 
 struct t32_cgu_priv {
@@ -128,6 +132,8 @@ static ulong t32_clk_get_rate(struct clk *clk)
 {
 	struct t32_cgu_priv *p = dev_get_priv(clk->dev);
 	const struct t32_clk_desc *d;
+	u32 cdr_val;
+	ulong rate;
 
 	switch (clk->id) {
 	case T32_CLK_EXCLK:
@@ -152,8 +158,11 @@ static ulong t32_clk_get_rate(struct clk *clk)
 	if (!d->cdr)
 		return EXT_RATE;
 
-	return t32_parent_rate(p, d->cdr) /
-	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1);
+	cdr_val = cpm_r(p, d->cdr);
+	rate = t32_parent_rate(p, d->cdr) / ((cdr_val & CDR_DIV_MASK) + 1);
+	if (d->h_freq != NO_HFREQ && (cdr_val & BIT(d->h_freq)))
+		rate /= 2;
+	return rate;
 }
 
 static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
@@ -162,6 +171,7 @@ static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
 	const struct t32_clk_desc *d;
 	ulong parent;
 	u32 div, v;
+	bool use_hfreq = false;
 
 	if (clk->id >= T32_CLK_COUNT)
 		return -EINVAL;
@@ -176,18 +186,35 @@ static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
 	div = DIV_ROUND_CLOSEST(parent, rate);
 	if (!div)
 		div = 1;
+
+	/*
+	 * The 8-bit CDR field tops out at 256. When the requested rate
+	 * needs a deeper divisor and the clock supports the H_FREQ /2
+	 * bit (MSC0/MSC1), use it to halve the effective rate after
+	 * the divider; this extends the reachable range to 512.
+	 */
+	if (div > 256 && d->h_freq != NO_HFREQ) {
+		div = DIV_ROUND_CLOSEST(parent, rate * 2);
+		if (!div)
+			div = 1;
+		use_hfreq = true;
+	}
 	if (div > 256)
 		div = 256;
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
+	if (d->h_freq != NO_HFREQ)
+		v &= ~BIT(d->h_freq);
 	v |= CDR_SRC_MPLL | BIT(d->ce) | (div - 1);
+	if (use_hfreq)
+		v |= BIT(d->h_freq);
 	cpm_w(p, d->cdr, v);
 
 	while (cpm_r(p, d->cdr) & BIT(d->busy))
 		;
 
-	return parent / div;
+	return use_hfreq ? parent / div / 2 : parent / div;
 }
 
 static int t32_clk_gate(struct clk *clk, bool enable)

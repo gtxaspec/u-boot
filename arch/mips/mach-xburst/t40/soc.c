@@ -81,8 +81,19 @@ void board_init_f(ulong dummy)
 {
 	gd = &gdata;
 
-	/* Disable watchdog */
-	writel(0, (void __iomem *)(WDT_BASE + 0x04));
+	/*
+	 * T40 CCU IFU-simple-loop disable (vendor t40.c board_init_f):
+	 *   CCU 0xb2200fe0 |= 0x18
+	 * The bit set differs from A1 (which uses 0x78); T40 only needs
+	 * bits 3..4. WDT disable is intentionally omitted here - the
+	 * vendor T40 SPL does not touch the WDT in early bring-up, and
+	 * the T40 WDT/TCU block requires a magic-key unlock so a naive
+	 * write hangs the CPU.
+	 */
+	{
+		u32 v = readl((void __iomem *)(CCU_BASE + 0xfe0));
+		writel(v | 0x18, (void __iomem *)(CCU_BASE + 0xfe0));
+	}
 
 	clk_ungate_uart(T40_CONSOLE_UART);
 	t40_spl_serial_init();

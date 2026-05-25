@@ -39,6 +39,9 @@ int print_cpuinfo(void)
 #elif defined(CONFIG_SOC_T33)
 	const char *soc = "T33";
 	const char *core = "XBurst1";
+#elif defined(CONFIG_SOC_T40)
+	const char *soc = "T40";
+	const char *core = "XBurst2";
 #else
 	const char *soc = "unknown";
 	const char *core = "XBurst";

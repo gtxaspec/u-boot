@@ -134,36 +134,43 @@ class Entry_ingenic_t31_spl(Entry_blob):
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             size.to_bytes(4, 'little')
 
-        # INGE params header at offset 0x100. Bytes 0x100..0x107 are
-        # the magic and length (always emitted). Bytes 0x108..0x11f
-        # are pll_freq + cpccr + nand_timing; left as 0 to match the
-        # FPGA-mode default in the vendor spl_params_fixer (the actual
-        # clock programming is done by the descriptors below, or by
-        # the SPL's own pll_init() if no descriptors are present).
-        # Length is rounded up to 512 to match vendor convention.
+        # INGE params header. The T-series mask ROMs check for the
+        # INGE block at two distinct offsets depending on the boot
+        # source (per the T40 bootrom decompilation):
+        #
+        #   - SFC NOR boot path (FUN_bfc015e0)  -> param block at 0x40
+        #   - USB/SD/NAND boot paths            -> param block at 0x100
+        #
+        # Bytes [0x00..0x03] of the block hold the 'INGE' magic, bytes
+        # [0x04..0x07] hold the SPL length (rounded up to 512), bytes
+        # [0x08..0x1f] are pll_freq + cpccr + nand_timing (left zero -
+        # the vendor FPGA-mode default; clock setup is done by the
+        # descriptor table below or by the SPL's pll_init), and bytes
+        # [0x20..] are the CPM descriptor table (5 u32 cells per entry,
+        # terminated by (0xffffffff, 0xffffffff, 0, 0, 0)). Emit the
+        # exact same block at both offsets so the binary boots from
+        # either path without needing per-board headers.
+        #
+        # Layout sanity at 0x40: header 32 bytes + 11 entries * 20 +
+        # terminator 20 = 272 bytes -> ends at 0x150. Our DT supplies
+        # 5 entries (so total = 152 = 0x98, ends at 0xd8 - well before
+        # the 0x100 mirror) and the etype rejects anything that would
+        # overflow the 0x100 block boundary.
         inge_length = (size + 511) & ~511
-        data[INGE_OFFSET:INGE_OFFSET + 4] = \
-            INGE_MAGIC.to_bytes(4, 'little')
-        data[INGE_OFFSET + 4:INGE_OFFSET + 8] = \
-            inge_length.to_bytes(4, 'little')
-
-        # Optional bootrom CPM descriptor table at offset 0x120. Each
-        # 20-byte entry is (set_addr, poll_addr, value, poll_h_mask,
-        # poll_l_mask). The bootrom walks the table, writes `value` to
-        # `set_addr`, then polls `poll_addr` until `(*poll_addr &
-        # poll_h_mask) != 0` (or skips the poll if both masks are 0).
-        # The table is terminated by (0xffffffff, 0xffffffff, 0, 0, 0).
-        # This block is the bootrom's "configure clocks before SPL"
-        # hook - used by T40 to program APLL/MPLL/CPCCR/SFC.
-        if self.inge_descriptors:
-            off = INGE_DESC_OFFSET
-            for val in self.inge_descriptors:
-                data[off:off + 4] = (val & 0xffffffff).to_bytes(4, 'little')
-                off += 4
-            # Terminator
-            data[off:off + 4] = (0xffffffff).to_bytes(4, 'little')
-            data[off + 4:off + 8] = (0xffffffff).to_bytes(4, 'little')
-            data[off + 8:off + 20] = b'\x00' * 12
+        for inge_off in (INGE_OFFSET, 0x40):
+            data[inge_off:inge_off + 4] = \
+                INGE_MAGIC.to_bytes(4, 'little')
+            data[inge_off + 4:inge_off + 8] = \
+                inge_length.to_bytes(4, 'little')
+            if self.inge_descriptors:
+                off = inge_off + 0x20
+                for val in self.inge_descriptors:
+                    data[off:off + 4] = (val & 0xffffffff).to_bytes(4, 'little')
+                    off += 4
+                # Terminator (set=0xffffffff, poll=0xffffffff, rest 0).
+                data[off:off + 4] = (0xffffffff).to_bytes(4, 'little')
+                data[off + 4:off + 8] = (0xffffffff).to_bytes(4, 'little')
+                data[off + 8:off + 20] = b'\x00' * 12
 
         self.SetContents(bytes(data))
         return True

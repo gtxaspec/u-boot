@@ -61,7 +61,12 @@
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
 #define CPM_DDRCDR	0x2c
-#define CPM_SRBC0	0xc4	/* soft reset/bus control (DDRC/DDRP) */
+#define CPM_USBPCR	0x3c	/* USB PHY control */
+#define CPM_USBRDT	0x40	/* USB reset detect timer */
+#define CPM_USBVBFIL	0x44	/* USB VBUS jitter filter */
+#define CPM_USBPCR1	0x48	/* USB PHY control 1 (ref clock) */
+#define CPM_SRBC0	0xc4	/* soft reset/bus control (DDRC/DDRP/USB) */
+#define CPM_SRBC	CPM_SRBC0
 #define CPM_CPCSR	0xd4
 #define CPM_MESTSEL	0xec
 #define CPM_CPVPCR	0xe0	/* VPLL (unused on T33/PRJ008) */
@@ -73,6 +78,32 @@
 
 /* OST gate lives in CLKGR1 bit 7 (vendor CPM_CLKGR1_OST) */
 #define CPM_CLKGR1_OST		BIT(7)
+
+/* CLKGR0 OTG core gate (T33 mirrors T32: bit 2) */
+#define CPM_CLKGR0_OTG		BIT(2)
+
+/*
+ * USB PHY control bits (CPM_USBPCR / CPM_USBPCR1 / CPM_USBRDT /
+ * CPM_OPCR). T33 is PRJ008, sibling of T32 (PRJ007) - same vendor
+ * cpm_usb.c bit layout. Untested on real silicon (no T33 hardware
+ * yet); transliterated from the working T32 port.
+ */
+#define USBPCR_USB_MODE_ORG	BIT(31)
+#define USBPCR_IDPULLUP_MASK	(0x3u << 28)
+#define USBPCR_COMMONONN	BIT(25)
+#define USBPCR_VBUSVLDEXT	BIT(24)
+#define USBPCR_VBUSVLDEXTSEL	BIT(23)
+#define USBPCR_POR		BIT(22)
+#define USBPCR_SIDDQ		BIT(21)
+#define USBPCR_OTG_DISABLE	BIT(20)
+
+#define USBRDT_UTMI_RST		BIT(27)
+#define USBRDT_VBFIL_LD_EN	BIT(25)
+#define USBRDT_IDDIG_EN		BIT(24)
+#define USBRDT_IDDIG_REG	BIT(23)
+
+#define OPCR_SPENDN0		BIT(7)
+#define SRBC_USB_SR		BIT(12)
 
 /* Watchdog register offsets (vendor arch-PRJ/wdt.h) */
 #define WDT_TDR			0x0

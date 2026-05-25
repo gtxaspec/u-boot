@@ -51,8 +51,12 @@
 
 #define DDR_PHY_OFFSET	(-0x4e0000 + 0x1000)
 
-/* Console UART index (UART2 -> ttyS2 on most T40 boards) */
-#define T40_CONSOLE_UART	2
+/* Console UART index. Vendor isvp_t40.h sets CONFIG_SYS_UART_INDEX=1 and
+ * the vendor jz_gpio uart_gpio_func[] table routes UART1 to PB23 TX /
+ * PB24 RX on FUNC 0 - that pad pair is the one wired to the FTDI on
+ * stock T40NN dev boards.
+ */
+#define T40_CONSOLE_UART	1
 
 /*
  * SoC identification (CPM_CPSPPR / EFUSE chipid path).

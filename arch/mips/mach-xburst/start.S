@@ -197,6 +197,12 @@ _start:
 	lui	sp, 0x8000
 	ori	sp, sp, 0x8000
 #endif
+	/*
+	 * XBurst2 (A1, T40) requires explicit sp init - the bootrom does
+	 * not leave a usable stack pointer like XBurst1 does. Stack top
+	 * = top of the 32 KB cache-as-SRAM region; BSS + stack must fit
+	 * below this in SRAM (per the A1 stage-1 bring-up commit).
+	 */
 #if defined(CONFIG_SOC_T40) && !defined(CONFIG_SPL_T40_USB_BOOT)
 	lui	sp, 0x8000
 	ori	sp, sp, 0x8000

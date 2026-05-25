@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-2.0+
+
+if SOC_T40
+
+choice
+	prompt "T40 SoC variant"
+	default T40_VARIANT_T40
+	help
+	  T40 product variant. DDR parameters are taken from the
+	  vendor U-Boot ddr_reg_values_*.c. Default variant is the
+	  plain T40 (DDR2 64 MB M14D5121632A) which is the most
+	  common SKU.
+
+config T40_VARIANT_T40
+	bool "T40 (DDR2-500, 64 MB)"
+	help
+	  T40 plain: DDR2 @ 500 MHz, 16-bit bus, 64 MB
+	  M14D5121632A. APLL 1404 MHz, MPLL 1000 MHz.
+
+endchoice
+
+config T40_DRAM_SIZE_MB
+	int
+	default 64
+
+config SPL_T40_USB_BOOT
+	bool "T40 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  PLLs and DDR, then return to the bootrom (jr ra) instead of
+	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
+	  U-Boot proper over USB. Used by the USB-boot / DFU loader
+	  defconfig (isvp_t40_usbboot_defconfig).
+
+endif

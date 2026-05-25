@@ -113,16 +113,6 @@
 		};
 	};
 
-	msc0: mmc@b3060000 {
-		compatible = "ingenic,t40-mmc";
-		reg = <0xb3060000 0x10000>;
-		clocks = <&cgu T40_CLK_MSC0>;
-		clock-names = "mmc";
-		bus-width = <4>;
-		broken-cd;
-		status = "okay";
-	};
-
 	gmac0: ethernet@b34b0000 {
 		compatible = "ingenic,t40-gmac";
 		reg = <0xb34b0000 0x2000>;
@@ -153,7 +143,7 @@
 		compatible = "snps,dwc2";
 		reg = <0xb3500000 0x40000>;
 		clocks = <&cgu T40_CLK_OTG0>;
-		dr_mode = "host";
+		dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
 		status = "okay";
 	};
 };

@@ -1,0 +1,10 @@
+ISVP-T40 BOARD
+M:	Thingino <thingino@example.com>
+S:	Maintained
+F:	board/ingenic/isvp-t40/
+F:	configs/isvp_t40_*_defconfig
+F:	arch/mips/dts/t40-isvp*.dts
+F:	arch/mips/dts/t40.dtsi
+F:	arch/mips/mach-xburst/t40/
+F:	arch/mips/mach-xburst/include/mach/t40.h
+F:	arch/mips/mach-xburst/include/mach/t40-ddr.h

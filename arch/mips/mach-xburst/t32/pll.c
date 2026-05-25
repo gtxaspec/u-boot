@@ -30,23 +30,23 @@
  * map: LQ/VL/ZL DDR2 600; NQ/XQ DDR3 900; VN/ZN/VX/ZX DDR3 700;
  * VNP LPDDR3 700.
  */
-#define T32_CPVPCR	0x063051c1u	/* VPLL 1188 MHz (all classes) */
+#define T32_CPVPCR	0x0c609101u	/* VPLL 1188 MHz (vendor SPL verified) */
 #define T32_CPCCR_DEFAULT	0x55700000u
 #if defined(CONFIG_T32_DDR3_W631_900) || defined(CONFIG_T32_DDR3_W632_900)
-#define T32_CPAPCR	0x064051c1u	/* NQ/XQ */
-#define T32_CPMPCR	0x04b051c1u
+#define T32_CPAPCR	0x06405101u	/* NQ/XQ */
+#define T32_CPMPCR	0x04b05101u
 #define T32_CPCCR_DIV	0x55752210u	/* H0/H2DIV 2, PDIV 5 */
 #define T32_CPCCR_SEL	0x9a052210u
 #elif defined(CONFIG_T32_HWTRAIN)	/* VN/ZN/VX/ZX DDR3 + VNP LPDDR3, 700 */
-#define T32_CPAPCR	0x04b051c1u
-#define T32_CPMPCR	0x0af059c1u
+#define T32_CPAPCR	0x04b05101u
+#define T32_CPMPCR	0x0af05901u
 #define T32_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
 #define T32_CPCCR_SEL	0x9a094410u
 #else					/* LQ/VL/ZL DDR2 600 (default) */
-#define T32_CPAPCR	0x04b051c1u
-#define T32_CPMPCR	0x064051c1u
-#define T32_CPCCR_DIV	0x55773310u	/* H0/H2DIV 3, PDIV 7 */
-#define T32_CPCCR_SEL	0x9a073310u
+#define T32_CPAPCR	0x04b05101u
+#define T32_CPMPCR	0x06405101u
+#define T32_CPCCR_DIV	0x557b5510u	/* H0/H2DIV 5, PDIV 11 (vendor HW-verified) */
+#define T32_CPCCR_SEL	0x9a7b5510u
 #endif
 
 static u32 cpm_r(unsigned int off)

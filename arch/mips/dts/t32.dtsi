@@ -98,14 +98,15 @@
 		status = "disabled";
 	};
 
-	msc0: mmc@13450000 {
-		compatible = "ingenic,t31-mmc";
-		reg = <0x13450000 0x1000>;
+	msc0: mmc@13060000 {
+		compatible = "ingenic,t32-mmc";
+		reg = <0x13060000 0x10000>;
 		clocks = <&cgu T32_CLK_MSC0>;
 		clock-names = "mmc";
-		cap-sd-highspeed;
+		bus-width = <4>;
+		broken-cd;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pins_mmc0>;
+		pinctrl-0 = <&pins_mmc0 &pins_sfc1>;
 		status = "disabled";
 	};
 
@@ -211,6 +212,17 @@
 		pins_mmc0: mmc0 {
 			function = "mmc0";
 			groups = "mmc0-1bit", "mmc0-4bit";
+		};
+
+		/*
+		 * Idle the second SPI-NOR pin block: the T32LQ wires it to
+		 * PC2..PC7 immediately next to the MSC0 data lines. Left as
+		 * GPIO, the floating drivers couple noise into MSC0 and
+		 * break SD card init.
+		 */
+		pins_sfc1: sfc1 {
+			function = "sfc1";
+			groups = "sfc1-data";
 		};
 	};
 };

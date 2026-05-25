@@ -461,6 +461,15 @@ config JZ47XX_MMC
 	  This selects support for the MSC SD/MMC controller found on
 	  Ingenic JZ47xx and XBurst1 T-series SoCs.
 
+config MMC_SDHCI_INGENIC
+	bool "Ingenic SDHCI controller support"
+	depends on ARCH_XBURST
+	depends on MMC_SDHCI
+	help
+	  This selects support for the SDHCI-style MSC controller on
+	  Ingenic T32/T33 SoCs. The earlier T10..T31 use the classic
+	  MSC controller (JZ47XX_MMC) instead.
+
 config MMC_SANDBOX
 	bool "Sandbox MMC support"
 	depends on SANDBOX

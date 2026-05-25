@@ -6,8 +6,8 @@
  * console, PLLs, DDR, then load U-Boot proper. Stage 1 brings up
  * console + PLL and (CONFIG_SPL_T32_USB_BOOT) returns to the mask
  * ROM; the Innophy DDR2 (Stage 2) + SFC NOR-boot (Stage 3) land
- * next. Forward-ported from the vendor U-Boot 2022.10 PRJ spl.c
- * (PRJ007 = T32); full U-Boot uses driver model.
+ * next. Forward-ported from the vendor U-Boot 2022.10 T32 spl.c;
+ * full U-Boot uses driver model.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -104,10 +104,10 @@ void board_init_f(ulong dummy)
 	socid = readl((void __iomem *)T32_SOCID_ADDR);
 	t32_spl_puts("T32 SPL: SOCID ");
 	spl_put_hex(socid);
-	t32_spl_puts(socid == T32_SOCID ? " (T32/PRJ007)\n" : " (unexpected)\n");
+	t32_spl_puts(socid == T32_SOCID ? " (T32)\n" : " (unexpected)\n");
 
 	/*
-	 * Vendor PRJ spl.c pre-PLL pokes: clear the OST gate bit (the
+	 * Vendor T32 spl.c pre-PLL pokes: clear the OST gate bit (the
 	 * vendor clears CPM_CLKGR1_OST within CLKGR0), disable the
 	 * watchdog, and set the low MESTSEL bits.
 	 */
@@ -125,7 +125,7 @@ void board_init_f(ulong dummy)
 	 * Ungate the DDR controller clock (CPM_CLKGR0 bit 27).
 	 * Without this the uMCTL2 controller has no APB/AXI clock,
 	 * stays in init state forever, and the PHY-training STAT
-	 * poll spins. Vendor PRJ/clk.c clk_init() clears the same
+	 * poll spins. Vendor T32 clk.c clk_init() clears the same
 	 * bit before any DDR access.
 	 */
 	writel(readl((void __iomem *)(CPM_BASE + CPM_CLKGR0)) & ~BIT(27),

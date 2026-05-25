@@ -27,18 +27,37 @@
 
 #define DDR_APB_BASE		0xb3012000
 
-/* DDR controller register offsets */
+/*
+ * DDR controller register offsets. T40 uses the Ingenic "Innophy"
+ * DDRC register map (NOT the Synopsys DWC map T31 uses); offsets
+ * follow vendor `arch/mips/include/asm/ddr_innophy.h`.
+ *
+ *           T31 DWC   T40 Innophy
+ *   DDRC_CFG       0x004     0x008
+ *   DDRC_CTRL      0x008     0x010
+ *   DDRC_LMR       0x00c     0x018
+ *   DDRC_REFCNT    0x018     0x038
+ *   DDRC_TIMING(n) 0x60+4*n  0x40+8*n   (5 timings, not 6)
+ *   DDRC_MMAP0     0x024     0x078
+ *   DDRC_MMAP1     0x028     0x080
+ */
 #define DDRC_STATUS		0x000
-#define DDRC_CFG		0x004
-#define DDRC_CTRL		0x008
-#define DDRC_LMR		0x00c
-#define DDRC_REFCNT		0x018
-#define DDRC_MMAP0		0x024
-#define DDRC_MMAP1		0x028
-#define DDRC_DLP		0x0bc
-#define DDRC_AUTOSR_EN		0x304
-#define DDRC_TIMING(n)		(0x060 + 4 * ((n) - 1))
-#define DDRC_REMAP(n)		(0x09c + 4 * ((n) - 1))
+#define DDRC_CFG		0x008
+#define DDRC_CTRL		0x010
+#define DDRC_LMR		0x018
+#define DDRC_DLP		0x020
+#define DDRC_AUTOSR_EN		0x028
+#define DDRC_AUTOSR_CNT		0x030
+#define DDRC_REFCNT		0x038
+#define DDRC_TIMING(n)		(0x040 + 8 * ((n) - 1))
+#define DDRC_MMAP0		0x078
+#define DDRC_MMAP1		0x080
+#define DDRC_HREGPRO		0x0d8
+/* REMAP lives in the APB peripheral region 0xb3012000+0x08; the
+ * macro expands to an offset from DDRC_BASE for sdram.c's existing
+ * `ddr_writel((DDRC_BASE + offset))` callsite to land at the right
+ * absolute address. */
+#define DDRC_REMAP(n)		(DDR_APB_BASE - DDRC_BASE + 0x008 + 4 * ((n) - 1))
 
 #define DDRC_DSTATUS_MISS	(1 << 6)
 #define DDRC_CTRL_DFI_RST	(1 << 23)
@@ -64,9 +83,9 @@
 /* Absolute PHY/APB addresses used by the init sequence */
 #define T40_INIT_COMP		(DDR_PHY_BASE + 0xd0)
 #define DDR_APB_PHY_INIT	(DDR_APB_BASE + 0x8c)
-#define REG_DDR_CTRL		(DDRC_BASE + 0x008)
-#define REG_DDR_CFG		(DDRC_BASE + 0x004)
-#define REG_DDR_LMR		(DDRC_BASE + 0x00c)
+#define REG_DDR_CTRL		(DDRC_BASE + DDRC_CTRL)
+#define REG_DDR_CFG		(DDRC_BASE + DDRC_CFG)
+#define REG_DDR_LMR		(DDRC_BASE + DDRC_LMR)
 
 /* CPM offset for the DDR clock divider + DLL reset (same as T31). */
 #define CPM_DRCG		0xd0

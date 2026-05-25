@@ -261,7 +261,11 @@ static void ddr_inno_phy_init(void)
 	t40_spl_puts("phy3 lock\n");
 
 	phy_writel(0x0, INNO_TRAINING_CTRL);
-	phy_writel(0x03, INNO_DQ_WIDTH);
+#if CONFIG_DDR_DW32
+	phy_writel(0x0f, INNO_DQ_WIDTH);	/* 32-bit DQ */
+#else
+	phy_writel(0x03, INNO_DQ_WIDTH);	/* 16-bit DQ */
+#endif
 
 #if defined(CONFIG_T31_DDR3)
 	/* MEMSEL = DDR3, BURSEL = burst8 */
@@ -292,8 +296,13 @@ static void ddr_inno_phy_init(void)
 	 * polled the wrong bit - PHY_INIT is a different register, the
 	 * actual handshake is on DWCFG/DWSTATUS.
 	 */
+#if CONFIG_DDR_DW32
+	writel(DDRC_DWCFG_DFI_INIT_START | 1, (void __iomem *)DDRC_DWCFG);
+	writel(1, (void __iomem *)DDRC_DWCFG);	/* buswidth = 32-bit (bit 0 = 1) */
+#else
 	writel(DDRC_DWCFG_DFI_INIT_START, (void __iomem *)DDRC_DWCFG);
-	writel(0, (void __iomem *)DDRC_DWCFG);
+	writel(0, (void __iomem *)DDRC_DWCFG);	/* buswidth = 16-bit (bit 0 = 0) */
+#endif
 	while (!(readl((void __iomem *)DDRC_DWSTATUS) & DDRC_DWSTATUS_DFI_INIT_COMP))
 		;
 	t40_spl_puts("phy5 dfi-init\n");

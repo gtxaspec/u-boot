@@ -103,13 +103,16 @@
 #define DDR_ROW			13
 #define DDR_COL			10
 #define DDR_BANK8		0	/* 4-bank */
-#define CONFIG_DDR_DW32		0
+#define CONFIG_DDR_DW32		1	/* T40N is 32-bit DDR bus (vendor isvp_t40.h) */
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
 
 /* Clock target: DDR = MPLL/2 = 500 MHz. */
+/* T40N operating point per vendor U-Boot include/configs/isvp_t40.h
+ * (DDR_500M / APLL_912M block): MPLL=1000, DDR = MPLL/2 = 500 MHz.
+ * Cloner uses 400 MHz - underclocked for manufacturing burning. */
 #define DDR_MPLL_RATE		1000000000U
-#define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
+#define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)	/* 500 MHz */
 
 /*
  * GOLD register values. Starting from the T31 DDR2-500 set

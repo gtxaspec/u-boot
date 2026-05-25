@@ -294,6 +294,7 @@ static int t31_pinctrl_probe(struct udevice *dev)
 
 static const struct udevice_id t31_pinctrl_ids[] = {
 	{ .compatible = "ingenic,a1-pinctrl" },
+	{ .compatible = "ingenic,t40-pinctrl" },
 	{ .compatible = "ingenic,t10-pinctrl" },
 	{ .compatible = "ingenic,t20-pinctrl" },
 	{ .compatible = "ingenic,t21-pinctrl" },
@@ -401,6 +402,7 @@ static int t31_gpio_probe(struct udevice *dev)
 
 static const struct udevice_id t31_gpio_ids[] = {
 	{ .compatible = "ingenic,a1-gpio" },
+	{ .compatible = "ingenic,t40-gpio" },
 	{ .compatible = "ingenic,t10-gpio" },
 	{ .compatible = "ingenic,t20-gpio" },
 	{ .compatible = "ingenic,t21-gpio" },

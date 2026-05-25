@@ -1,21 +1,43 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Binman image description for the Ingenic ISVP-A1 SFC-NOR boot.
+ * Binman image description for the Ingenic ISVP-T40 SFC-NOR boot.
  *
- * The A1 mask ROM boots from SPI-NOR by reading a headered SPL at
- * flash offset 0, which then loads U-Boot proper from a fixed offset.
- * The SFC-NOR boot header is the same format the T31 uses - CRC7 of
- * the SPL body at byte 9, image length at bytes 12..15 - so the
- * ingenic-t31-spl binman etype applies unchanged (the vendor
- * tools/ingenic-tools/spi_checksum.c handles CONFIG_A1 and CONFIG_T31
- * with one shared SFC code path, SKIP_SIZE 2048).
+ * Mirrors the A1 binman layout - T40 is the XBurst2 sibling of A1 and
+ * uses the same vendor `0x03040506 / 0x55aa5502 / 0x000000aa` SFC-NOR
+ * boot header at flash offset 0, with LZMA U-Boot at 0x8000 (SPL pad
+ * clears 0x6000 with margin). The bootrom's FUN_bfc02070 Port-A SFC
+ * path scans for the 0x55aa5502 marker in the first sector.
+ *
+ * T40 differs from A1: at SPL-entry time the UART clock is not the
+ * raw 24 MHz EXTAL - PCLK runs through the bootrom-default CPCCR
+ * divider and is too slow for the SPL's hard-coded 115200/16/24M
+ * baud divisor (the receiver sees 0x00 frames). The
+ * `ingenic,inge-descriptors` property below tells the bootrom to
+ * program APLL/MPLL/CPCCR/SFC clocks *before* it jumps to the SPL,
+ * so the SPL's UART setup runs against a sane PCLK. Values come from
+ * the vendor U-Boot 2013 T40-1.3.1 tools/ingenic-tools/spl_params_fixer.c
+ * `descriptors[]` table (CONFIG_SPL_SFC path):
+ *
+ *   APLL  = 600 MHz  : (set 0xb0000010, poll 0xb0000010, val 0x03205101,
+ *                      hmask 0x08, lmask 0)
+ *   MPLL  = 1200 MHz : (set 0xb0000014, poll 0xb0000014, val 0x06405101,
+ *                      hmask 0x08, lmask 0)
+ *   CPCCR DIV        : (set 0xb0000000, poll 0xb00000d4, val 0x557b5510,
+ *                      hmask 0,    lmask 0x07)
+ *   CPCCR SEL        : (set 0xb0000000, poll 0xffffffff (no-poll),
+ *                      val 0x9a0b5510, hmask 0, lmask 0)
+ *   SFC SSICDR 24 MHz: (set 0xb0000060, poll 0xb0000060, val 0x60000018,
+ *                      hmask 0,    lmask 0x10000000)
+ *
+ * The descriptor table is generic infrastructure - any T-series board's
+ * binman dtsi can use it to program its own clocks before the SPL runs.
  *
  * 'make' produces:
- *   u-boot-spl-a1.bin        : SPL with the finalized SFC-NOR boot
- *                              header, bootable standalone.
+ *   u-boot-spl-t40.bin       : SPL with the finalized SFC-NOR boot
+ *                              header + INGE descriptor table,
+ *                              bootable standalone.
  *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
- *                              at 0x8000 (the A1 SPL loader's U-Boot
- *                              offset in a1/sfc.c) - flash at offset 0.
+ *                              at 0x8000 - flash at offset 0.
  */
 
 / {
@@ -25,25 +47,22 @@
 };
 
 &binman {
-	/*
-	 * Standalone headered SPL: take the freshly built
-	 * spl/u-boot-spl.bin through the SFC-NOR boot-header finalizer.
-	 */
-	u-boot-spl-a1 {
-		filename = "u-boot-spl-a1.bin";
+	u-boot-spl-t40 {
+		filename = "u-boot-spl-t40.bin";
 
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
+
+			ingenic,inge-descriptors = <
+				0xb0000010 0xb0000010 0x03205101 0x00000008 0x00000000
+				0xb0000014 0xb0000014 0x06405101 0x00000008 0x00000000
+				0xb0000000 0xb00000d4 0x557b5510 0x00000000 0x00000007
+				0xb0000000 0xffffffff 0x9a0b5510 0x00000000 0x00000000
+				0xb0000060 0xb0000060 0x60000018 0x00000000 0x10000000
+			>;
 		};
 	};
 
-	/*
-	 * Combined SFC-NOR flash image: headered SPL at offset 0, LZMA
-	 * U-Boot at 0x8000 (SPL MAX_SIZE is 0x6000; 0x8000 clears it
-	 * with margin). Trimmed to the end of the last entry; erased
-	 * flash reads 0xff so the rest of the chip is fine to leave
-	 * alone after flashing at offset 0.
-	 */
 	flash {
 		filename = "u-boot-with-spl-lzma.bin";
 		pad-byte = <0xff>;
@@ -51,7 +70,7 @@
 		spl {
 			type = "blob";
 			offset = <0x0>;
-			filename = "u-boot-spl-a1.bin";
+			filename = "u-boot-spl-t40.bin";
 		};
 
 		u-boot {

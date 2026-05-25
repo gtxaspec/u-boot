@@ -13,6 +13,8 @@
 #include <asm/cache.h>
 #if defined(CONFIG_SOC_A1)
 #include <mach/a1.h>
+#elif defined(CONFIG_SOC_T40)
+#include <mach/t40.h>
 #else
 #include <mach/t31.h>
 #endif
@@ -112,13 +114,13 @@ _start:
 	li	t8, 0x05555555
 	li	t9, 0xb0012144
 	sw	t8, 0(t9)
-#elif defined(CONFIG_SOC_A1)
+#elif defined(CONFIG_SOC_A1) || defined(CONFIG_SOC_T40)
 	/*
-	 * A1 (XBurst2): GPIO drive strength / Schmitt trigger setup
-	 * is done in C code (soc.c board_init_f) since it is not pad-
-	 * critical for UART1 on the A1 (PC6/PC7 function 0 works
-	 * without explicit drive-strength programming). If needed,
-	 * add Schmitt-trigger / drive-strength writes here.
+	 * A1 / T40 (XBurst2): GPIO drive strength / Schmitt trigger
+	 * setup is done in C code (soc.c board_init_f) since it is
+	 * not pad-critical for the default UART pad routing. If
+	 * board-specific drive-strength tuning is needed it can be
+	 * added here per SoC.
 	 */
 #elif !defined(CONFIG_SOC_T33)
 	/*
@@ -160,12 +162,13 @@ _start:
 	mtc0	t0, CP0_CONFIG, 7
 	nop
 
-#if !defined(CONFIG_SOC_T32) && !defined(CONFIG_SOC_T33) && !defined(CONFIG_SOC_A1)
+#if !defined(CONFIG_SOC_T32) && !defined(CONFIG_SOC_T33) && \
+    !defined(CONFIG_SOC_A1) && !defined(CONFIG_SOC_T40)
 	/*
 	 * XBurst1 CP0 $12,2: clear bit 31 (faithful to vendor T31
-	 * start.S). Vendor T32/T33 and A1 (XBurst2) do NOT touch
-	 * this register - the bit is reserved or repurposed and
-	 * writing to it can hang the SPL.
+	 * start.S). Vendor T32/T33 and the XBurst2 SoCs (A1, T40)
+	 * do NOT touch this register - the bit is reserved or
+	 * repurposed and writing to it can hang the SPL.
 	 */
 	mfc0	t0, $12, 2
 	nop
@@ -191,6 +194,10 @@ _start:
 	 * the bootrom sp has too little headroom for the LZMA decompress.
 	 */
 #if defined(CONFIG_SOC_A1) && !defined(CONFIG_SPL_A1_USB_BOOT)
+	lui	sp, 0x8000
+	ori	sp, sp, 0x8000
+#endif
+#if defined(CONFIG_SOC_T40) && !defined(CONFIG_SPL_T40_USB_BOOT)
 	lui	sp, 0x8000
 	ori	sp, sp, 0x8000
 #endif

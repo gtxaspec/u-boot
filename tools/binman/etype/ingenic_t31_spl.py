@@ -157,7 +157,12 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # the 0x100 mirror) and the etype rejects anything that would
         # overflow the 0x100 block boundary.
         inge_length = (size + 511) & ~511
-        for inge_off in (INGE_OFFSET, 0x40):
+        # Vendor T40N SFCNOR SPL binary places INGE only at 0x100.
+        # 2026-05-26 cold-boot A/B test: vendor (INGE@0x100 only) cold-
+        # boots T40NN cleanly to U-Boot. Our build with INGE mirrored
+        # at 0x40 was silent on cold boot but worked on warm reset.
+        # Drop the 0x40 mirror to mirror vendor layout exactly.
+        for inge_off in (INGE_OFFSET,):
             data[inge_off:inge_off + 4] = \
                 INGE_MAGIC.to_bytes(4, 'little')
             data[inge_off + 4:inge_off + 8] = \

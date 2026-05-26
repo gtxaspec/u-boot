@@ -406,35 +406,79 @@ static void ddr_inno_phy_init(void)
 		phy_writel(2, (chB + 0x14) * 4);
 		phy_writel(2, (chA + 0x15) * 4);
 		phy_writel(2, (chB + 0x15) * 4);
+
+		/* PHY REG-02 (0xb3011008) bit 3 = "open manual per-bit
+		 * de-skew" enable. Vendor sets this in the DDR2 path of
+		 * ddr_phy_init AFTER the baseline DQ delay seed. Without
+		 * this bit, the per-bit delays we just wrote may not be
+		 * honoured by the PHY at calibration time. */
+		phy_writel(phy_readl(0x02 * 4) | 0x8, 0x02 * 4);
 	}
 #endif
 
-	phy_writel(0x10, INNO_PLL_FBDIV);
-	phy_writel(0x1a, INNO_PLL_CTRL);
-	phy_writel(0x4, INNO_PLL_PDIV);
-	phy_writel(0x18, INNO_PLL_CTRL);
+	/*
+	 * Vendor T40 ddrp_pll_init: RMW writes (mask low byte, OR in
+	 * value) to preserve any upper bits the bootrom / EFUSE set.
+	 * Order is fixed - PHY_RST is asserted AGAIN inside this
+	 * function AFTER DQ_WIDTH+MEM_CFG, BEFORE CWL/CL/AL, with the
+	 * PLL_LOCK poll AT THE END of the function.
+	 */
+	{
+		u32 val;
+
+		val = phy_readl(INNO_PLL_FBDIV); val &= ~0xff; val |= 0x10;
+		phy_writel(val, INNO_PLL_FBDIV);
+
+		val = phy_readl(INNO_PLL_CTRL); val &= ~0xff; val |= 0x1a;
+		phy_writel(val, INNO_PLL_CTRL);
+
+		val = phy_readl(INNO_PLL_PDIV); val &= ~0xff; val |= 0x4;
+		phy_writel(val, INNO_PLL_PDIV);
+
+		val = phy_readl(INNO_PLL_CTRL); val &= ~0xff; val |= 0x18;
+		phy_writel(val, INNO_PLL_CTRL);
+
+		val = phy_readl(INNO_DQ_WIDTH); val &= ~0xf;
+#if CONFIG_DDR_DW32
+		val |= 0xf;
+#else
+		val |= 0x3;
+#endif
+		phy_writel(val, INNO_DQ_WIDTH);
+
+		val = phy_readl(INNO_MEM_CFG); val &= ~0xff;
+		val |= DDRP_MEMCFG_VALUE;
+		phy_writel(val, INNO_MEM_CFG);
+
+		/* Vendor's 2nd PHY_RST (inside ddrp_pll_init), AFTER
+		 * DQ_WIDTH and MEM_CFG. Same register as INNO_CHANNEL_EN
+		 * (offset 0x00). Required - we previously had the write
+		 * AFTER PLL_LOCK wait, but vendor does it BEFORE. */
+		val = phy_readl(INNO_CHANNEL_EN); val &= ~0xff; val |= 0x0d;
+		phy_writel(val, INNO_CHANNEL_EN);
+
+		val = phy_readl(INNO_CWL); val &= ~0xf;
+		val |= DDRP_CWL_VALUE;
+		phy_writel(val, INNO_CWL);
+
+		val = phy_readl(INNO_CL); val &= ~0xf;
+		val |= DDRP_CL_VALUE;
+		phy_writel(val, INNO_CL);
+
+		val = phy_readl(INNO_AL); val &= ~0xf;
+		phy_writel(val, INNO_AL);
+	}
 
 	while (!(phy_readl(INNO_PLL_LOCK) & (1 << 3)))	/* wait pll lock */
 		;
 
-	phy_writel(0x0, INNO_TRAINING_CTRL);
-#if CONFIG_DDR_DW32
-	phy_writel(0x0f, INNO_DQ_WIDTH);	/* 32-bit DQ */
-#else
-	phy_writel(0x03, INNO_DQ_WIDTH);	/* 16-bit DQ */
-#endif
-
-	phy_writel(DDRP_MEMCFG_VALUE, INNO_MEM_CFG);
 #if defined(CONFIG_T40_DDR3)
 	/* DDR3: DQS0/1 TXPLL clear [6:4] (vendor non-T23 path, raw
 	 * 0x154/0x114 byte offsets) */
 	phy_writel(phy_readl(0x154) & 0xffffff8f, 0x154);
 	phy_writel(phy_readl(0x114) & 0xffffff8f, 0x114);
 #endif
-	phy_writel(0x0d, INNO_CHANNEL_EN);
-	phy_writel(DDRP_CWL_VALUE, INNO_CWL);
-	phy_writel(DDRP_CL_VALUE, INNO_CL);
-	phy_writel(0x00, INNO_AL);
+	phy_writel(0x0, INNO_TRAINING_CTRL);
 
 	/*
 	 * Vendor T40 DFI init (ddrc_dfi_init in arch/mips/cpu/xburst2/
@@ -583,6 +627,7 @@ static void ddr_inno_phy_init(void)
 void sdram_init(void)
 {
 	ddr_clk_set_rate();
+	reset_dll();
 
 	reset_controller();		/* = vendor ddrc_reset_phy */
 

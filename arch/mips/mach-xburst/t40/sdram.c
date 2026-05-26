@@ -156,6 +156,79 @@ static void ddr_controller_init(void)
 }
 
 /*
+ * Vendor T40 ddrp_hardware_calibration() DDR2 branch: kick training
+ * via TRAINING_CTRL, poll INNO_CALIB_DONE bits[3:0] == 0xf, clear
+ * training bit. Required so the PHY learns per-channel DQS/DQ skew
+ * to the chip; without it writes get dropped on the floor.
+ */
+static void ddrp_hw_calibration(void)
+{
+	int timeout = 1000000;
+
+	phy_writel(0xa9, INNO_TRAINING_CTRL);
+	while (((readl((void __iomem *)(DDR_PHY_BASE + 0xcc)) & 0xf) != 0xf) &&
+	       timeout--)
+		;
+	phy_writel(0xa8, INNO_TRAINING_CTRL);
+}
+
+/*
+ * Vendor T40 ddr_innophy_set_skew() T40N branch: per-bit TX/RX
+ * delay defaults the PHY uses to time DQ/DQS at 500 MHz.
+ */
+static void ddr_innophy_set_skew_t40n(void)
+{
+	static const u32 dqx_rx[] = {
+		0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+		0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33,
+	};
+	static const u32 dqx_tx[] = {
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13,
+	};
+	const u32 chA = 0x120, chB = 0x1a0;
+	const u32 vref = 0x7f, dqs_rx = 0x18, dqx_rx_v = 0x11;
+	const u32 dqs_tx = 0x07, dqx_tx_v = 0x0e;
+	int i;
+
+	/* vref - channels A and B */
+	phy_writel(vref, 0xd7 * 4);
+	phy_writel(vref, 0xd8 * 4);
+	phy_writel(vref, 0xf7 * 4);
+	phy_writel(vref, 0xf8 * 4);
+
+	/* RX: DQS and DQ per channel */
+	phy_writel(dqs_rx, (chA + 0x29) * 4);
+	phy_writel(dqs_rx, (chA + 0x34) * 4);
+	phy_writel(dqs_rx, (chB + 0x29) * 4);
+	phy_writel(dqs_rx, (chB + 0x34) * 4);
+	for (i = 0; i < 16; i++) {
+		phy_writel(dqx_rx_v, (chA + dqx_rx[i]) * 4);
+		phy_writel(dqx_rx_v, (chB + dqx_rx[i]) * 4);
+	}
+
+	/* TX: cmd (0x100..0x11e), then DM/DQS/DQSb per channel, then DQ */
+	for (i = 0; i <= 0x1e; i++)
+		phy_writel(dqs_tx, (0x100 + i) * 4);
+	phy_writel(dqs_tx, (chA + 0x00) * 4);	/* dm0 */
+	phy_writel(dqs_tx, (chA + 0x09) * 4);	/* dqs0 */
+	phy_writel(dqs_tx, (chA + 0x0a) * 4);	/* dqsb0 */
+	phy_writel(dqs_tx, (chA + 0x0b) * 4);	/* dm1 */
+	phy_writel(dqs_tx, (chA + 0x14) * 4);	/* dqs1 */
+	phy_writel(dqs_tx, (chA + 0x15) * 4);	/* dqsb1 */
+	phy_writel(dqs_tx, (chB + 0x00) * 4);
+	phy_writel(dqs_tx, (chB + 0x09) * 4);
+	phy_writel(dqs_tx, (chB + 0x0a) * 4);
+	phy_writel(dqs_tx, (chB + 0x0b) * 4);
+	phy_writel(dqs_tx, (chB + 0x14) * 4);
+	phy_writel(dqs_tx, (chB + 0x15) * 4);
+	for (i = 0; i < 16; i++) {
+		phy_writel(dqx_tx_v, (chA + dqx_tx[i]) * 4);
+		phy_writel(dqx_tx_v, (chB + dqx_tx[i]) * 4);
+	}
+}
+
+/*
  * Vendor T40 ddrc_post_init() - REFCNT (idempotent reapply), final
  * CTRL, CGUC0/1 clock-unit-gating; followed by AUTOSR + HREGPRO/
  * PREGPRO host/peripheral region protection.
@@ -418,6 +491,9 @@ void sdram_init(void)
 	ddr_controller_init();
 	t40_spl_puts("sdram6 ctrl\n");
 
+	ddrp_hw_calibration();
+	t40_spl_puts("sdram6a calib\n");
+
 	ddr_controller_post_init();
 	t40_spl_puts("sdram6b post\n");
 
@@ -442,6 +518,10 @@ void sdram_init(void)
 	phy_set_range(0xa, 1, 3, 3);				/* FIFO depth */
 	phy_set_range(0x8, 0, 2, 3);				/* TX write pointer adj */
 	t40_spl_puts("sdram7c phy-fix\n");
+
+	/* Vendor T40N per-bit DQ/DQS skew defaults. */
+	ddr_innophy_set_skew_t40n();
+	t40_spl_puts("sdram7d skew\n");
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);
 

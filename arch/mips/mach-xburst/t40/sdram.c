@@ -168,20 +168,33 @@ static void ddr_controller_init(void)
 }
 
 /*
- * Vendor T40 ddrp_hardware_calibration() DDR2 branch: kick training
- * via TRAINING_CTRL, poll INNO_CALIB_DONE bits[3:0] == 0xf, clear
+ * Vendor T40 ddrp_hardware_calibration(): kick training via
+ * TRAINING_CTRL, poll INNO_CALIB_DONE bits[3:0] == 0xf, clear
  * training bit. Required so the PHY learns per-channel DQS/DQ skew
  * to the chip; without it writes get dropped on the floor.
+ *
+ * DDR2 path: write 0xa9 (training enable + DDR2 mode), poll, write
+ * 0xa8 (clear enable).
+ *
+ * DDR3 path: set bit 0 of existing TRAINING_CTRL, poll, clear bit 0.
  */
 static void ddrp_hw_calibration(void)
 {
 	int timeout = 1000000;
 
+#if defined(CONFIG_T40_DDR3)
+	phy_writel(phy_readl(INNO_TRAINING_CTRL) | 0x1, INNO_TRAINING_CTRL);
+	while (((readl((void __iomem *)(DDR_PHY_BASE + 0xcc)) & 0xf) != 0xf) &&
+	       timeout--)
+		;
+	phy_writel(phy_readl(INNO_TRAINING_CTRL) & ~0x1, INNO_TRAINING_CTRL);
+#else
 	phy_writel(0xa9, INNO_TRAINING_CTRL);
 	while (((readl((void __iomem *)(DDR_PHY_BASE + 0xcc)) & 0xf) != 0xf) &&
 	       timeout--)
 		;
 	phy_writel(0xa8, INNO_TRAINING_CTRL);
+#endif
 }
 
 /*
@@ -359,24 +372,17 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x03, INNO_DQ_WIDTH);	/* 16-bit DQ */
 #endif
 
-#if defined(CONFIG_T31_DDR3)
-	/* MEMSEL = DDR3, BURSEL = burst8 */
-	phy_writel(0x30, INNO_MEM_CFG);
-	/* DQS0/1 TXPLL: clear [6:4] (vendor non-T23 path, raw 0x154/0x114) */
+	phy_writel(DDRP_MEMCFG_VALUE, INNO_MEM_CFG);
+#if defined(CONFIG_T40_DDR3)
+	/* DDR3: DQS0/1 TXPLL clear [6:4] (vendor non-T23 path, raw
+	 * 0x154/0x114 byte offsets) */
 	phy_writel(phy_readl(0x154) & 0xffffff8f, 0x154);
 	phy_writel(phy_readl(0x114) & 0xffffff8f, 0x114);
-	phy_writel(0x0d, INNO_CHANNEL_EN);
-	phy_writel(0x6, INNO_CWL);
-	phy_writel(0x8, INNO_CL);
-	phy_writel(0x00, INNO_AL);
-#else
-	/* MEMSEL = DDR2, BURSEL = burst8 (vendor DDRP_MEMCFG_VALUE) */
-	phy_writel(DDRP_MEMCFG_VALUE, INNO_MEM_CFG);
+#endif
 	phy_writel(0x0d, INNO_CHANNEL_EN);
 	phy_writel(DDRP_CWL_VALUE, INNO_CWL);
 	phy_writel(DDRP_CL_VALUE, INNO_CL);
 	phy_writel(0x00, INNO_AL);
-#endif
 
 	/*
 	 * Vendor T40 DFI init (ddrc_dfi_init in arch/mips/cpu/xburst2/
@@ -398,7 +404,7 @@ static void ddr_inno_phy_init(void)
 	udelay(50);
 	writel(0, (void __iomem *)REG_DDR_CTRL);
 
-#if defined(CONFIG_T31_DDR3)
+#if defined(CONFIG_T40_DDR3)
 	/* DDR3: DFI reset (kgdreset) - set, 200us, clear, 500us. */
 	writel(DDRC_CTRL_DFI_RST, (void __iomem *)REG_DDR_CTRL);
 	udelay(200);
@@ -409,27 +415,44 @@ static void ddr_inno_phy_init(void)
 	writel(DDRC_CFG_VALUE, (void __iomem *)REG_DDR_CFG);
 	writel(0x0a, (void __iomem *)REG_DDR_CTRL);
 
-#if defined(CONFIG_T31_DDR3)
-	/* DDR3 LMR MRS sequence: MR2,MR3,MR1,MR0,ZQCL (no-poll
-	 * writel pairs - vendor ddr_innophy.c DDR3 branch). */
-	writel((0x08 << 12) | 0x211, (void __iomem *)REG_DDR_LMR);
-	writel(0, (void __iomem *)REG_DDR_LMR);
-	writel(0x311, (void __iomem *)REG_DDR_LMR);
-	writel(0, (void __iomem *)REG_DDR_LMR);
-	writel((0x6 << 12) | 0x111, (void __iomem *)REG_DDR_LMR);
-	writel(0, (void __iomem *)REG_DDR_LMR);
-	writel((DDRP_MR0_VALUE << 12) | 0x011, (void __iomem *)REG_DDR_LMR);
-	writel(0, (void __iomem *)REG_DDR_LMR);
-	writel(0x19, (void __iomem *)REG_DDR_LMR);
-	writel(0, (void __iomem *)REG_DDR_LMR);
+#if defined(CONFIG_T40_DDR3)
+	/*
+	 * DDR3 LMR sequence per vendor T40 ddr_innophy.c DDR3 branch.
+	 * Cmd encoding (DDR3-specific - DLMR_VALUE bit + 16-bit MR
+	 * addr field + 3-bit BA):
+	 *   cmd = DLMR_VALUE | START | LMR_CMD_LMR(2<<6) |
+	 *         ((MR & 0xffff) << 12) | (((MR >> 16) & 0x7) << 9)
+	 * DDRC_DLMR_VALUE for T40XP = 0x02 (from params_creator output).
+	 *
+	 * Order: zero, MR2, zero, MR3, zero, MR1, zero, MR0.
+	 */
+#define _LMR_MR3(mr_val) \
+	(DDRC_DLMR_VALUE | (((mr_val) & 0xffff) << 12) | \
+	 ((((mr_val) >> 16) & 0x7) << 9) | (2 << 6) | (1 << 0))
 
-	/* DDR3 hardware write-leveling (wait WL_DONE == 0x3). */
-	writel(0x4, (void __iomem *)(DDR_PHY_BASE + 0x0c));
-	writel(0x40, (void __iomem *)(DDR_PHY_BASE + 0x10));
-	writel(0xa4, (void __iomem *)(DDR_PHY_BASE + 0x08));
-	while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xc0)))
-		;
-	writel(0xa1, (void __iomem *)(DDR_PHY_BASE + 0x08));
+	writel(0, (void __iomem *)REG_DDR_LMR);			udelay(5);
+	writel(_LMR_MR3(DDR_MR2_VALUE), (void __iomem *)REG_DDR_LMR);
+	udelay(5);
+	writel(0, (void __iomem *)REG_DDR_LMR);			udelay(5);
+	writel(_LMR_MR3(DDR_MR3_VALUE), (void __iomem *)REG_DDR_LMR);
+	udelay(5);
+	writel(0, (void __iomem *)REG_DDR_LMR);			udelay(5);
+	writel(_LMR_MR3(DDR_MR1_VALUE), (void __iomem *)REG_DDR_LMR);
+	udelay(5);
+	writel(0, (void __iomem *)REG_DDR_LMR);			udelay(5);
+	writel(_LMR_MR3(DDR_MR0_VALUE), (void __iomem *)REG_DDR_LMR);
+	udelay(5);
+#undef _LMR_MR3
+	udelay(1000);	/* DDR3 needs settle time after MR programming */
+
+	/*
+	 * Note: vendor T40 ddr_innophy.c has an explicit write-leveling
+	 * sequence here (WR_LEVEL1=0x4, WR_LEVEL2=0x40, TRAINING_CTRL=
+	 * 0xa4, poll WL_DONE == 0xf) but it's wrapped in `#if 0` -
+	 * vendor skips DDR3 WL entirely; the per-channel DQ/DQS skew
+	 * comes out of ddrp_hardware_calibration() called later. We
+	 * follow the vendor's actual (#if 0 -> off) behavior.
+	 */
 #else
 	/*
 	 * DDR2 LMR sequence - vendor T40 ddr_innophy.c ddrc_dfi_init()
@@ -495,28 +518,33 @@ void sdram_init(void)
 	ddr_controller_post_init();
 	udelay(1000);
 
-	/* Vendor T40 REMMAP_ARRAY from ddr_params_creator output. The
-	 * T31-style mem_remap() computes swap on the fly but doesn't
-	 * match T40 Innophy's mapping; use the generated table directly. */
+	/* Vendor T40 REMMAP_ARRAY from ddr_params_creator output, per
+	 * variant. The T31-style mem_remap() computes swap on the fly
+	 * but doesn't match T40 Innophy's mapping. */
 	{
-		static const u32 remap[5] = {
-			0x03020e0d, 0x07060504, 0x0b0a0908,
-			0x0f01000c, 0x13121110,
-		};
+		static const u32 remap[5] = T40_REMMAP_ARRAY;
 		int i;
 		for (i = 0; i < 5; i++)
 			ddr_writel(remap[i], DDRC_REMAP(i + 1));
 	}
 
-	/* Vendor T40 sdram_init() post-init PHY fixups for DDR2 (must
-	 * happen AFTER post_init writes). Without these the DQ FIFO and
-	 * write-pointer alignment is off and reads return garbage. */
+	/* Vendor T40 sdram_init() post-init PHY fixups (DDR-type
+	 * specific). Without these the DQ FIFO and write-pointer
+	 * alignment is off and reads return garbage. */
+#if defined(CONFIG_T40_DDR3)
+	phy_set_range(0x1, 6, 1, 1);				/* FIFO bit */
+#else
 	writel(0x51, (void __iomem *)(DDR_PHY_BASE + 0x04));	/* MEM_CFG | bit6 FIFO */
+#endif
 	phy_set_range(0xa, 1, 3, 3);				/* FIFO depth */
 	phy_set_range(0x8, 0, 2, 3);				/* TX write pointer adj */
 
-	/* Vendor T40N per-bit DQ/DQS skew defaults. */
+	/* Vendor T40N per-bit DQ/DQS skew defaults. The vendor T40XP
+	 * branch is parameterised by EFUSE values that we don't read
+	 * yet; leave defaults for that variant and validate. */
+#if !defined(CONFIG_T40_DDR3)
 	ddr_innophy_set_skew_t40n();
+#endif
 	udelay(1000);
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);

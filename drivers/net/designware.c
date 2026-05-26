@@ -652,7 +652,11 @@ int designware_eth_init(struct dw_eth_dev *priv, u8 *enetaddr)
 	rx_descs_init(priv);
 	tx_descs_init(priv);
 
-	writel(FIXEDBURST | PRIORXTX_41 | DMA_PBL, &dma_p->busmode);
+	writel(FIXEDBURST | PRIORXTX_41 | DMA_PBL |
+#if defined(CONFIG_DW_ALTDESCRIPTOR)
+	       DMA_ATDS |
+#endif
+	       0, &dma_p->busmode);
 
 #ifndef CONFIG_DW_MAC_FORCE_THRESHOLD_MODE
 	writel(readl(&dma_p->opmode) | FLUSHTXFIFO | STOREFORWARD,

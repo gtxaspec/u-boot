@@ -94,6 +94,7 @@ struct eth_dma_regs {
 #define PRIORXTX_21		(1 << 14)
 #define PRIORXTX_11		(0 << 14)
 #define DMA_PBL			(GMAC_DEFAULT_DMA_PBL << 8)
+#define DMA_ATDS		(1 << 7)
 #define RXHIGHPRIO		(1 << 1)
 #define DMAMAC_SRST		(1 << 0)
 

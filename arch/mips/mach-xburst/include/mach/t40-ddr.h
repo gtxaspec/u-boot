@@ -152,7 +152,10 @@
 /* Compat alias for code still referencing the old single name. */
 #define DDRP_MR0_VALUE		DDR_MR0_VALUE
 
-#define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
+/* T40N: 128 MiB single chip M14D5121632A in 32-bit config (per vendor
+ * isvp_t40.h T40N block + params_creator output DDR_CHIP_0_SIZE =
+ * 134217728). */
+#define DDR_CHIP_0_SIZE		0x08000000	/* 128 MiB */
 #define DDR_CHIP_1_SIZE		0
 
 /* Total physical RAM size for U-Boot's dram_init(). */

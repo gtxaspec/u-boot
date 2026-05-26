@@ -78,8 +78,26 @@ static int dram_verify(void)
 
 gd_t gdata __section(".bss");
 
+extern char __bss_start[], __bss_end[];
+
 void board_init_f(ulong dummy)
 {
+	char *p;
+
+	/*
+	 * Zero BSS - our SPL crt0 (arch/mips/mach-xburst/start.S T40
+	 * branch) jumps straight here without clearing the BSS region.
+	 * Letting BSS contain bootrom-left SRAM garbage broke T40XP
+	 * USB-boot: gd->cyclic.cyclic_list ended up with non-empty
+	 * pointers, so mdelay/udelay -> schedule() -> cyclic_run()
+	 * walked into bad memory and never returned. T40N happened to
+	 * have a zero list head from a slightly different bootrom code
+	 * path leaving SRAM mostly clean. Zero BSS up front so SPL
+	 * state starts deterministic on every chip variant.
+	 */
+	for (p = __bss_start; p < __bss_end; p++)
+		*p = 0;
+
 	gd = &gdata;
 
 	/* Disable watchdog */

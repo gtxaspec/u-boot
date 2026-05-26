@@ -95,12 +95,22 @@ static void ddr_clk_set_rate(void)
 		;
 }
 
+/*
+ * Vendor T40 ddrc_reset_phy(): assert full reset (bits 23:20 = 0xf
+ * = SR+DFI+ALH+SR_R), then drop to just DFI_RST asserted
+ * (bit 23 = 0x8<<20 = dfi_reset_n LOW for Innophy) and HOLD that
+ * state across PHY init. DFI_RST is released later in ddrc_dfi_init.
+ *
+ * Previously we cleared CTRL all the way to 0 here, which released
+ * DFI_RST before PHY init ran - intermittent dram_verify failures
+ * because the PHY occasionally raced the released DFI_RST.
+ */
 static void reset_controller(void)
 {
 	ddr_writel(0xf << 20, DDRC_CTRL);
-	mdelay(5);
-	ddr_writel(0, DDRC_CTRL);
-	mdelay(5);
+	mdelay(1);
+	ddr_writel(0x8 << 20, DDRC_CTRL);	/* dfi_reset_n low */
+	mdelay(1);
 }
 
 static void remap_swap(int a, int b)
@@ -413,7 +423,13 @@ static void ddr_inno_phy_init(void)
 #endif
 
 	writel(DDRC_CFG_VALUE, (void __iomem *)REG_DDR_CFG);
-	writel(0x0a, (void __iomem *)REG_DDR_CTRL);
+	/* Vendor T40 ddrc_dfi_init: udelay(500) AFTER CFG write, BEFORE
+	 * raising CKE - DRAM needs time to see configuration latched
+	 * before CKE+commands are valid. Skipping this udelay made
+	 * dram_verify intermittently fail. */
+	udelay(500);
+	writel(DDRC_CTRL_CKE, (void __iomem *)REG_DDR_CTRL);
+	udelay(10);
 
 #if defined(CONFIG_T40_DDR3)
 	/*

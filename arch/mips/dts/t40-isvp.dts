@@ -2,6 +2,7 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/ingenic,t40-cgu.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "ingenic,t40";
@@ -96,6 +97,40 @@
 	};
 
 	/*
+	 * AIC (audio interface controller) + on-chip codec. PIO playback
+	 * driven by U-Boot's `sound` command. T40 has the same B-block
+	 * codec layout as T31 (extended with extra CHR/CMR/CTR regs for
+	 * the 2nd ADC channel; for tone playback we touch only the
+	 * T31-shared subset).
+	 */
+	aic: audio-controller@b0020000 {
+		compatible = "ingenic,t40-aic";
+		reg = <0xb0020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	codec: audio-codec@b0021000 {
+		compatible = "ingenic,t40-codec";
+		reg = <0xb0021000 0x170>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	sound: sound {
+		compatible = "ingenic,t40-sound";
+		status = "disabled";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
+	};
+
+	/*
 	 * TCU (timer/counter unit) container mirroring T31's binding. U-Boot
 	 * only needs the watchdog child for sysreset; the WDT self-clocks
 	 * from the 32 kHz RTC so the TCU clock provider is not required.
@@ -176,4 +211,19 @@
 		dr_mode = "host";
 		status = "okay";
 	};
+};
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	/* Speaker-amp enable: SDK default PB31, active-high. Override
+	 * here per board if the amp is on a different pin/polarity. */
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+};
+
+&sound {
+	status = "okay";
 };

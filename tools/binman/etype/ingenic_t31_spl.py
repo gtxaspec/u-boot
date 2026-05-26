@@ -133,47 +133,50 @@ class Entry_ingenic_t31_spl(Entry_blob):
         data[CRC_POSITION] = crc & 0xff
         #
         # SPL_LENGTH field bootrom semantics (T40 SFC NOR boot path,
-        # FUN_bfc02070): bootrom loads uVar5 = MIN(SPL_LENGTH, INGE_length)
-        # bytes from NOR into SRAM at 0x80001000 before jumping to
-        # 0x80001800.
+        # FUN_bfc02070): bootrom reads SPL_LENGTH (header byte 12, u32
+        # LE) into local_44, then loads MIN(local_44, _DAT_80000000)
+        # bytes from NOR offset 0 into SRAM at _DAT_80000034 (=
+        # 0x80001000 by default). _DAT_80000000 starts at the bootrom's
+        # internal soft cap (~0x19000 = 100 KiB, see lines 1155-1158
+        # of the T40 bootrom decompile in thingino-cloner). The
+        # earlier "0x4400 hard cap" claim came from a contaminated
+        # 2026-05-26 bisect and was wrong: vendor T40N SFCNOR SPL has
+        # SPL_LENGTH = 0x4640 = 17984 bytes (= actual file size) and
+        # cold-boots cleanly, so 0x4400 is NOT the upper bound.
         #
-        # 2026-05-26 cold-boot bisect on real T40NN silicon: small SPLs
-        # (e.g. our 2872-byte probe SPL with stored SPL_LENGTH = 2872)
-        # are silently rejected by the bootrom on cold POR even with
-        # correct magic + valid CRC. Bumping SPL_LENGTH to vendor's
-        # 13184 (with our actual binary still 2872 bytes) makes the
-        # bootrom load the SPL and reach 0x80001800.
+        # The vendor T-series tool that writes this field is
+        # `tools/ingenic-tools/spi_checksum.c`; it simply writes the
+        # exact file byte count (see its main(): `count` = total bytes
+        # read, then `write(fd, &count, 4)` at SPL_LENGTH_POSITION).
+        # The corresponding CONFIG_SPL_MAX_SIZE in vendor T40 is
+        # 26624 (= 0x6800), which sets the SPL+padding cap and the
+        # NOR offset of U-Boot proper but is unrelated to the
+        # bootrom-side SPL_LENGTH check.
         #
-        # The exact threshold is around the bootrom's default SPL load
-        # size (0x4400 = 17408, set at boot via `_DAT_80000010 = 0x4400`
-        # in the bootrom reset stub). Empirically: SPL_LENGTH < ~13 KiB
-        # is treated as invalid; >= 13 KiB cold-boots reliably.
-        #
-        # T40 bootrom SFC NOR boot path (FUN_bfc02070) reads the
-        # SPL_LENGTH field at SPL header byte 12 and enforces an upper
-        # bound at the bootrom's default SPL load size:
-        #     _DAT_80000010 = 0x4400   (set in reset stub)
-        # SPL_LENGTH > 0x4400 is silently rejected on cold POR - the
-        # bootrom never reaches the SPL entry point at 0x80001800, no
-        # UART output, no fallback to USB-boot. Bootrom CRC is NOT
-        # checked (a CRC-corrupted vendor binary still cold-boots).
-        #
-        # Empirical A/B (2026-05-26 on real T40NN silicon):
-        #   stored = 2872    -> silent (below lower threshold)
-        #   stored = 13184   -> works  (vendor T40N SFCNOR value)
-        #   stored = 17408   -> works  (= 0x4400 exactly)
-        #   stored = 17496   -> silent (> 0x4400)
-        #
-        # The actual amount loaded from NOR into SRAM 0x80001000 is
-        # MIN(SPL_LENGTH, INGE_length). Pin SPL_LENGTH at 0x4400 so
-        # the bootrom loads up to 17408 bytes of SPL. If the .text +
-        # .rodata + .data of the SPL fits in those 17408 bytes plus
-        # the 2048-byte header (so total file <= 0x4400), the SPL runs
-        # to completion. INGE_length is still rounded up from the
-        # actual file size, so on USB / SD / NAND boot paths (which
-        # use INGE_length, not SPL_LENGTH) the full SPL is still
-        # loaded.
-        stored_size = 0x4400
+        # We mirror vendor behaviour: store actual file size, BUT
+        # the bootrom rejects (silent fail, no UART, no fallback) any
+        # SPL_LENGTH > (INGE_length - 0x180). Cold-boot bisect on real
+        # T40NN silicon 2026-05-26:
+        #   stored = 0x4640 (vendor T40N, INGE_len=0x4800) -> works
+        #   stored = 0x4400..0x4800 (our 20120-B SPL)      -> SPL loads
+        #                                                    but truncates,
+        #                                                    crashes at
+        #                                                    udelay()
+        #   stored = 0x4C00 (our 20120-B SPL)              -> works
+        #   stored = 0x4E00 (our 20120-B SPL)              -> works
+        #   stored = 0x4E80 (our 20120-B SPL)              -> works
+        #   stored = 0x4E98 (= our file size, 20120)       -> SILENT
+        # Empirical bootrom cap = INGE_length - 0x180:
+        #   INGE_length 0x5000 -> cap 0x4E80 (our 20120 just fits)
+        #   INGE_length 0x4800 -> cap 0x4680 (vendor 17984 fits w/ 64-B margin)
+        # The 0x180 (= 384-byte) margin is undocumented in the T40
+        # bootrom decompile (FUN_bfc02070 + FUN_bfc039a0); likely a
+        # bootrom-side staging buffer reserved inside the SRAM region
+        # described by INGE_length. Store min(file_size, INGE_length -
+        # 0x180) so we never trip the cap.
+        inge_len_for_cap = (size + 511) & ~511
+        cap = inge_len_for_cap - 0x180
+        stored_size = min(size, cap)
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             stored_size.to_bytes(4, 'little')
 

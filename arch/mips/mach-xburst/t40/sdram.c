@@ -151,13 +151,32 @@ static void ddr_controller_init(void)
 	ddr_writel(DDRC_TIMING3_VALUE, DDRC_TIMING(3));
 	ddr_writel(DDRC_TIMING4_VALUE, DDRC_TIMING(4));
 	ddr_writel(DDRC_TIMING5_VALUE, DDRC_TIMING(5));
-	ddr_writel(DDRC_TIMING6_VALUE, DDRC_TIMING(6));
+	/* Innophy has 5 timing regs (T31 DWC had 6). */
 
 	ddr_writel(DDRC_MMAP0_VALUE, DDRC_MMAP0);
 	ddr_writel(DDRC_MMAP1_VALUE, DDRC_MMAP1);
 	ddr_writel(DDRC_CTRL_CKE | DDRC_CTRL_ALH, DDRC_CTRL);
 	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff8fff, DDRC_CTRL);
+}
+
+/*
+ * Vendor T40 ddrc_post_init() - REFCNT (idempotent reapply), final
+ * CTRL, CGUC0/1 clock-unit-gating; followed by AUTOSR + HREGPRO/
+ * PREGPRO host/peripheral region protection.
+ */
+static void ddr_controller_post_init(void)
+{
+	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
+	ddr_writel(DDRC_CTRL_VALUE, DDRC_CTRL);
+	ddr_writel(DDRC_CGUC0_VALUE, 0x064 + (DDR_APB_BASE - DDRC_BASE));
+	ddr_writel(DDRC_CGUC1_VALUE, 0x068 + (DDR_APB_BASE - DDRC_BASE));
+
+	ddr_writel(DDRC_AUTOSR_CNT_VALUE, DDRC_AUTOSR_CNT);
+	ddr_writel(DDRC_AUTOSR_EN_VALUE ? 1 : 0, DDRC_AUTOSR_EN);
+
+	ddr_writel(DDRC_HREGPRO_VALUE, DDRC_HREGPRO);
+	ddr_writel(DDRC_PREGPRO_VALUE, 0x06c + (DDR_APB_BASE - DDRC_BASE));
 }
 
 /*
@@ -278,12 +297,11 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x8, INNO_CL);
 	phy_writel(0x00, INNO_AL);
 #else
-	/* MEMSEL = DDR2, BURSEL = burst8 */
-	phy_writel(0x11, INNO_MEM_CFG);
+	/* MEMSEL = DDR2, BURSEL = burst8 (vendor DDRP_MEMCFG_VALUE) */
+	phy_writel(DDRP_MEMCFG_VALUE, INNO_MEM_CFG);
 	phy_writel(0x0d, INNO_CHANNEL_EN);
-	phy_writel(((DDRP_MR0_VALUE & 0xf0) >> 4) - 1, INNO_CWL);
-	reg = ((DDRP_MR0_VALUE & 0xf0) >> 4);
-	phy_writel(reg, INNO_CL);
+	phy_writel(DDRP_CWL_VALUE, INNO_CWL);
+	phy_writel(DDRP_CL_VALUE, INNO_CL);
 	phy_writel(0x00, INNO_AL);
 #endif
 
@@ -344,32 +362,30 @@ static void ddr_inno_phy_init(void)
 #else
 	/*
 	 * DDR2 LMR sequence - vendor T40 ddr_innophy.c ddrc_dfi_init()
-	 * DDR2 branch (udelay-paced, no polls; the poll-based T31
-	 * sequence stalls because bit 0 doesn't auto-clear here).
-	 *
-	 * Vendor LMR cmd encoding for MRn (where DDR_MR{n}_VALUE is
-	 * MRn's mode-register value):
-	 *   cmd = (1 << 1) | START(bit 0) | LMR_CMD |
-	 *         ((mr & 0x1fff) << DDR_ADDR_BIT) |
-	 *         (((mr >> 13) & 0x3) << BA_BIT)
-	 * Vendor START bit = bit 0, LMR_CMD constant = 0x011 (PCHG=
-	 * 0x400001/0x400003, REF=0x400009, LMR=0x011 in the cmd field).
+	 * DDR2 branch. Cmd encoding per vendor DDRC_LMR_MR(n) macro:
+	 *   cmd = (1 << 1) | LMR_START(bit 0) | LMR_CMD_LMR(2<<6) |
+	 *         ((MR & 0x1fff) << LMR_ADDR_BIT(12)) |
+	 *         (((MR >> 13) & 0x3) << LMR_BA_BIT(9))
+	 * PCHG-all = 0x400003 (vendor hardcoded literal). REF = 0x400009.
 	 */
+#define _LMR_MR(mr_val) \
+	((((mr_val) & 0x1fff) << 12) | ((((mr_val) >> 13) & 0x3) << 9) | \
+	 (2 << 6) | (1 << 1) | (1 << 0))
+
 	t40_spl_puts("lmr1\n");
 	writel(0x400003, (void __iomem *)REG_DDR_LMR);
 	udelay(100);
 	t40_spl_puts("lmr2\n");
-	writel(0x211, (void __iomem *)REG_DDR_LMR);	/* MR2 */
+	writel(_LMR_MR(DDR_MR2_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
 	t40_spl_puts("lmr3\n");
-	writel(0x311, (void __iomem *)REG_DDR_LMR);	/* MR3 */
+	writel(_LMR_MR(DDR_MR3_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
 	t40_spl_puts("lmr4\n");
-	writel(0x111, (void __iomem *)REG_DDR_LMR);	/* MR1 */
+	writel(_LMR_MR(DDR_MR1_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
 	t40_spl_puts("lmr5\n");
-	reg = ((DDRP_MR0_VALUE & 0x1fff) << 12) | 0x011;
-	writel(reg, (void __iomem *)REG_DDR_LMR);	/* MR0 */
+	writel(_LMR_MR(DDR_MR0_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
 	t40_spl_puts("lmr6\n");
 	writel(0x400003, (void __iomem *)REG_DDR_LMR);	/* PCHG */
@@ -379,6 +395,7 @@ static void ddr_inno_phy_init(void)
 	writel(0x400009, (void __iomem *)REG_DDR_LMR);	/* REF */
 	udelay(5 * 1000);
 	t40_spl_puts("lmr7\n");
+#undef _LMR_MR
 #endif
 
 	/* Vendor T40 skips phy_calibration in the default config; the
@@ -405,8 +422,21 @@ void sdram_init(void)
 	ddr_controller_init();
 	t40_spl_puts("sdram6 ctrl\n");
 
-	/* open remap function */
-	mem_remap();
+	ddr_controller_post_init();
+	t40_spl_puts("sdram6b post\n");
+
+	/* Vendor T40 REMMAP_ARRAY from ddr_params_creator output. The
+	 * T31-style mem_remap() computes swap on the fly but doesn't
+	 * match T40 Innophy's mapping; use the generated table directly. */
+	{
+		static const u32 remap[5] = {
+			0x03020e0d, 0x07060504, 0x0b0a0908,
+			0x0f01000c, 0x13121110,
+		};
+		int i;
+		for (i = 0; i < 5; i++)
+			ddr_writel(remap[i], DDRC_REMAP(i + 1));
+	}
 	t40_spl_puts("sdram7 remap\n");
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);

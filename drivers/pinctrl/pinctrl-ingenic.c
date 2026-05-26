@@ -191,6 +191,7 @@ static const struct t31_function a1_functions[] = {
 struct t31_pinctrl_priv {
 	void __iomem *base;
 	bool is_t32_family;	/* T32/T33: 6-pin SFC0 on PA23-28, func 0 */
+	bool is_t40;		/* T40: 6-pin SFC on PA23-28, func 1 */
 	const struct t31_group *groups;
 	unsigned int ngroups;
 	const struct t31_function *functions;
@@ -243,6 +244,10 @@ static int t31_pinmux_group_set(struct udevice *dev, unsigned int group,
 		pins = t32_sfc_data;
 		npins = ARRAY_SIZE(t32_sfc_data);
 		pin_func = 0;
+	} else if (p->is_t40 && !strcmp(g->name, "sfc-data")) {
+		pins = t32_sfc_data;	/* 6 pins PA23..PA28 (same set) */
+		npins = ARRAY_SIZE(t32_sfc_data);
+		pin_func = 1;		/* T40 uses function 1, not 0 */
 	}
 
 	for (i = 0; i < npins; i++)
@@ -276,6 +281,7 @@ static int t31_pinctrl_probe(struct udevice *dev)
 
 	p->is_t32_family = device_is_compatible(dev, "ingenic,t32-pinctrl") ||
 			   device_is_compatible(dev, "ingenic,t33-pinctrl");
+	p->is_t40 = device_is_compatible(dev, "ingenic,t40-pinctrl");
 
 	if (device_is_compatible(dev, "ingenic,a1-pinctrl")) {
 		p->groups = a1_groups;

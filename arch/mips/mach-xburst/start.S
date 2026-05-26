@@ -198,15 +198,16 @@ _start:
 	ori	sp, sp, 0x8000
 #endif
 	/*
-	 * XBurst2 (A1, T40) requires explicit sp init - the bootrom does
-	 * not leave a usable stack pointer like XBurst1 does. Stack top
-	 * = top of the 32 KB cache-as-SRAM region; BSS + stack must fit
-	 * below this in SRAM (per the A1 stage-1 bring-up commit).
+	 * XBurst2 (A1) requires explicit sp init for NOR boot - the bootrom
+	 * does not leave a usable stack pointer like XBurst1 does. Stack
+	 * top = top of the 32 KB cache-as-SRAM region; BSS + stack must
+	 * fit below this in SRAM (per the A1 stage-1 bring-up commit).
+	 *
+	 * T40 vendor SPL does NOT touch SP at entry - it keeps the
+	 * bootrom-provided stack pointer. Match vendor behaviour: do not
+	 * overwrite SP on T40 SFC NOR boot. (USB-boot SPL also keeps
+	 * bootrom SP, and was already not overwriting it.)
 	 */
-#if defined(CONFIG_SOC_T40) && !defined(CONFIG_SPL_T40_USB_BOOT)
-	lui	sp, 0x8000
-	ori	sp, sp, 0x8000
-#endif
 
 #if defined(CONFIG_SOC_T40) && defined(CONFIG_SPL_T40_NOR_PROBE)
 	/*

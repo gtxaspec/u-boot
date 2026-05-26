@@ -131,8 +131,32 @@ class Entry_ingenic_t31_spl(Entry_blob):
 
         size = len(data)
         data[CRC_POSITION] = crc & 0xff
+        #
+        # SPL_LENGTH field bootrom semantics (T40 SFC NOR boot path,
+        # FUN_bfc02070): bootrom loads uVar5 = MIN(SPL_LENGTH, INGE_length)
+        # bytes from NOR into SRAM at 0x80001000 before jumping to
+        # 0x80001800.
+        #
+        # 2026-05-26 cold-boot bisect on real T40NN silicon: small SPLs
+        # (e.g. our 2872-byte probe SPL with stored SPL_LENGTH = 2872)
+        # are silently rejected by the bootrom on cold POR even with
+        # correct magic + valid CRC. Bumping SPL_LENGTH to vendor's
+        # 13184 (with our actual binary still 2872 bytes) makes the
+        # bootrom load the SPL and reach 0x80001800.
+        #
+        # The exact threshold is around the bootrom's default SPL load
+        # size (0x4400 = 17408, set at boot via `_DAT_80000010 = 0x4400`
+        # in the bootrom reset stub). Empirically: SPL_LENGTH < ~13 KiB
+        # is treated as invalid; >= 13 KiB cold-boots reliably.
+        #
+        # Empirical T40 threshold: SPL_LENGTH < 13184 = bootrom rejects
+        # SPL silently on cold POR. Vendor T40N stored value is 13184
+        # (vendor's SPL is also 13184 bytes). Pinning our stored value
+        # to vendor's 13184 covers small probe SPLs and lets larger
+        # production SPLs use their actual size (still > threshold).
+        stored_size = max(size, 13184)
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
-            size.to_bytes(4, 'little')
+            stored_size.to_bytes(4, 'little')
 
         # INGE params header. The T-series mask ROMs check for the
         # INGE block at two distinct offsets depending on the boot

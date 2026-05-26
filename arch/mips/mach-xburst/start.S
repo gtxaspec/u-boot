@@ -215,6 +215,11 @@ _start:
 	 * if 'A' shows up here, bootrom + the standard MIPS entry
 	 * sequence (BTB + CP0 + SP) all work. If 'A' is silent we
 	 * have to move this probe earlier (before BTB) to isolate.
+	 *
+	 * Mirrors soc.c board_init_f: WDT disable, CCU +0xfe0 |= 0x78
+	 * (IFU simple loop disable), CCU +0x060 |= 0x10 (L1 prefetcher
+	 * trust disable), UART1 clk-ungate, GPIO PB23/24 -> FUNC0,
+	 * UART1 setup, spin 'A'.
 	 */
 	/* WDT disable: write 0 to TCER (WDT enable register), but the
 	 * actual reg is at b00200c+4 - the WDT register block is at
@@ -222,10 +227,24 @@ _start:
 	 * WDT_TDR / WDT enable on T-series. */
 	li	t0, 0xb0002000
 	sw	zero, 0x04(t0)
-	/* Ungate UART1 clock: CPM_CLKGR0 (0xb0000020) bit 9 clear */
+	/* XBurst2 CCU tweaks (required for SPL to run on real silicon)
+	 *   CCU +0xfe0 |= 0x78  disable IFU simple loop
+	 *   CCU +0x060 |= 0x10  disable L1 prefetcher trust
+	 * CCU_BASE = 0xb2200000.
+	 */
+	li	t0, 0xb2200000
+	lw	t1, 0xfe0(t0)
+	ori	t1, t1, 0x78
+	sw	t1, 0xfe0(t0)
+	lw	t1, 0x060(t0)
+	ori	t1, t1, 0x10
+	sw	t1, 0x060(t0)
+	/* Ungate UART1 clock: CPM_CLKGR0 (0xb0000020) bit 15 clear
+	 * (T40 UART1 = BIT(15), see mach/t40.h CPM_CLKGR0_UART1)
+	 */
 	li	t0, 0xb0000020
 	lw	t1, 0(t0)
-	li	t2, ~(1 << 9)
+	li	t2, ~(1 << 15)
 	and	t1, t1, t2
 	sw	t1, 0(t0)
 	/* GPIO PB23 / PB24 to device FUNC0:
@@ -251,24 +270,24 @@ _start:
 	li	t0, 0xb0011128
 	sw	t1, 0(t0)
 	/* UART1 @ 0xb0031000, ns16550-compat reg-shift=2.
-	 * IER (offset 1<<2 = 0x04) = 0
-	 * LCR (offset 3<<2 = 0x0c) = LCR_DLAB | 8N1 (0x83)
-	 * DLL (offset 0<<2 = 0x00) = 13
-	 * DLH (offset 1<<2 = 0x04) = 0
-	 * LCR = 8N1 (0x03)
-	 * FCR (offset 2<<2 = 0x08) = enable+reset (0xc7)
+	 * Mirrors drivers/.../t40/serial.c t40_spl_serial_init:
+	 *   IER=0, LCR=8N1 (0x03), then LCR|DLAB (0x83), DLH=0, DLL=13,
+	 *   LCR=8N1, FCR=UUE|FE|TFLS|RFLS (0x17).
+	 * UUE (FCR bit 4) is the UART unit enable - without it, no TX.
 	 */
 	li	t0, 0xb0031000
-	sb	zero, 0x04(t0)
-	li	t1, 0x83
-	sb	t1, 0x0c(t0)
-	li	t1, 13
-	sb	t1, 0x00(t0)
-	sb	zero, 0x04(t0)
+	sb	zero, 0x04(t0)		/* IER = 0  */
 	li	t1, 0x03
-	sb	t1, 0x0c(t0)
-	li	t1, 0xc7
-	sb	t1, 0x08(t0)
+	sb	t1, 0x0c(t0)		/* LCR = 8N1 */
+	li	t1, 0x83
+	sb	t1, 0x0c(t0)		/* LCR |= DLAB */
+	sb	zero, 0x04(t0)		/* DLH = 0 */
+	li	t1, 13
+	sb	t1, 0x00(t0)		/* DLL = 13 (24 MHz / 16 / 115200) */
+	li	t1, 0x03
+	sb	t1, 0x0c(t0)		/* LCR = 8N1 (clear DLAB) */
+	li	t1, 0x17
+	sb	t1, 0x08(t0)		/* FCR = UUE|FE|TFLS|RFLS */
 	/* Spin emit 'A' (with brief inter-byte delay so the TX FIFO
 	 * has time to drain at 115200). */
 1:	li	t1, 'A'

@@ -367,6 +367,48 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0xc, 0x15 * 4);	/* cmd dll */
 	phy_writel(0x1, 0x16 * 4);	/* ck dll */
 
+	/*
+	 * Vendor T40 ddr_phy_init DDR2 branch: write a uniform baseline
+	 * delay of 5 to all cmd/DQ TX delay regs, and 2 to all DQS/DQSb
+	 * TX delay regs. This is the FROM-RESET seed the per-bit auto
+	 * calibration starts from; without this seed the per-bit delay
+	 * regs come up with random values and the PHY hardware calibration
+	 * has to work harder (or fails) on quick power cycles.
+	 *
+	 * Empirically on real T40NN silicon, adding this seed took USB-
+	 * boot quick-cycle reliability from intermittent to 4/4 success at
+	 * 3-5 s power-off intervals.
+	 */
+#if !defined(CONFIG_T40_DDR3)
+	{
+		const u32 chA = 0x120, chB = 0x1a0;
+		int i;
+
+		/* cmd TX delay 0x100..0x11e */
+		for (i = 0; i <= 0x1e; i++)
+			phy_writel(5, (0x100 + i) * 4);
+		/* DQ TX delay, low half [0..8] both channels */
+		for (i = 0; i <= 0x8; i++) {
+			phy_writel(5, (chA + i) * 4);
+			phy_writel(5, (chB + i) * 4);
+		}
+		/* DQ TX delay, high half [0xb..0x13] both channels */
+		for (i = 0xb; i <= 0x13; i++) {
+			phy_writel(5, (chA + i) * 4);
+			phy_writel(5, (chB + i) * 4);
+		}
+		/* DQS / DQSb TX delay (per-channel, byte 0 + byte 1) = 2 */
+		phy_writel(2, (chA + 0x09) * 4);
+		phy_writel(2, (chB + 0x09) * 4);
+		phy_writel(2, (chA + 0x0a) * 4);
+		phy_writel(2, (chB + 0x0a) * 4);
+		phy_writel(2, (chA + 0x14) * 4);
+		phy_writel(2, (chB + 0x14) * 4);
+		phy_writel(2, (chA + 0x15) * 4);
+		phy_writel(2, (chB + 0x15) * 4);
+	}
+#endif
+
 	phy_writel(0x10, INNO_PLL_FBDIV);
 	phy_writel(0x1a, INNO_PLL_CTRL);
 	phy_writel(0x4, INNO_PLL_PDIV);

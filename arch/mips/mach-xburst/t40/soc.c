@@ -86,23 +86,20 @@ void board_init_f(ulong dummy)
 	writel(0, (void __iomem *)(WDT_BASE + 0x04));
 
 	/*
-	 * XBurst2 CCU tweaks - mirrors A1's HW-validated sequence (T40 is
-	 * the XBurst2 sibling of A1, NOT XBurst1, so the same prefetcher-
-	 * trust / IFU-loop quirks apply on real silicon):
-	 *   CCU +0xfe0: |= 0x78  disable IFU simple loop (bits 6:3)
-	 *   CCU +0x060: |= 0x10  disable L1 prefetcher trust (bit 4)
+	 * XBurst2 CCU tweak - exactly match vendor T40 U-Boot 2013
+	 * (board_init_f, 0x80001ccc): CCU +0xfe0 |= 0x18 (bits 3,4 -
+	 * IFU simple-loop / prefetcher tweak). Vendor does NOT touch
+	 * CCU +0x060.
 	 *
-	 * The vendor T40 U-Boot 2013 source only writes 0x18 to +0xfe0 and
-	 * does not touch +0x060 - that source was QEMU-shaped and not
-	 * proven against real T40NN silicon; mirroring A1's HW-validated
-	 * sequence is what makes the SPL alive on real T40NN silicon.
+	 * 2026-05-26: prior code wrote |= 0x78 to +0xfe0 and |= 0x10
+	 * to +0x060 (borrowed from A1 USB-boot bring-up). Those worked
+	 * for USB-boot SPL but cold SFC NOR boot was silent. Vendor T40
+	 * SFCNOR binary cold-boots fine with just |= 0x18 to +0xfe0,
+	 * so revert to vendor's actual values.
 	 */
 	{
 		u32 v = readl((void __iomem *)(CCU_BASE + 0xfe0));
-		writel(v | 0x78, (void __iomem *)(CCU_BASE + 0xfe0));
-
-		v = readl((void __iomem *)(CCU_BASE + 0x060));
-		writel(v | 0x10, (void __iomem *)(CCU_BASE + 0x060));
+		writel(v | 0x18, (void __iomem *)(CCU_BASE + 0xfe0));
 	}
 
 	clk_ungate_uart(T40_CONSOLE_UART);

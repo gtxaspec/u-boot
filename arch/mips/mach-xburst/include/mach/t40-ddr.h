@@ -115,27 +115,42 @@
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)	/* 500 MHz */
 
 /*
- * GOLD register values. Starting from the T31 DDR2-500 set
- * (M14D5121632A @ 504 MHz) since T40 uses the same DRAM chip
- * and very close clock. Replace per-register from the vendor
- * T40 ddr_dwc.c output when validating on real silicon.
+ * T40N DDR2 controller + Innophy PHY register values. Output of
+ * vendor `tools/ingenic-tools/ddr_params_creator` host tool built
+ * with T40N + M14D5121632A_DDR2 + DDR=500MHz + DW32=1 + CS0-only,
+ * matches what vendor T40 U-Boot 2013 production builds.
  *
- * TODO: cross-reference with vendor T40 1.3.1 host-tool params
- *       (arch/mips/cpu/xburst2/ddr_dwc.c + ddr_efuse_param.c).
+ * DO NOT swap to T31 DWC values: the Innophy controller and the
+ * T31 DWC controller decode the same numerical register values
+ * into different geometry/timing - the T31 values appear to write
+ * fine but make dram_verify return garbage.
  */
-#define DDRC_CFG_VALUE		0x0a288a40
-#define DDRC_MMAP0_VALUE	0x000020fc
-#define DDRC_MMAP1_VALUE	0x00002400
-#define DDRC_CTRL_VALUE		0x0000d91e
+#define DDRC_CFG_VALUE		0x28002825
+#define DDRC_CTRL_VALUE		0x00008092
+#define DDRC_MMAP0_VALUE	0x000020f8
+#define DDRC_MMAP1_VALUE	0x00002800
+#define DDRC_REFCNT_VALUE	0x21f20081
+#define DDRC_TIMING1_VALUE	0x050c0806
+#define DDRC_TIMING2_VALUE	0x04060407
+#define DDRC_TIMING3_VALUE	0x03080208
+#define DDRC_TIMING4_VALUE	0x1e1e1705
+#define DDRC_TIMING5_VALUE	0x46000055
+#define DDRC_AUTOSR_CNT_VALUE	0x20000f3c
+#define DDRC_AUTOSR_EN_VALUE	0x00000000
+#define DDRC_HREGPRO_VALUE	0x00000001
+#define DDRC_PREGPRO_VALUE	0x00000001
+#define DDRC_CGUC0_VALUE	0x11111111
+#define DDRC_CGUC1_VALUE	0x00000113
+#define DDRP_MEMCFG_VALUE	0x00000011
+#define DDRP_CL_VALUE		0x00000007
+#define DDRP_CWL_VALUE		0x00000005
+#define DDR_MR0_VALUE		0x00000f73
+#define DDR_MR1_VALUE		0x00002040
+#define DDR_MR2_VALUE		0x00004000
+#define DDR_MR3_VALUE		0x00006000
 
-#define DDRC_REFCNT_VALUE	0x00f20001
-#define DDRC_TIMING1_VALUE	0x040e0806
-#define DDRC_TIMING2_VALUE	0x02170707
-#define DDRC_TIMING3_VALUE	0x2007051e
-#define DDRC_TIMING4_VALUE	0x1a240031
-#define DDRC_TIMING5_VALUE	0xff060405
-#define DDRC_TIMING6_VALUE	0x32170505
-#define DDRP_MR0_VALUE		0x00000f73
+/* Compat alias for code still referencing the old single name. */
+#define DDRP_MR0_VALUE		DDR_MR0_VALUE
 
 #define DDR_CHIP_0_SIZE		67108864	/* 64 MB */
 #define DDR_CHIP_1_SIZE		0

@@ -394,6 +394,25 @@ static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
+/*
+ * T40 (XBurst2). Same AIC IP as T31 / same split CDR layout
+ * (CPM_I2STCDR=0x70, CPM_I2SRCDR=0x84, same M/N/CE/SRC encoding),
+ * same CLKGR0 AIC gate (bit 11). MPLL is 1000 MHz on T40N and 1200
+ * MHz on T40XP; pick T40N as the default and let the T40XP variant
+ * override later if its 1200 MHz reference produces a different
+ * sample-rate error budget.
+ */
+static const struct ingenic_i2s_soc soc_t40  = {
+#ifdef CONFIG_T40_VARIANT_T40XP
+	.mpll_hz = 1200000000u,
+#else
+	.mpll_hz = 1000000000u,
+#endif
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T31_CODEC_SEL_BITS,
+	.aic_slave_clear = T31_AIC_SLAVE_BITS };
 
 /*
  * T32 CGU split I2S: CPM_I2STCDR=0x70 (TX), CPM_I2SRCDR=0x84 (RX) -
@@ -416,6 +435,7 @@ static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t30-aic",  .data = (ulong)&soc_t30 },
 	{ .compatible = "ingenic,t31-aic",  .data = (ulong)&soc_t31 },
 	{ .compatible = "ingenic,t32-aic",  .data = (ulong)&soc_t32 },
+	{ .compatible = "ingenic,t40-aic",  .data = (ulong)&soc_t40 },
 	{ .compatible = "ingenic,c100-aic", .data = (ulong)&soc_c100 },
 	{ }
 };

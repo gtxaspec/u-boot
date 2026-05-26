@@ -139,25 +139,20 @@ static void mem_remap(void)
 		remap_swap(0 + num - 1, start + num - 1);
 }
 
+/* Vendor T40 ddrc_prev_init() - TIMINGs + MMAPs + CTRL (with bits
+ * 14:12 masked off; those are set later in post_init). */
 static void ddr_controller_init(void)
 {
-	ddr_writel(DDRC_CTRL_CKE | DDRC_CTRL_ALH, DDRC_CTRL);
-	ddr_writel(0, DDRC_CTRL);
-
-	ddr_writel(DDRC_CFG_VALUE, DDRC_CFG);
-
 	ddr_writel(DDRC_TIMING1_VALUE, DDRC_TIMING(1));
 	ddr_writel(DDRC_TIMING2_VALUE, DDRC_TIMING(2));
 	ddr_writel(DDRC_TIMING3_VALUE, DDRC_TIMING(3));
 	ddr_writel(DDRC_TIMING4_VALUE, DDRC_TIMING(4));
 	ddr_writel(DDRC_TIMING5_VALUE, DDRC_TIMING(5));
-	/* Innophy has 5 timing regs (T31 DWC had 6). */
 
 	ddr_writel(DDRC_MMAP0_VALUE, DDRC_MMAP0);
 	ddr_writel(DDRC_MMAP1_VALUE, DDRC_MMAP1);
-	ddr_writel(DDRC_CTRL_CKE | DDRC_CTRL_ALH, DDRC_CTRL);
-	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
-	ddr_writel(DDRC_CTRL_VALUE & 0xffff8fff, DDRC_CTRL);
+
+	ddr_writel(DDRC_CTRL_VALUE & ~(7 << 12), DDRC_CTRL);
 }
 
 /*
@@ -387,12 +382,13 @@ static void ddr_inno_phy_init(void)
 	t40_spl_puts("lmr5\n");
 	writel(_LMR_MR(DDR_MR0_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
+	udelay(5 * 1000);	/* let MR0 DLL reset settle */
 	t40_spl_puts("lmr6\n");
-	writel(0x400003, (void __iomem *)REG_DDR_LMR);	/* PCHG */
+	writel(0x400003, (void __iomem *)REG_DDR_LMR);	/* PCHG all */
+	udelay(100);
+	writel(0x43, (void __iomem *)REG_DDR_LMR);	/* AUREF (CMD=1) */
 	udelay(5);
-	writel(0x400009, (void __iomem *)REG_DDR_LMR);	/* REF */
-	udelay(5);
-	writel(0x400009, (void __iomem *)REG_DDR_LMR);	/* REF */
+	writel(0x43, (void __iomem *)REG_DDR_LMR);	/* AUREF again */
 	udelay(5 * 1000);
 	t40_spl_puts("lmr7\n");
 #undef _LMR_MR
@@ -438,6 +434,14 @@ void sdram_init(void)
 			ddr_writel(remap[i], DDRC_REMAP(i + 1));
 	}
 	t40_spl_puts("sdram7 remap\n");
+
+	/* Vendor T40 sdram_init() post-init PHY fixups for DDR2 (must
+	 * happen AFTER post_init writes). Without these the DQ FIFO and
+	 * write-pointer alignment is off and reads return garbage. */
+	writel(0x51, (void __iomem *)(DDR_PHY_BASE + 0x04));	/* MEM_CFG | bit6 FIFO */
+	phy_set_range(0xa, 1, 3, 3);				/* FIFO depth */
+	phy_set_range(0x8, 0, 2, 3);				/* TX write pointer adj */
+	t40_spl_puts("sdram7c phy-fix\n");
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);
 

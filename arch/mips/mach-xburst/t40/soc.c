@@ -52,13 +52,31 @@ static int dram_verify(void)
 		0xffffffff, 0x00000000,
 	};
 	volatile u32 *a;
-	u32 off;
+	u32 off, got;
 	int p;
 
 	a = (volatile u32 *)0xa0000000;
+	/* Read pre-write to see if the address returns a stable garbage
+	 * value (indicates wrong controller config / unmapped) vs reads
+	 * driven by the chip. */
+	t40_spl_puts("DDR pre-read 1: ");
+	spl_put_hex(*a);
+	t40_spl_puts("\nDDR pre-read 2: ");
+	spl_put_hex(*a);
+	t40_spl_puts("\n");
+	/* Also try a different address */
+	t40_spl_puts("DDR pre-read 0x1000: ");
+	spl_put_hex(*((volatile u32 *)0xa0001000));
+	t40_spl_puts("\n");
 	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
 		*a = pat[p];
-		if (*a != pat[p])
+		got = *a;
+		t40_spl_puts("DDR w=");
+		spl_put_hex(pat[p]);
+		t40_spl_puts(" r=");
+		spl_put_hex(got);
+		t40_spl_puts("\n");
+		if (got != pat[p])
 			return -1;
 	}
 

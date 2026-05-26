@@ -149,12 +149,31 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # in the bootrom reset stub). Empirically: SPL_LENGTH < ~13 KiB
         # is treated as invalid; >= 13 KiB cold-boots reliably.
         #
-        # Empirical T40 threshold: SPL_LENGTH < 13184 = bootrom rejects
-        # SPL silently on cold POR. Vendor T40N stored value is 13184
-        # (vendor's SPL is also 13184 bytes). Pinning our stored value
-        # to vendor's 13184 covers small probe SPLs and lets larger
-        # production SPLs use their actual size (still > threshold).
-        stored_size = max(size, 13184)
+        # T40 bootrom SFC NOR boot path (FUN_bfc02070) reads the
+        # SPL_LENGTH field at SPL header byte 12 and enforces an upper
+        # bound at the bootrom's default SPL load size:
+        #     _DAT_80000010 = 0x4400   (set in reset stub)
+        # SPL_LENGTH > 0x4400 is silently rejected on cold POR - the
+        # bootrom never reaches the SPL entry point at 0x80001800, no
+        # UART output, no fallback to USB-boot. Bootrom CRC is NOT
+        # checked (a CRC-corrupted vendor binary still cold-boots).
+        #
+        # Empirical A/B (2026-05-26 on real T40NN silicon):
+        #   stored = 2872    -> silent (below lower threshold)
+        #   stored = 13184   -> works  (vendor T40N SFCNOR value)
+        #   stored = 17408   -> works  (= 0x4400 exactly)
+        #   stored = 17496   -> silent (> 0x4400)
+        #
+        # The actual amount loaded from NOR into SRAM 0x80001000 is
+        # MIN(SPL_LENGTH, INGE_length). Pin SPL_LENGTH at 0x4400 so
+        # the bootrom loads up to 17408 bytes of SPL. If the .text +
+        # .rodata + .data of the SPL fits in those 17408 bytes plus
+        # the 2048-byte header (so total file <= 0x4400), the SPL runs
+        # to completion. INGE_length is still rounded up from the
+        # actual file size, so on USB / SD / NAND boot paths (which
+        # use INGE_length, not SPL_LENGTH) the full SPL is still
+        # loaded.
+        stored_size = 0x4400
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             stored_size.to_bytes(4, 'little')
 

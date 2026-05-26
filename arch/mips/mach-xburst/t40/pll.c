@@ -18,18 +18,17 @@
 
 #include <asm/io.h>
 #include <mach/t40.h>
+#include <mach/t40-ddr.h>		/* T40_APLL_MNOD / T40_MPLL_MNOD */
 
 /*
- * Vendor T40N clock plan (include/configs/isvp_t40.h DDR_500M /
- * APLL_912M block):
- *   APLL = 912 MHz (M=76, N=1, OD1=2, OD0=1)
- *   MPLL = 1000 MHz (M=125, N=1, OD1=3, OD0=1)  -> DDR = MPLL/2 = 500
- * Bootrom INGE descriptors program APLL=600 / MPLL=1200 for the
- * initial UART clock; pll_init() reprograms to the vendor T40N
- * operating point before sdram_init.
+ * APLL and MPLL M/N/OD values come from the per-variant header
+ * (<mach/t40n-ddr.h> or <mach/t40xp-ddr.h>) - vendor isvp_t40.h
+ * has different operating points for T40N (APLL=912/MPLL=1000) and
+ * T40XP (APLL=1008/MPLL=1200). Bootrom INGE descriptors program
+ * APLL=600/MPLL=1200 for the initial UART clock; pll_init()
+ * reprograms to the per-variant production operating point before
+ * sdram_init.
  */
-#define T40_APLL_MNOD	((76 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-#define T40_MPLL_MNOD	((125 << 20) | (1 << 14) | (3 << 11) | (1 << 8))
 
 static void cpm_writel(u32 val, unsigned int off)
 {

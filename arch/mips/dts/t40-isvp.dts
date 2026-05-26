@@ -95,6 +95,26 @@
 		status = "okay";
 	};
 
+	/*
+	 * TCU (timer/counter unit) container mirroring T31's binding. U-Boot
+	 * only needs the watchdog child for sysreset; the WDT self-clocks
+	 * from the 32 kHz RTC so the TCU clock provider is not required.
+	 */
+	tcu: timer@b0002000 {
+		compatible = "ingenic,t40-tcu", "ingenic,jz4760-tcu",
+			     "simple-mfd";
+		reg = <0xb0002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0xb0002000 0x1000>;
+
+		watchdog: watchdog@0 {
+			compatible = "ingenic,t40-watchdog",
+				     "ingenic,jz4780-watchdog";
+			reg = <0x0 0x10>;
+		};
+	};
+
 	sfc: spi@b3440000 {
 		compatible = "ingenic,t40-sfc";
 		reg = <0xb3440000 0x10000>;

@@ -549,42 +549,58 @@ static void ddr_inno_phy_init(void)
 	 * needed. */
 }
 
-/* DDR2 sdram init (innophy DDR2 path of the vendor sdram_init()) */
+/*
+ * DDR2 sdram init - vendor-faithful port of
+ * arch/mips/cpu/xburst2/ddr_innophy.c sdram_init(), DDR2 branch.
+ *
+ * Vendor T40 DDR2 sequence (verified against working vendor U-Boot
+ * 2013 T40N SFCNOR binary that cold-boots reliably):
+ *   clk_set_rate(DDR)
+ *   ddrc_reset_phy()       - DDRC CTRL 0xf<<20 then 0x8<<20
+ *   ddr_phy_init()         - PHY reset, ODT, DLL bypass, baseline
+ *                            per-bit delay seed, PHY PLL lock
+ *   ddrc_dfi_init()        - DFI handshake, CFG, CKE, LMR sequence
+ *                            (we fold this into ddr_inno_phy_init)
+ *   ddrc_prev_init()       - TIMING + MMAP + CTRL (bits 14:12 clear)
+ *   ddrp_hardware_calibration()
+ *   ddrc_post_init()       - REFCNT + CTRL + CGUC0/1
+ *   AUTOSR + HREGPRO + PREGPRO
+ *   PHY DDR2 fixups        - 0x51 to 0x1004, FIFO depth, TX wptr
+ *   ddr_innophy_set_skew() - per-bit final skew values
+ *
+ * Things we used to do that vendor does NOT, and that broke quick-
+ * cycle DDR reliability on T40NN:
+ *   reset_dll() (CPM_DRCG toggle)
+ *   udelay(1000) gaps between stages
+ *   mem_remap (T40_REMMAP_ARRAY) for DDR2 (vendor's mem_remap is
+ *     DDR3-only - DDR2 doesn't need it)
+ *   final ddr_writel(CTRL & 0xffff07ff)
+ *   final ddr_writel(STATUS & ~DDRC_DSTATUS_MISS)
+ *   final ddr_writel(0, DDRC_DLP)
+ *
+ * All removed 2026-05-26.
+ */
 void sdram_init(void)
 {
 	ddr_clk_set_rate();
-	reset_dll();
 
-	reset_controller();
+	reset_controller();		/* = vendor ddrc_reset_phy */
 
-	ddr_inno_phy_init();
+	ddr_inno_phy_init();		/* = vendor ddr_phy_init + ddrc_dfi_init */
 
-	ddr_controller_init();
-
-	/*
-	 * Wait for the controller register writes to settle before
-	 * kicking calibration. Empirically required: stripping the
-	 * mid-init UART puts (which acted as a ~1 ms delay) on real
-	 * T40NN silicon makes the calibration race the controller
-	 * state and dram_verify fails.
-	 */
-	udelay(1000);
+	ddr_controller_init();		/* = vendor ddrc_prev_init */
 
 	ddrp_hw_calibration();
-	udelay(1000);
 
-	ddr_controller_post_init();
-	udelay(1000);
+	ddr_controller_post_init();	/* REFCNT + CTRL + CGUC0/1 + AUTOSR +
+					 * HREGPRO + PREGPRO. Vendor does these
+					 * in two steps; we combine. */
 
-	/* Vendor T40 REMMAP_ARRAY from ddr_params_creator output, per
-	 * variant. The T31-style mem_remap() computes swap on the fly
-	 * but doesn't match T40 Innophy's mapping. */
-	{
-		static const u32 remap[5] = T40_REMMAP_ARRAY;
-		int i;
-		for (i = 0; i < 5; i++)
-			ddr_writel(remap[i], DDRC_REMAP(i + 1));
-	}
+	/* Vendor mem_remap (REMMAP_ARRAY) is DDR3-only in the vendor
+	 * source (#ifdef CONFIG_DDR_TYPE_DDR3). T40N DDR2 does not call
+	 * it. Our prior code wrote T40_REMMAP_ARRAY unconditionally
+	 * which is a no-op at best (the DDR2 memory map is the
+	 * MMAP0/MMAP1 programming, not REMMAP) - removed. */
 
 	/* Vendor T40 sdram_init() post-init PHY fixups (DDR-type
 	 * specific). Without these the DQ FIFO and write-pointer
@@ -597,16 +613,8 @@ void sdram_init(void)
 	phy_set_range(0xa, 1, 3, 3);				/* FIFO depth */
 	phy_set_range(0x8, 0, 2, 3);				/* TX write pointer adj */
 
-	/* Vendor T40N per-bit DQ/DQS skew defaults. The vendor T40XP
-	 * branch is parameterised by EFUSE values that we don't read
-	 * yet; leave defaults for that variant and validate. */
+	/* Vendor T40N per-bit DQ/DQS skew defaults. */
 #if !defined(CONFIG_T40_DDR3)
 	ddr_innophy_set_skew_t40n();
 #endif
-	udelay(1000);
-	/* must modify after opening remap function */
-	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);
-
-	ddr_writel(ddr_readl(DDRC_STATUS) & ~DDRC_DSTATUS_MISS, DDRC_STATUS);
-	ddr_writel(0, DDRC_DLP);
 }

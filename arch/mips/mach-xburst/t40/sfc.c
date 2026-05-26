@@ -127,9 +127,9 @@ static void sfc_clk_set_rate(void)
 
 	cdr = (pll_rate / rate - 1) & 0xff;
 
-	/* Set source to MPLL (bits 31:30 = 0x2), clear stop+div, set CE+cdr */
+	/* Set source to MPLL (sel=1 -> bits 31:30 = 01), clear stop+div, set CE+cdr */
 	regval &= ~((3u << 30) | (3 << SFC_CGU_STOP) | 0xff);
-	regval |= (2u << 30) | (1 << SFC_CGU_CE) | cdr;
+	regval |= (1u << 30) | (1 << SFC_CGU_CE) | cdr;
 	cpm_writel(regval, CPM_SFCCDR);
 	while (cpm_readl(CPM_SFCCDR) & (1 << SFC_CGU_BUSY))
 		;
@@ -247,16 +247,22 @@ static void sfc_init(void)
 	cpm_writel(tmp, CPM_CLKGR0);
 
 	/*
-	 * After pll_init() MPLL changed to 1608 MHz, so SFC0CDR must
-	 * be reprogrammed. Source=MPLL (bits 31:30=2), div=22
-	 * -> SFC clk = 1608/(22+1) = ~70 MHz.
+	 * Re-program CPM_SFCCDR. The vendor CGU source mux for SFC is
+	 * sel=0:APLL, sel=1:MPLL, sel=2:VPLL (per t40 clk.c
+	 * cgu_clk_sel[SFC]). MPLL therefore lives at bits 31:30 = 01,
+	 * NOT 10. div=80 with MPLL=1000 gives SFC ~12 MHz.
+	 *
+	 * Poll BUSY rather than spinning for a fixed cycle count: the CGU
+	 * does not finalize the clock change until BUSY clears, and a
+	 * stuck BUSY leaves the controller unclocked.
 	 */
 	{
 		u32 reg = cpm_readl(CPM_SFCCDR);
 		reg &= ~((3u << 30) | (3 << SFC_CGU_STOP) | 0xff);
-		reg |= (2u << 30) | (1 << SFC_CGU_CE) | 80;
+		reg |= (1u << 30) | (1 << SFC_CGU_CE) | 80;
 		cpm_writel(reg, CPM_SFCCDR);
-		{ volatile int d = 10000; while (d--); }
+		while (cpm_readl(CPM_SFCCDR) & (1 << SFC_CGU_BUSY))
+			;
 	}
 
 	tmp = THRESHOLD << THRESHOLD_OFFSET;

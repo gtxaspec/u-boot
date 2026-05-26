@@ -49,14 +49,14 @@ static void pll_set(unsigned int reg, u32 mnod)
 }
 
 /*
- * CPCCR: SEL_SRC=EXTAL during reprogram, then switch to APLL/MPLL.
- * Dividers: PDIV=10, H2DIV=5, H0DIV=5, L2DIV=2, CDIV=1 (matches A1
- * MPLL>=1000 band, vendor T40 plan). Source select bits 31:24 chosen
- * SEL_CPLL=1(APLL), SEL_H0/H2=2(MPLL).
+ * CPCCR vendor T40N production values per include/configs/isvp_t40.h
+ * DDR_500M block: PDIV=12, H2DIV=6, H0DIV=6, L2DIV=2, CDIV=1. SEL
+ * bits chosen for APLL=CPU clock + MPLL=H0/H2/peripherals. Encoded
+ * value = 0x9a0b5510 (matches vendor T40 INGE descriptor SEL value).
  */
 #define T40_CPCCR_CFG	((2 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | \
-			 ((10 - 1) << 16) | ((5 - 1) << 12) | \
-			 ((5 - 1) << 8) | ((2 - 1) << 4) | ((1 - 1) << 0))
+			 ((12 - 1) << 16) | ((6 - 1) << 12) | \
+			 ((6 - 1) << 8) | ((2 - 1) << 4) | ((1 - 1) << 0))
 
 static void cpccr_init(void)
 {

@@ -12,9 +12,8 @@
  * and copying the generated `ddr_reg_values.h`.
  *
  * Sequence (from vendor sdram_init):
- *   ddr_clk_set_rate  (CPM_DDRCDR /3 from MPLL = 500 MHz)
- *   reset_dll         (CPM_DRCG kick)
- *   reset_controller  (DDRC_CTRL 0xf<<20 then 0)
+ *   ddr_clk_set_rate  (CPM_DDRCDR /2 from MPLL = 500 MHz)
+ *   reset_controller  (DDRC_CTRL 0xf<<20 then 0x8<<20, dfi_reset_n low)
  *   ddr_inno_phy_init (PHY reset + driver/ODT + DLL bypass + PHY
  *                      PLL + CL/CWL/AL + DFI handshake + LMR)
  *   ddr_controller_init  (= vendor ddrc_prev_init: TIMING + MMAP + CTRL)
@@ -52,16 +51,17 @@ static void cpm_writel(u32 val, unsigned int off)
 }
 
 /*
- * WARNING: DDR CLK GATE (CPM_DRCG 0xb00000d0) BIT6 must stay set (0x40),
- * otherwise chip memory is not stable and the GPU hangs.
+ * Vendor T40 reset_dll() is intentionally NOT ported. The vendor
+ * registers a `prev_ddr_init = reset_dll` hook (arch/mips/cpu/xburst2/
+ * t40/ddr_set_dll.c) but the function body is empty - only a comment
+ * about CPM_DRCG bit 6 needing to stay set - AND the call site in
+ * vendor sdram_init() is commented out. Calling a CPM_DRCG toggle here
+ * (which the previous T31-derived port did, and which one of our
+ * earlier commits accidentally re-introduced) is non-vendor behaviour;
+ * on quick power cycles it makes DDR init race the just-locked PHY PLL
+ * and dram_verify fails intermittently. Bit 6 of CPM_DRCG is set by
+ * the bootrom and we never clear it, so the warning is satisfied.
  */
-static void reset_dll(void)
-{
-	cpm_writel(0x73 | (1 << 6), CPM_DRCG);
-	mdelay(1);
-	cpm_writel(0x71 | (1 << 6), CPM_DRCG);
-	mdelay(1);
-}
 
 /*
  * DDR clock divider: replicate the DDR branch of the vendor
@@ -352,8 +352,21 @@ static void ddr_inno_phy_init(void)
 	/* Vendor T40 ddr_phy_init: reset PHY then config driver/ODT
 	 * BEFORE programming PLLs / CL / CWL. PHY register indices are
 	 * 4-byte-aligned; vendor writes use `0xb3011000 + idx*4` so we
-	 * use phy_writel(v, idx*4). */
-	phy_writel(0x0d, 0x00);				/* INNO_PHY_RST */
+	 * use phy_writel(v, idx*4).
+	 *
+	 * Vendor reads INNO_PHY_RST, clears the low byte, sleeps 2ms,
+	 * THEN ORs in 0x0d and writes back. The 2ms gap is intentional -
+	 * it gives the PHY analog block time to settle after the prior
+	 * DDRC CTRL dfi_reset_n assertion before we re-program the
+	 * digital reset bits.
+	 */
+	{
+		u32 v = phy_readl(0x00);
+		v &= ~0xff;
+		mdelay(2);
+		v |= 0x0d;
+		phy_writel(v, 0x00);
+	}
 	t40n_phy_driver_odt();
 	/* Vendor T40N DLL bypass values (ddr_phy_init T40N branch). */
 	phy_writel(0xc, 0x54 * 4);	/* byte0 dq dll */
@@ -627,7 +640,6 @@ static void ddr_inno_phy_init(void)
 void sdram_init(void)
 {
 	ddr_clk_set_rate();
-	reset_dll();
 
 	reset_controller();		/* = vendor ddrc_reset_phy */
 

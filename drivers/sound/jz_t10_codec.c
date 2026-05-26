@@ -53,6 +53,25 @@
 #define B_CHR_28	0xa0
 #define B_CSRR_44	0x110
 
+/*
+ * D-block codec register offsets (T40). Same low half as B-block but
+ * the DAC analog path lives on CHR_29/2a/2b instead of CANACR2_27 /
+ * CHR_28 (the vendor SDK 4.4.94 codec.c codec_init + codec_enable_
+ * playback sequence). Volume is in CHR_2b[4:0], DAC i2s master in
+ * CACR2_03[7:6] = 0x3, DAC config in CDCR1_04 / CDCR2_05.
+ */
+#define D_CGR_00	0x00
+#define D_CACR2_03	0x0c
+#define D_CDCR1_04	0x10
+#define D_CDCR2_05	0x14
+#define D_POWER_20	0x80
+#define D_CCR_21	0x84
+#define D_CAACR_22	0x88
+#define D_CHR_29	0xa4
+#define D_CHR_2a	0xa8
+#define D_CHR_2b	0xac
+#define D_CSRR_44	0x110
+
 /* CPM AIC gate - the codec island shares it; ungate defensively. */
 #define CPM_BASE	0xb0000000
 #define CPM_CLKGR0	0x20
@@ -83,6 +102,7 @@ enum jz_codec_soc {
 	JZ_CODEC_T10,	/* A-block, falling 0x3f>>i ramp, CCR bit7=0 */
 	JZ_CODEC_T30_T21,/* A-block, value|=value<<1|1 ramp */
 	JZ_CODEC_T31_C100,/* B-block */
+	JZ_CODEC_T40,	/* D-block, DAC path on CHR_29/2a/2b */
 };
 
 struct jz_codec_priv {
@@ -299,6 +319,56 @@ static void jz_codec_b_powerup(struct jz_codec_priv *p)
 	mdelay(10);
 }
 
+/*
+ * D-block (T40) power-up + DAC->speaker route. Faithful port of the
+ * vendor SDK 4.4.94 audio/t40/oss3/inner_codecs/codec.c codec_init()
+ * (reset + DC bias + precharge ramp) followed by codec_enable_playback()
+ * (DAC I2S config + CHR_29/2a/2b analog driver chain). Per-step
+ * mdelay()s mirror the vendor msleep()s; they are analog settling
+ * requirements, not just defensive padding.
+ */
+static void jz_codec_d_powerup(struct jz_codec_priv *p)
+{
+	int i;
+	u32 value = 0;
+
+	/* codec_init: reset, DC voltage bias on DAC output, precharge ramp */
+	codec_set(p, D_CGR_00, 0, 1, 0x0);
+	mdelay(1);
+	codec_set(p, D_CGR_00, 0, 1, 0x3);
+	codec_set(p, D_CHR_2a, 0, 1, 0x1);
+	codec_set(p, D_CHR_2a, 4, 5, 0x1);
+	codec_set(p, D_CCR_21, 0, 7, 0x1);
+	codec_set(p, D_CAACR_22, 5, 5, 0x1);	/* reference voltage */
+
+	for (i = 0; i <= 7; i++) {
+		value |= value << 1 | 0x01;
+		codec_set(p, D_CCR_21, 0, 7, value);
+		mdelay(20);
+	}
+	mdelay(20);
+	codec_set(p, D_CCR_21, 0, 7, 0x02);	/* min charge current */
+
+	/* codec_enable_playback: DAC I2S config + analog DAC chain */
+	codec_set(p, D_CACR2_03, 6, 7, 0x3);	/* DAC I2S master */
+	codec_set(p, D_CDCR1_04, 0, 7, 0x10);	/* DAC iface = I2S */
+	codec_set(p, D_CDCR2_05, 0, 7, 0x0e);
+
+	codec_set(p, D_CHR_29, 7, 7, 1);	/* current source */
+	codec_set(p, D_POWER_20, 0, 3, 0x7);
+	codec_set(p, D_CHR_29, 6, 6, 1);	/* reference voltage */
+	codec_set(p, D_CHR_29, 4, 5, 0x2);	/* POP sound */
+	codec_set(p, D_CHR_2a, 4, 4, 1);	/* enable HPDRV */
+	codec_set(p, D_CHR_2a, 5, 5, 1);	/* end-init HPDRV */
+	codec_set(p, D_CHR_29, 3, 3, 1);	/* reference voltage 2 */
+	codec_set(p, D_CHR_29, 2, 2, 1);	/* DACL clock */
+	codec_set(p, D_CHR_29, 1, 1, 1);	/* DACL module */
+	codec_set(p, D_CHR_29, 0, 0, 1);	/* end-init DAC */
+	codec_set(p, D_CHR_2a, 6, 6, 1);	/* unmute DRV */
+	codec_set(p, D_CHR_2b, 0, 4, p->volume);	/* replay volume */
+	mdelay(1);
+}
+
 static int jz_codec_set_params(struct udevice *dev, int interface,
 				int rate, int mclk_freq,
 				int bits_per_sample, uint channels)
@@ -310,7 +380,10 @@ static int jz_codec_set_params(struct udevice *dev, int interface,
 	clrbits_le32((void __iomem *)(CPM_BASE + CPM_CLKGR0),
 		     CPM_CLKGR0_AIC);
 
-	if (p->soc == JZ_CODEC_T31_C100) {
+	if (p->soc == JZ_CODEC_T40) {
+		jz_codec_d_powerup(p);
+		codec_set(p, D_CSRR_44, 0, 2, jz_codec_fs(rate));
+	} else if (p->soc == JZ_CODEC_T31_C100) {
 		jz_codec_b_powerup(p);
 		codec_set(p, B_CSRR_44, 0, 2, jz_codec_fs(rate));
 	} else {
@@ -370,6 +443,7 @@ static const struct udevice_id jz_codec_ids[] = {
 	{ .compatible = "ingenic,t23-codec",  .data = JZ_CODEC_T31_C100 },
 	{ .compatible = "ingenic,t30-codec",  .data = JZ_CODEC_T30_T21 },
 	{ .compatible = "ingenic,t31-codec",  .data = JZ_CODEC_T31_C100 },
+	{ .compatible = "ingenic,t40-codec",  .data = JZ_CODEC_T40 },
 	{ .compatible = "ingenic,c100-codec", .data = JZ_CODEC_T31_C100 },
 	{ }
 };

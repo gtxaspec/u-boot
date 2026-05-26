@@ -155,12 +155,18 @@ _start:
 	sw	t8, 0(t9)
 #endif
 
-	/* Invalidate BTB */
+	/*
+	 * Invalidate BTB. T40 vendor SPL skips this; cold-boot probe
+	 * 2026-05-26 also tries skipping to match vendor exactly in
+	 * case CP0 Config7 RMW is the cold-boot wedge.
+	 */
+#if !defined(CONFIG_SOC_T40)
 	mfc0	t0, CP0_CONFIG, 7
 	nop
 	ori	t0, 2
 	mtc0	t0, CP0_CONFIG, 7
 	nop
+#endif
 
 #if !defined(CONFIG_SOC_T32) && !defined(CONFIG_SOC_T33) && \
     !defined(CONFIG_SOC_A1) && !defined(CONFIG_SOC_T40)
@@ -182,9 +188,19 @@ _start:
 	li	t0, 0x0040FC04
 	mtc0	t0, CP0_STATUS
 
-	/* CAUSE: IV=1, use the special interrupt vector (0x200) */
+	/* CAUSE: IV=1, use the special interrupt vector (0x200).
+	 * T40 vendor SPL does this as a RMW (preserves other CAUSE
+	 * bits); other ports overwrite. Match vendor on T40. */
+#if defined(CONFIG_SOC_T40)
+	mfc0	t1, CP0_CAUSE
+	nop
+	lui	t2, 0x80
+	or	t1, t1, t2
+	mtc0	t1, CP0_CAUSE
+#else
 	li	t1, 0x00800000
 	mtc0	t1, CP0_CAUSE
+#endif
 
 	/*
 	 * Stack setup. XBurst1 (T10..T33) and the A1 USB-boot SPL keep

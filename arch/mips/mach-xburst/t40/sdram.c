@@ -2,18 +2,30 @@
 /*
  * Ingenic T40 DDR2 controller and Innophy PHY init (SPL)
  *
- * Structural port of the T31 DDR2 path (mach-xburst/t31/sdram.c),
- * which itself is a faithful transliteration of the vendor known-
- * good ddr_innophy.c / ddr_set_dll.c / clk.c. T40 uses the same
- * legacy Ingenic DDRC + Innophy DDR2 training PHY as T31, the
- * default 64 MB M14D5121632A chip and a similar ~500 MHz clock
- * (MPLL 1000 / 2). 16-bit bus, CS0 only.
+ * Vendor-shaped port of `arch/mips/cpu/xburst2/ddr_innophy.c`
+ * DDR2 path. T40N: 128 MiB M14D5121632A, 32-bit bus, single rank,
+ * DDR @ 500 MHz from MPLL/2.
  *
- * Untested on real T40 silicon - parameter values come from the
- * T31 DDR2-@500 set (same DRAM chip, ~same clock) and need a
- * cross-check against vendor T40 ddr_dwc.c on the lab T40 unit.
- * The register write order / poll loops / delays match the
- * vendor and the working T31 port.
+ * The DDRC_*_VALUE / DDRP_*_VALUE constants in <mach/t40-ddr.h>
+ * come from running the vendor `tools/ingenic-tools/ddr_params_
+ * creator` host tool with the T40N + M14D5121632A_DDR2 inputs
+ * and copying the generated `ddr_reg_values.h`.
+ *
+ * Sequence (from vendor sdram_init):
+ *   ddr_clk_set_rate  (CPM_DDRCDR /3 from MPLL = 500 MHz)
+ *   reset_dll         (CPM_DRCG kick)
+ *   reset_controller  (DDRC_CTRL 0xf<<20 then 0)
+ *   ddr_inno_phy_init (PHY reset + driver/ODT + DLL bypass + PHY
+ *                      PLL + CL/CWL/AL + DFI handshake + LMR)
+ *   ddr_controller_init  (= vendor ddrc_prev_init: TIMING + MMAP + CTRL)
+ *   ddrp_hw_calibration  (DDR2 branch: 0xa9 -> poll 0xcc==0xf -> 0xa8)
+ *   ddr_controller_post_init  (REFCNT + CTRL + CGUC0/1 + AUTOSR +
+ *                              HREGPRO + PREGPRO)
+ *   mem_remap         (vendor T40N REMMAP_ARRAY from params_creator)
+ *   PHY DDR2 fixups   (PHY MEM_CFG=0x51, regs 0x8/0xa range writes)
+ *   ddr_innophy_set_skew_t40n  (per-bit TX/RX delays for chA/chB)
+ *
+ * HW-validated on real T40NN silicon via USB-boot dev loop.
  */
 
 #include <asm/io.h>
@@ -255,16 +267,12 @@ static void phy_calibration(void)
 {
 	int m;
 
-	t40_spl_puts("cal1\n");
 	m = phy_readl(INNO_TRAINING_CTRL);
 	m = 0xa1;
 	phy_writel(m, INNO_TRAINING_CTRL);
-	t40_spl_puts("cal2 trig\n");
 	while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xcc)))
 		;
-	t40_spl_puts("cal3 done\n");
 	phy_writel(0xa0, INNO_TRAINING_CTRL);
-	t40_spl_puts("cal4 off\n");
 }
 
 /* read-modify-write a PHY register bit range (idx is the reg index, *4 */
@@ -318,7 +326,6 @@ static void ddr_inno_phy_init(void)
 {
 	u32 __maybe_unused reg = 0;	/* used only by the DDR2 path */
 
-	t40_spl_puts("phy1\n");
 	/* Vendor T40 ddr_phy_init: reset PHY then config driver/ODT
 	 * BEFORE programming PLLs / CL / CWL. PHY register indices are
 	 * 4-byte-aligned; vendor writes use `0xb3011000 + idx*4` so we
@@ -341,11 +348,9 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x1a, INNO_PLL_CTRL);
 	phy_writel(0x4, INNO_PLL_PDIV);
 	phy_writel(0x18, INNO_PLL_CTRL);
-	t40_spl_puts("phy2 plls\n");
 
 	while (!(phy_readl(INNO_PLL_LOCK) & (1 << 3)))	/* wait pll lock */
 		;
-	t40_spl_puts("phy3 lock\n");
 
 	phy_writel(0x0, INNO_TRAINING_CTRL);
 #if CONFIG_DDR_DW32
@@ -373,7 +378,6 @@ static void ddr_inno_phy_init(void)
 	phy_writel(0x00, INNO_AL);
 #endif
 
-	t40_spl_puts("phy4 mr\n");
 	/*
 	 * Vendor T40 DFI init (ddrc_dfi_init in arch/mips/cpu/xburst2/
 	 * ddr_innophy.c): write DFI_INIT_START bit to DWCFG with the
@@ -391,7 +395,6 @@ static void ddr_inno_phy_init(void)
 #endif
 	while (!(readl((void __iomem *)DDRC_DWSTATUS) & DDRC_DWSTATUS_DFI_INIT_COMP))
 		;
-	t40_spl_puts("phy5 dfi-init\n");
 	udelay(50);
 	writel(0, (void __iomem *)REG_DDR_CTRL);
 
@@ -440,62 +443,57 @@ static void ddr_inno_phy_init(void)
 	((((mr_val) & 0x1fff) << 12) | ((((mr_val) >> 13) & 0x3) << 9) | \
 	 (2 << 6) | (1 << 1) | (1 << 0))
 
-	t40_spl_puts("lmr1\n");
 	writel(0x400003, (void __iomem *)REG_DDR_LMR);
 	udelay(100);
-	t40_spl_puts("lmr2\n");
 	writel(_LMR_MR(DDR_MR2_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
-	t40_spl_puts("lmr3\n");
 	writel(_LMR_MR(DDR_MR3_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
-	t40_spl_puts("lmr4\n");
 	writel(_LMR_MR(DDR_MR1_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
-	t40_spl_puts("lmr5\n");
 	writel(_LMR_MR(DDR_MR0_VALUE), (void __iomem *)REG_DDR_LMR);
 	udelay(5);
 	udelay(5 * 1000);	/* let MR0 DLL reset settle */
-	t40_spl_puts("lmr6\n");
 	writel(0x400003, (void __iomem *)REG_DDR_LMR);	/* PCHG all */
 	udelay(100);
 	writel(0x43, (void __iomem *)REG_DDR_LMR);	/* AUREF (CMD=1) */
 	udelay(5);
 	writel(0x43, (void __iomem *)REG_DDR_LMR);	/* AUREF again */
 	udelay(5 * 1000);
-	t40_spl_puts("lmr7\n");
 #undef _LMR_MR
 #endif
 
 	/* Vendor T40 skips phy_calibration in the default config; the
 	 * call here came from the T31 path. Skip until we know it's
 	 * needed. */
-	t40_spl_puts("phy-cal skipped\n");
 }
 
 /* DDR2 sdram init (innophy DDR2 path of the vendor sdram_init()) */
 void sdram_init(void)
 {
-	t40_spl_puts("sdram1\n");
 	ddr_clk_set_rate();
-	t40_spl_puts("sdram2 clk\n");
 	reset_dll();
-	t40_spl_puts("sdram3 dll\n");
 
 	reset_controller();
-	t40_spl_puts("sdram4 rst\n");
 
 	ddr_inno_phy_init();
-	t40_spl_puts("sdram5 phy\n");
 
 	ddr_controller_init();
-	t40_spl_puts("sdram6 ctrl\n");
+
+	/*
+	 * Wait for the controller register writes to settle before
+	 * kicking calibration. Empirically required: stripping the
+	 * mid-init UART puts (which acted as a ~1 ms delay) on real
+	 * T40NN silicon makes the calibration race the controller
+	 * state and dram_verify fails.
+	 */
+	udelay(1000);
 
 	ddrp_hw_calibration();
-	t40_spl_puts("sdram6a calib\n");
+	udelay(1000);
 
 	ddr_controller_post_init();
-	t40_spl_puts("sdram6b post\n");
+	udelay(1000);
 
 	/* Vendor T40 REMMAP_ARRAY from ddr_params_creator output. The
 	 * T31-style mem_remap() computes swap on the fly but doesn't
@@ -509,7 +507,6 @@ void sdram_init(void)
 		for (i = 0; i < 5; i++)
 			ddr_writel(remap[i], DDRC_REMAP(i + 1));
 	}
-	t40_spl_puts("sdram7 remap\n");
 
 	/* Vendor T40 sdram_init() post-init PHY fixups for DDR2 (must
 	 * happen AFTER post_init writes). Without these the DQ FIFO and
@@ -517,15 +514,13 @@ void sdram_init(void)
 	writel(0x51, (void __iomem *)(DDR_PHY_BASE + 0x04));	/* MEM_CFG | bit6 FIFO */
 	phy_set_range(0xa, 1, 3, 3);				/* FIFO depth */
 	phy_set_range(0x8, 0, 2, 3);				/* TX write pointer adj */
-	t40_spl_puts("sdram7c phy-fix\n");
 
 	/* Vendor T40N per-bit DQ/DQS skew defaults. */
 	ddr_innophy_set_skew_t40n();
-	t40_spl_puts("sdram7d skew\n");
+	udelay(1000);
 	/* must modify after opening remap function */
 	ddr_writel(DDRC_CTRL_VALUE & 0xffff07ff, DDRC_CTRL);
 
 	ddr_writel(ddr_readl(DDRC_STATUS) & ~DDRC_DSTATUS_MISS, DDRC_STATUS);
 	ddr_writel(0, DDRC_DLP);
-	t40_spl_puts("sdram8 done\n");
 }

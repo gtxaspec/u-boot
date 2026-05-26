@@ -4,24 +4,26 @@ if SOC_T40
 
 choice
 	prompt "T40 SoC variant"
-	default T40_VARIANT_T40
+	default T40_VARIANT_T40N
 	help
 	  T40 product variant. DDR parameters are taken from the
-	  vendor U-Boot ddr_reg_values_*.c. Default variant is the
-	  plain T40 (DDR2 64 MB M14D5121632A) which is the most
-	  common SKU.
+	  vendor U-Boot ddr_params_creator host-tool output. Default
+	  variant is T40N (DDR2 128 MiB M14D5121632A in 32-bit config)
+	  which is the variant in the IPC camera modules we have on
+	  the bench.
 
-config T40_VARIANT_T40
-	bool "T40 (DDR2-500, 64 MB)"
+config T40_VARIANT_T40N
+	bool "T40N (DDR2-500, 128 MiB)"
 	help
-	  T40 plain: DDR2 @ 500 MHz, 16-bit bus, 64 MB
-	  M14D5121632A. APLL 1404 MHz, MPLL 1000 MHz.
+	  T40N: DDR2 @ 500 MHz, 32-bit bus, 128 MiB
+	  M14D5121632A. APLL 912 MHz, MPLL 1000 MHz, per vendor
+	  include/configs/isvp_t40.h DDR_500M / APLL_912M block.
 
 endchoice
 
 config T40_DRAM_SIZE_MB
 	int
-	default 64
+	default 128 if T40_VARIANT_T40N
 
 config SPL_T40_USB_BOOT
 	bool "T40 SPL: return to mask ROM for USB boot (dev loop)"

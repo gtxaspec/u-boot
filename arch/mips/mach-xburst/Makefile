@@ -19,3 +19,4 @@ obj-$(CONFIG_SOC_T31)		+= t31/
 obj-$(CONFIG_SOC_T32)		+= t32/
 obj-$(CONFIG_SOC_T33)		+= t33/
 obj-$(CONFIG_SOC_T40)		+= t40/
+obj-$(CONFIG_SOC_T41)		+= t41/

@@ -127,6 +127,17 @@ class Entry_ingenic_t31_spl(Entry_blob):
 
     def ReadBlobContents(self):
         data = bytearray(tools.read_file(self._pathname))
+        orig_size = len(data)
+
+        # NAND boot path: pad file size up to 64-byte boundary BEFORE
+        # CRC, because the bootrom CRCs over the full SPL_LENGTH range
+        # of SRAM (incl. padding bytes loaded from NAND). The padding
+        # MUST be in the file so binman's CRC and bootrom's CRC see
+        # the same bytes.
+        if self.no_inge:
+            stored_size = (orig_size + 0x3f) & ~0x3f
+            if stored_size > orig_size:
+                data.extend(b'\xff' * (stored_size - orig_size))
 
         # CRC7 over the SPL body: bytes from SKIP_SIZE to EOF. crc
         # starts at 0; crc = table[(crc << 1) ^ byte] per the vendor
@@ -180,9 +191,32 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # bootrom-side staging buffer reserved inside the SRAM region
         # described by INGE_length. Store min(file_size, INGE_length -
         # 0x180) so we never trip the cap.
-        inge_len_for_cap = (size + 511) & ~511
-        cap = inge_len_for_cap - 0x180
-        stored_size = min(size, cap)
+        if self.no_inge:
+            # NAND boot path: stored_size already computed above
+            # (padding applied before CRC). SPL_LENGTH = padded size.
+            #
+            # Pad to 64-byte boundary to match vendor build behaviour.
+            # The vendor tool `tools/ingenic-tools/spl_pad_to_block.c`
+            # pads SPL with 0xff to a multiple of 64 bytes
+            # unconditionally before stamping CRC + SPL_LENGTH;
+            # vendor's comment attributes the rule to "scboot hash
+            # module 64-byte minimum granularity". The check itself
+            # lives in FUN_bfc04ea0 (line 2983 of the t40 decompile),
+            # gated by `(DAT_800000b1 & 1) != 0` (secure-boot fuse).
+            # Whether a specific chip has the fuse set or not, the
+            # vendor build pads anyway, so we match that convention.
+            #
+            # The bootrom code on the non-secure path requires only
+            # 4-byte word granularity (FUN_bfc02070: `(size + 3) & ~3`
+            # and FUN_bfc01ffc reads in word units); a size cap at
+            # _DAT_80000000 default 0x19000 (100 KiB) caps anything
+            # larger. Padding to 64 bytes is harmless under that
+            # cap and matches vendor.
+            pass
+        else:
+            inge_len_for_cap = (size + 511) & ~511
+            cap = inge_len_for_cap - 0x180
+            stored_size = min(size, cap)
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             stored_size.to_bytes(4, 'little')
 

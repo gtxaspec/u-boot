@@ -206,19 +206,23 @@ _start:
 #endif
 
 	/* CU0=UM=EXL=IE=0, BEV=ERL=1, IP2~7=1 */
+#if !defined(CONFIG_SOC_T41)
+	/* T41 vendor start.S does NOT touch CP0 - the bootrom-left state
+	 * is used as-is. Writing CP0_STATUS breaks DDR PHY PLL lock. */
 	li	t0, 0x0040FC04
 	mtc0	t0, CP0_STATUS
+#endif
 
 	/* CAUSE: IV=1, use the special interrupt vector (0x200).
 	 * T40 vendor SPL does this as a RMW (preserves other CAUSE
 	 * bits); other ports overwrite. Match vendor on T40. */
-#if defined(CONFIG_SOC_T40) || defined(CONFIG_SOC_T41)
+#if defined(CONFIG_SOC_T40)
 	mfc0	t1, CP0_CAUSE
 	nop
 	lui	t2, 0x80
 	or	t1, t1, t2
 	mtc0	t1, CP0_CAUSE
-#else
+#elif !defined(CONFIG_SOC_T41)
 	li	t1, 0x00800000
 	mtc0	t1, CP0_CAUSE
 #endif

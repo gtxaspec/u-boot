@@ -156,8 +156,10 @@ void board_init_f(ulong dummy)
 		}
 		t40_spl_puts("T40 SPL: loading U-Boot from NAND...\n");
 		/* TODO: header parse + size from mkimage hdr; for first
-		 * cut, hardcode a generous read of 1 MiB at fixed offset. */
-		sfc_nand_load(0x20000, 0x100000, 0x80100000);
+		 * cut, hardcode a generous read at the binman
+		 * u-boot-lzma offset (matches arch/mips/dts/t40-isvp-u-boot.dtsi
+		 * `u-boot { offset = <0x8000>; }`). */
+		sfc_nand_load(0x8000, 0x100000, 0x80100000);
 		t40_spl_puts("T40 SPL: jumping to U-Boot\n");
 		((void (*)(void))0x80100000)();
 		for (;;);

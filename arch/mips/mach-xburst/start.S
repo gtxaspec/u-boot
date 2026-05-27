@@ -49,7 +49,7 @@ _start:
 	.word 0xffff00aa
 	.word 0x00000000
 	.space 496, 0
-#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
+#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT) || defined(CONFIG_SPL_T40_NAND_PROBE_BOOT)
 	/*
 	 * T40 SFC SPI-NAND boot header.
 	 *
@@ -243,7 +243,7 @@ _start:
 	 * bootrom SP, and was already not overwriting it.)
 	 */
 
-#if defined(CONFIG_SOC_T40) && defined(CONFIG_SPL_T40_NOR_PROBE)
+#if defined(CONFIG_SOC_T40) && (defined(CONFIG_SPL_T40_NOR_PROBE) || defined(CONFIG_SPL_T40_NAND_PROBE_BOOT))
 	/*
 	 * Diagnostic probe for T40 SFC NOR cold-boot bring-up.
 	 * Reached AFTER the BTB invalidate / CP0 status / SP setup;

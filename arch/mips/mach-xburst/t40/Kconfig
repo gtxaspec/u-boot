@@ -53,9 +53,22 @@ config SPL_T40_NOR_PROBE
 	  silent on cold SFC NOR boot. Enable only for short-cycle bring-up
 	  testing of the NOR boot path.
 
+config SPL_T40_NAND_PROBE_BOOT
+	bool "T40 SPL: ASM-only NAND-boot probe (spins emitting 'A')"
+	depends on SPL && !SPL_T40_USB_BOOT && !SPL_T40_NOR_PROBE
+	help
+	  Diagnostic SPL that uses the SPI-NAND boot header (byte 8 = 0x00)
+	  but the same minimal asm payload as SPL_T40_NOR_PROBE (WDT disable,
+	  UART1 clock ungate, PB23/24 to FUNC0, UART setup, spin emitting 'A').
+	  Lets us bisect whether the mask ROM is loading our SPL bytes from
+	  NAND at all on cold-boot: if 'A' appears, bootrom loads + jumps
+	  correctly and the production SPL has a NAND-specific runtime bug;
+	  if silent, bootrom rejects/ignores the NAND image regardless of
+	  payload.
+
 config SPL_T40_SFC_NAND_BOOT
 	bool "T40 SPL: load U-Boot proper from SPI-NAND via SFC"
-	depends on SPL && !SPL_T40_USB_BOOT && !SPL_T40_NOR_PROBE
+	depends on SPL && !SPL_T40_USB_BOOT && !SPL_T40_NOR_PROBE && !SPL_T40_NAND_PROBE_BOOT
 	help
 	  Build the SPL as a cold-boot stage1 that probes the SPI-NAND
 	  on SFC, reads U-Boot proper out of the NAND at a fixed offset

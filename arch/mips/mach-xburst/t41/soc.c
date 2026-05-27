@@ -205,7 +205,7 @@ void board_init_f(ulong dummy)
 	/* Immediately try DRAM access - no debug prints between
 	 * sdram_init and verify, to avoid CKE dropping during idle. */
 	{
-		volatile u32 *a = (volatile u32 *)0xa0000000;
+		volatile u32 *a = (volatile u32 *)0x81000000;
 		*a = 0xdeadbeef;
 		if (*a == 0xdeadbeef)
 			t41_spl_puts("T41 SPL: DDR OK\n");

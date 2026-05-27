@@ -305,6 +305,20 @@ static int spinand_probe_id(struct jz_sfc *sfc)
 	};
 	int i;
 
+	/*
+	 * Issue CMD_RESET (0xff) to put the chip in a known state. Required
+	 * after cold-boot from a vendor SPL or any prior SPL that left
+	 * QUAD/ECC/BUF feature bits set: a chip stuck in QUAD-IO mode does
+	 * not respond to single-IO RDID and our probe sees 0xff/0xff and
+	 * declares FAILED. The reset clears feature regs to chip defaults
+	 * and is harmless on a freshly-powered chip.
+	 */
+	sfc_writel(CLR_END | (1 << 3) | CLR_RREQ |
+		   (1 << 1) | (1 << 0), SFC_SCR);
+	SFC_SEND_COMMAND(sfc, 0xff, 0, 0, 0, 0, 0, 0);
+	/* tRST(max) = 250 us per Micron / Winbond datasheets. */
+	udelay(500);
+
 	for (i = 0; i < (int)ARRAY_SIZE(variants); i++) {
 		u8 buf[8] = { 0 };
 

@@ -22,6 +22,16 @@
 #include <mach/t41-ddr.h>
 
 void t41_spl_puts(const char *s);
+void t41_spl_putc(char c);
+
+static void spl_put_hex(u32 v)
+{
+	static const char h[] = "0123456789abcdef";
+	int i;
+	t41_spl_puts("0x");
+	for (i = 28; i >= 0; i -= 4)
+		t41_spl_putc(h[(v >> i) & 0xf]);
+}
 
 #define ddr_writel(v, off)	writel((v), (void __iomem *)(DDRC_BASE + (off)))
 #define ddr_readl(off)		readl((void __iomem *)(DDRC_BASE + (off)))
@@ -152,49 +162,35 @@ static void ddr_phy_init(void)
 	ddr_writel(val, PHY_PLL_FBDIVH);
 
 	/*
-	 * Vendor starts with pll_sel=0 (0x28/0x20 for >625MHz), retries
-	 * with pll_sel=1 (0x48/0x40) if PLL doesn't lock within 500
-	 * iterations. On our T41NQ lab board pll_sel=0 consistently fails
-	 * (LOCK reads 0x12, bit 2 never sets) and pll_sel=1 works. The
-	 * stock vendor SPL shows the same pattern in its boot log:
-	 *   DDRP_INNOPHY_PLL_CTRL: 00000028  (pll_sel=0, first try)
-	 *   DDRP_INNOPHY_PLL_CTRL: 00000020  (pll_sel=0, fails)
+	 * Vendor uses pll_sel=0 (0x28/0x20 for >625MHz) and it works.
+	 * Our pll_sel=0 was failing and we fell through to pll_sel=1
+	 * (0x48/0x40) which gives PLC=0x40. But vendor's PLC=0x20 with
+	 * working DDR. Try pll_sel=0 only with a much longer timeout.
 	 * then silently retries to pll_sel=1 which locks.
 	 *
 	 * Implement the vendor retry loop: try pll_sel=0, if PLL doesn't
 	 * lock in 500 polls, reset PHY and retry with pll_sel=1.
 	 */
-	{
-		int pll_sel;
-		for (pll_sel = 0; pll_sel < 2; pll_sel++) {
-			val = ddr_readl(PHY_PLL_CTRL);
-			val &= ~0xff;
-			val |= (pll_sel ? 0x48 : 0x28);
-			ddr_writel(val, PHY_PLL_CTRL);
-			udelay(500);
+	/* pll_sel=0 only, with extended timeout (50000 polls) */
+	val = ddr_readl(PHY_PLL_CTRL);
+	val &= ~0xff;
+	val |= 0x28;
+	ddr_writel(val, PHY_PLL_CTRL);
+	udelay(500);
 
-			val = ddr_readl(PHY_PLL_PDIV);
-			val &= ~0x1f;
-			val |= 0x1;
-			ddr_writel(val, PHY_PLL_PDIV);
+	val = ddr_readl(PHY_PLL_PDIV);
+	val &= ~0x1f;
+	val |= 0x1;
+	ddr_writel(val, PHY_PLL_PDIV);
 
-			val = pll_sel ? 0x40 : 0x20;
-			ddr_writel(val, PHY_PLL_CTRL);
-			udelay(500);
+	val = 0x20;
+	ddr_writel(val, PHY_PLL_CTRL);
+	udelay(500);
 
-			i = 0;
-			while (!(ddr_readl(PHY_PLL_LOCK) & (1 << 2))) {
-				if (++i > 500) break;
-			}
-			if (i <= 500) break;
-
-			ddrc_reset_phy();
-			val = ddr_readl(PHY_PLL_FBDIVL);
-			val &= ~0xff; val |= 0x1;
-			ddr_writel(val, PHY_PLL_FBDIVL);
-			val = ddr_readl(PHY_PLL_FBDIVH);
-			val &= ~0xff; val |= 0x80;
-			ddr_writel(val, PHY_PLL_FBDIVH);
+	while (!(ddr_readl(PHY_PLL_LOCK) & (1 << 2))) {
+		if (++i > 50000) {
+			t41_spl_puts("DDR: PLL FAIL\n");
+			break;
 		}
 	}
 
@@ -340,11 +336,7 @@ static void ddrc_post_init(void)
 {
 	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
 	mem_remap();
-	/* Write CTRL with PDT disabled (bits 14:12 = 0) during init.
-	 * PDT=3 (0xb092) enters power-down after 32 tCK idle, which
-	 * drops CKE before the SPL can verify DRAM. Leave power-down
-	 * disabled until after U-Boot proper takes over. */
-	ddr_writel((DDRC_CTRL_VALUE & ~(7 << 12)) | CTRL_CKE, DDRC_CTRL);
+	ddr_writel(DDRC_CTRL_VALUE, DDRC_CTRL);
 	ddr_writel(DDRC_CGUC0_VALUE, APB_CGUC0);
 	ddr_writel(DDRC_CGUC1_VALUE, APB_CGUC1);
 }
@@ -397,59 +389,99 @@ void sdram_init(void)
 {
 	t41_spl_puts("DDR: clk\n");
 
-	/* Full CGU init matching vendor clk_init() + clk_set_rate(DDR).
-	 * The vendor calls clk_init() BEFORE sdram_init(), which:
-	 *   1. Ungates SFC0/SFC1 in CLKGR0, LZMA/IVDC in CLKGR1
-	 *   2. Resets all CGU dividers: max div + ce, poll busy,
-	 *      stop + ce, poll busy, clear ce + stop
-	 *   3. Selects PLL sources (MPLL for DDR, SFC, MACPHY)
-	 * Without steps 1-3, the DDR clock CGU is in bootrom-left
-	 * state and the DDRC can't drive CKE. */
 	{
-		u32 v;
+		u32 regval;
 
-		/* Ungate clocks vendor enables */
-		v = cpm_readl(CPM_CLKGR0);
-		v &= ~(CPM_CLKGR0_SFC | CPM_CLKGR0_DDR);
-		cpm_writel(v, CPM_CLKGR0);
+		/* DRCG bit 6 */
+		cpm_writel(cpm_readl(CPM_DRCG) | 0x40, CPM_DRCG);
 
-		v = cpm_readl(CPM_DRCG);
-		cpm_writel(v | (1 << 6), CPM_DRCG);
+		/* Full CGU init matching vendor clk_init().
+		 * For each CGU: max div+ce, poll busy, stop+ce, poll busy,
+		 * clear ce+stop. Then set PLL source. Then set actual div.
+		 * Vendor does this for ALL CGUs before sdram_init. */
+#define CGU_RESET(off) do { \
+	regval = cpm_readl(off); \
+	regval |= 0xff | (1 << 29); \
+	cpm_writel(regval, off); \
+	while (cpm_readl(off) & (1 << 28)); \
+	regval = cpm_readl(off); \
+	regval |= (1 << 27) | (1 << 29); \
+	cpm_writel(regval, off); \
+	while (cpm_readl(off) & (1 << 28)); \
+	regval = cpm_readl(off); \
+	regval &= ~((1 << 29) | (1 << 27)); \
+	cpm_writel(regval, off); \
+} while (0)
+
+		/* Reset DDR, SFC0, SFC1 CGUs (vendor resets all) */
+		CGU_RESET(CPM_DDRCDR);
+		CGU_RESET(CPM_SFCCDR);  /* SFC0 at 0x60 */
+#undef CGU_RESET
+
+		/* Set PLL source select bits (31:30) */
+		/* DDR -> MPLL (sel=2) */
+		regval = cpm_readl(CPM_DDRCDR);
+		regval &= ~(3 << 30); regval |= (2 << 30);
+		cpm_writel(regval, CPM_DDRCDR);
+		/* SFC0 -> MPLL (sel=1) */
+		regval = cpm_readl(CPM_SFCCDR);
+		regval &= ~(3 << 30); regval |= (1 << 30);
+		cpm_writel(regval, CPM_SFCCDR);
+
+		/* DDR: actual divider = 1 (MPLL/2 = 700 MHz) */
+		regval = cpm_readl(CPM_DDRCDR);
+		regval &= ~(0xf | (0x3f << 24));
+		regval |= (1 << 29) | 1;
+		cpm_writel(regval, CPM_DDRCDR);
+		while (cpm_readl(CPM_DDRCDR) & (1 << 28))
+			;
 	}
 
-	ddr_clk_set_rate();
-
-	t41_spl_puts("DDR: rst\n");
+	t41_spl_puts("D:CDR="); spl_put_hex(cpm_readl(CPM_DDRCDR));
+	t41_spl_puts(" MPLL="); spl_put_hex(cpm_readl(CPM_CPMPCR));
+	t41_spl_puts(" APLL="); spl_put_hex(cpm_readl(CPM_CPAPCR));
+	t41_spl_puts(" CCSR="); spl_put_hex(cpm_readl(CPM_CPCCR));
+	t41_spl_puts(" DRCG="); spl_put_hex(cpm_readl(CPM_DRCG));
+	t41_spl_puts("\n");
 	ddrc_reset_phy();
+	t41_spl_puts("D:rst CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL)); t41_spl_puts("\n");
 
-	t41_spl_puts("DDR: phy\n");
 	ddr_phy_init();
+	t41_spl_puts("D:phy CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" PLC="); spl_put_hex(ddr_readl(PHY_PLL_CTRL));
+	t41_spl_puts(" PLK="); spl_put_hex(ddr_readl(PHY_PLL_LOCK)); t41_spl_puts("\n");
 
-	t41_spl_puts("DDR: dfi\n");
 	ddrc_dfi_init();
+	t41_spl_puts("D:dfi CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" CFG="); spl_put_hex(ddr_readl(DDRC_CFG));
+	t41_spl_puts(" DWST="); spl_put_hex(ddr_readl(APB_DWSTATUS)); t41_spl_puts("\n");
 
-	t41_spl_puts("DDR: drv\n");
 	ddrp_set_drv_odt();
-
-	t41_spl_puts("DDR: ctrl\n");
 	ddrc_prev_init();
+	t41_spl_puts("D:prev CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" T1="); spl_put_hex(ddr_readl(DDRC_TIMING(1)));
+	t41_spl_puts(" MM0="); spl_put_hex(ddr_readl(DDRC_MMAP0)); t41_spl_puts("\n");
 
-	t41_spl_puts("DDR: cal\n");
 	ddrp_hardware_calibration();
+	t41_spl_puts("D:cal CAL="); spl_put_hex(ddr_readl(PHY_CALIB_DONE)); t41_spl_puts("\n");
 
-	t41_spl_puts("DDR: post\n");
 	ddrc_post_init();
+	t41_spl_puts("D:post CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
 
 	ddr_writel(DDRC_AUTOSR_CNT_VALUE, DDRC_AUTOSR_CNT);
 	ddr_writel(DDRC_AUTOSR_EN_VALUE ? 1 : 0, DDRC_AUTOSR_EN);
 	ddr_writel(DDRC_HREGPRO_VALUE, DDRC_HREGPRO);
 	ddr_writel(DDRC_PREGPRO_VALUE, APB_PREGPRO);
+	t41_spl_puts("D:prot CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
 
 	writel(0x0, (void __iomem *)0xb301206c);
 	writel(0xff000000, (void __iomem *)0xb3012040);
 	writel(0x2bd07460, (void __iomem *)0xb3012048);
 	writel(0x1, (void __iomem *)0xb301206c);
 
-	t41_spl_puts("DDR: skew\n");
 	ddr_set_vref_skew();
+	t41_spl_puts("D:done CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
 }

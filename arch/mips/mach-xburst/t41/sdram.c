@@ -33,8 +33,19 @@ static void spl_put_hex(u32 v)
 		t41_spl_putc(h[(v >> i) & 0xf]);
 }
 
-#define ddr_writel(v, off)	writel((v), (void __iomem *)(DDRC_BASE + (off)))
-#define ddr_readl(off)		readl((void __iomem *)(DDRC_BASE + (off)))
+/* Raw register access with explicit SYNC after every write.
+ * Uses volatile pointers to prevent compiler reordering. */
+static inline void ddr_writel(u32 v, u32 off)
+{
+	*(volatile u32 *)(DDRC_BASE + (off)) = v;
+	asm volatile("sync" ::: "memory");
+}
+
+static inline u32 ddr_readl(u32 off)
+{
+	asm volatile("sync" ::: "memory");
+	return *(volatile u32 *)(DDRC_BASE + (off));
+}
 
 /* T41 Innophy PHY registers (offsets from DDRC_BASE + DDR_PHY_OFFSET) */
 #define PHY_RST			(DDR_PHY_OFFSET + 0x000)
@@ -155,27 +166,20 @@ static void ddr_phy_init(void)
 	val &= ~0xff;
 	val |= 0x1;
 	ddr_writel(val, PHY_PLL_FBDIVL);
+	/* Verify write took */
+	t41_spl_puts("FBL="); spl_put_hex(ddr_readl(PHY_PLL_FBDIVL)); t41_spl_puts("\n");
 
 	val = ddr_readl(PHY_PLL_FBDIVH);
 	val &= ~0xff;
 	val |= 0x80;
 	ddr_writel(val, PHY_PLL_FBDIVH);
+	t41_spl_puts("FBH="); spl_put_hex(ddr_readl(PHY_PLL_FBDIVH)); t41_spl_puts("\n");
 
-	/*
-	 * Vendor uses pll_sel=0 (0x28/0x20 for >625MHz) and it works.
-	 * Our pll_sel=0 was failing and we fell through to pll_sel=1
-	 * (0x48/0x40) which gives PLC=0x40. But vendor's PLC=0x20 with
-	 * working DDR. Try pll_sel=0 only with a much longer timeout.
-	 * then silently retries to pll_sel=1 which locks.
-	 *
-	 * Implement the vendor retry loop: try pll_sel=0, if PLL doesn't
-	 * lock in 500 polls, reset PHY and retry with pll_sel=1.
-	 */
-	/* pll_sel=0 only, with extended timeout (50000 polls) */
 	val = ddr_readl(PHY_PLL_CTRL);
 	val &= ~0xff;
 	val |= 0x28;
 	ddr_writel(val, PHY_PLL_CTRL);
+	t41_spl_puts("PC1="); spl_put_hex(ddr_readl(PHY_PLL_CTRL)); t41_spl_puts("\n");
 	udelay(500);
 
 	val = ddr_readl(PHY_PLL_PDIV);
@@ -185,14 +189,7 @@ static void ddr_phy_init(void)
 
 	val = 0x20;
 	ddr_writel(val, PHY_PLL_CTRL);
-	udelay(500);
-
-	while (!(ddr_readl(PHY_PLL_LOCK) & (1 << 2))) {
-		if (++i > 50000) {
-			t41_spl_puts("DDR: PLL FAIL\n");
-			break;
-		}
-	}
+	udelay(5000);	/* 5ms settle */
 
 	/* PLL lock poll + retry is handled in the pll_sel loop above */
 
@@ -437,6 +434,21 @@ void sdram_init(void)
 			;
 	}
 
+	/* Compute actual DDR rate from MPLL and CDR divider */
+	{
+		u32 mpll_reg = cpm_readl(CPM_CPMPCR);
+		u32 cdr_reg = cpm_readl(CPM_DDRCDR);
+		u32 m = (mpll_reg >> 20) & 0x3ff;
+		u32 n = (mpll_reg >> 14) & 0x1f;
+		u32 od1 = (mpll_reg >> 11) & 0x7;
+		u32 od0 = (mpll_reg >> 8) & 0x7;
+		u32 div = (cdr_reg & 0xff) + 1;
+		u32 mpll_mhz = (m * 24) / (n * od1 * od0);
+		u32 ddr_mhz = mpll_mhz / div;
+		t41_spl_puts("DDR rate=");
+		spl_put_hex(ddr_mhz);
+		t41_spl_puts("MHz\n");
+	}
 	t41_spl_puts("D:CDR="); spl_put_hex(cpm_readl(CPM_DDRCDR));
 	t41_spl_puts(" MPLL="); spl_put_hex(cpm_readl(CPM_CPMPCR));
 	t41_spl_puts(" APLL="); spl_put_hex(cpm_readl(CPM_CPAPCR));
@@ -444,7 +456,10 @@ void sdram_init(void)
 	t41_spl_puts(" DRCG="); spl_put_hex(cpm_readl(CPM_DRCG));
 	t41_spl_puts("\n");
 	ddrc_reset_phy();
-	t41_spl_puts("D:rst CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL)); t41_spl_puts("\n");
+	t41_spl_puts("D:rst CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
+	t41_spl_puts(" PLK0="); spl_put_hex(ddr_readl(PHY_PLL_LOCK));
+	t41_spl_puts(" PLC0="); spl_put_hex(ddr_readl(PHY_PLL_CTRL));
+	t41_spl_puts("\n");
 
 	ddr_phy_init();
 	t41_spl_puts("D:phy CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));

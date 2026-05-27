@@ -17,6 +17,7 @@
  */
 
 #include <asm/io.h>
+#include <linux/delay.h>
 #include <mach/t41.h>
 #include <mach/t41-ddr.h>		/* T41_APLL_MNOD / T41_MPLL_MNOD */
 
@@ -42,20 +43,33 @@ static u32 cpm_readl(unsigned int off)
 
 static void pll_set(unsigned int reg, u32 mnod)
 {
+	u32 cur;
+
+	/* Vendor T41 pll_set: disable PLL first, wait 1us, then
+	 * program new MNOD + enable. Required for clean PLL relock
+	 * when the bootrom left the PLL running at a different freq.
+	 * Only disable if the PLL is currently enabled and the MNOD
+	 * differs (avoids disrupting a PLL that's already correct). */
+	cur = cpm_readl(reg);
+	if ((cur & PLL_PLLEN) && ((cur & ~0xff) != (mnod & ~0xff))) {
+		volatile int d;
+		cpm_writel(cur & ~PLL_PLLEN, reg);
+		for (d = 0; d < 1000; d++);	/* ~1us busy-wait (no timer yet) */
+	}
 	cpm_writel(mnod | PLL_PLLEN, reg);
 	while (!(cpm_readl(reg) & PLL_PLLON))
 		;
 }
 
 /*
- * CPCCR vendor T40N production values per include/configs/isvp_t40.h
- * DDR_500M block: PDIV=12, H2DIV=6, H0DIV=6, L2DIV=2, CDIV=1. SEL
- * bits chosen for APLL=CPU clock + MPLL=H0/H2/peripherals. Encoded
- * value = 0x9a0b5510 (matches vendor T40 INGE descriptor SEL value).
+ * CPCCR vendor T41NQ production values per include/configs/isvp_t41.h
+ * DDR_700M block: PDIV=12, H2DIV=6, H0DIV=6, L2DIV=3, CDIV=1. SEL
+ * bits: SCLKA=2, CPU=1(APLL), H0=2(MPLL), H2=2(MPLL).
+ * = 0x9a0b5520 (T41NQ, differs from T40 in L2DIV: 3 vs 2).
  */
 #define T41_CPCCR_CFG	((2 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | \
 			 ((12 - 1) << 16) | ((6 - 1) << 12) | \
-			 ((6 - 1) << 8) | ((2 - 1) << 4) | ((1 - 1) << 0))
+			 ((6 - 1) << 8) | ((3 - 1) << 4) | ((1 - 1) << 0))
 
 static void cpccr_init(void)
 {

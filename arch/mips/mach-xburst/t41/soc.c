@@ -56,10 +56,29 @@ static int dram_verify(void)
 	int p;
 
 	a = (volatile u32 *)0xa0000000;
-	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-		*a = pat[p];
-		if (*a != pat[p])
+	*a = 0xdeadbeef;
+	{
+		u32 got = *a;
+		static const char hc[] = "0123456789abcdef";
+		char buf[14];
+		int j;
+		buf[0] = '0'; buf[1] = 'x';
+		for (j = 7; j >= 0; j--)
+			buf[9 - j] = hc[(got >> (j * 4)) & 0xf];
+		buf[10] = '\n'; buf[11] = 0;
+		t41_spl_puts("RD=");
+		t41_spl_puts(buf);
+		if (got != 0xdeadbeef) {
+			t41_spl_puts("DDR: pat fail\n");
 			return -1;
+		}
+	}
+	for (p = 1; p < (int)ARRAY_SIZE(pat); p++) {
+		*a = pat[p];
+		if (*a != pat[p]) {
+			t41_spl_puts("DDR: pat fail\n");
+			return -1;
+		}
 	}
 
 	/* Coarse sweep across the part, one word per 1 MB. */
@@ -69,8 +88,10 @@ static int dram_verify(void)
 	}
 	for (off = 0; off < T41_DRAM_SIZE; off += 0x100000) {
 		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		if (*a != 0xa0000000u + off)
+		if (*a != 0xa0000000u + off) {
+			t41_spl_puts("DDR: sweep fail\n");
 			return -1;
+		}
 	}
 
 	return 0;

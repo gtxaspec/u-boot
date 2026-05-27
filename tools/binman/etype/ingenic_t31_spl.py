@@ -115,6 +115,12 @@ class Entry_ingenic_t31_spl(Entry_blob):
         if 0x20 + descriptors_bytes > INGE_BLOCK_MAX:
             self.Raise("'ingenic,inge-descriptors' table too large for "
                        "256-byte INGE block")
+        # Vendor T40 SPI-NAND SPL headers do NOT carry an INGE block at
+        # offset 0x100 - the file there is all zeros. With INGE magic
+        # present, the bootrom NAND boot path rejects the image (silent
+        # UART, no fallback). Boards that boot from SPI-NAND set the
+        # `ingenic,no-inge` boolean to suppress the INGE write.
+        self.no_inge = fdt_util.GetBool(self._node, 'ingenic,no-inge')
 
     def GetDefaultFilename(self):
         return 'spl/u-boot-spl.bin'
@@ -208,20 +214,21 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # boots T40NN cleanly to U-Boot. Our build with INGE mirrored
         # at 0x40 was silent on cold boot but worked on warm reset.
         # Drop the 0x40 mirror to mirror vendor layout exactly.
-        for inge_off in (INGE_OFFSET,):
-            data[inge_off:inge_off + 4] = \
-                INGE_MAGIC.to_bytes(4, 'little')
-            data[inge_off + 4:inge_off + 8] = \
-                inge_length.to_bytes(4, 'little')
-            if self.inge_descriptors:
-                off = inge_off + 0x20
-                for val in self.inge_descriptors:
-                    data[off:off + 4] = (val & 0xffffffff).to_bytes(4, 'little')
-                    off += 4
-                # Terminator (set=0xffffffff, poll=0xffffffff, rest 0).
-                data[off:off + 4] = (0xffffffff).to_bytes(4, 'little')
-                data[off + 4:off + 8] = (0xffffffff).to_bytes(4, 'little')
-                data[off + 8:off + 20] = b'\x00' * 12
+        if not self.no_inge:
+            for inge_off in (INGE_OFFSET,):
+                data[inge_off:inge_off + 4] = \
+                    INGE_MAGIC.to_bytes(4, 'little')
+                data[inge_off + 4:inge_off + 8] = \
+                    inge_length.to_bytes(4, 'little')
+                if self.inge_descriptors:
+                    off = inge_off + 0x20
+                    for val in self.inge_descriptors:
+                        data[off:off + 4] = (val & 0xffffffff).to_bytes(4, 'little')
+                        off += 4
+                    # Terminator (set=0xffffffff, poll=0xffffffff, rest 0).
+                    data[off:off + 4] = (0xffffffff).to_bytes(4, 'little')
+                    data[off + 4:off + 8] = (0xffffffff).to_bytes(4, 'little')
+                    data[off + 8:off + 20] = b'\x00' * 12
 
         self.SetContents(bytes(data))
         return True

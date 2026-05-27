@@ -137,10 +137,10 @@ void board_init_f(ulong dummy)
 #ifdef CONFIG_SPL_T40_USB_BOOT
 	t40_spl_sfc_clk_init();
 #ifdef CONFIG_SPL_T40_NAND_PROBE
-	t40_spl_puts("T40 SPL: probing SPI-NAND...\n");
 	{
-		extern int sfc_nand_init(void);
-		(void)sfc_nand_init();
+		extern void sfc_nand_probe_dump(void);
+		t40_spl_puts("T40 SPL: probing SPI-NAND...\n");
+		sfc_nand_probe_dump();
 	}
 #endif
 	t40_spl_puts("T40 SPL: returning to mask ROM (USB boot)\n");

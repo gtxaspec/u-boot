@@ -53,4 +53,26 @@ config SPL_T40_NOR_PROBE
 	  silent on cold SFC NOR boot. Enable only for short-cycle bring-up
 	  testing of the NOR boot path.
 
+config SPL_T40_SFC_NAND_BOOT
+	bool "T40 SPL: load U-Boot proper from SPI-NAND via SFC"
+	depends on SPL && !SPL_T40_USB_BOOT && !SPL_T40_NOR_PROBE
+	help
+	  Build the SPL as a cold-boot stage1 that probes the SPI-NAND
+	  on SFC, reads U-Boot proper out of the NAND at a fixed offset
+	  (T40_NAND_UBOOT_OFFSET, default 128 KiB), and jumps. Used by
+	  the production T40XP SFCNAND defconfig
+	  (isvp_t40xp_sfcnand_defconfig). The driver lives in
+	  arch/mips/mach-xburst/t40/sfc_nand.c.
+
+config SPL_T40_NAND_PROBE
+	bool "T40 SPL: probe SPI-NAND and print chip ID (USB-boot debug)"
+	depends on SPL && SPL_T40_USB_BOOT
+	help
+	  Diagnostic: link the SFC SPI-NAND probe into the USB-boot SPL
+	  and call sfc_nand_init() just before returning to mask ROM.
+	  Lets us validate the NAND read path on real silicon without
+	  having to commit a flash layout for U-Boot in NAND first. The
+	  SPL still returns to mask ROM after the probe, so U-Boot is
+	  uploaded over USB exactly as in the plain USB-boot defconfig.
+
 endif

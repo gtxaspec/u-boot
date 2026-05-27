@@ -145,8 +145,59 @@ void board_init_f(ulong dummy)
 	t41_spl_serial_init();
 	t41_spl_puts("\nT41 SPL: alive (pre-PLL)\n");
 
+	/* Full vendor clk_prepare: stop ALL CGU clocks before pll_init */
+	{
+		/* CGU offsets: {reg, ce_bit, busy_bit, stop_bit} - all same: 29,28,27 */
+		static const u32 cgus[] = {
+			0x2c, /* DDR */ 0xbc, /* EL200 */ 0x54, /* MACPHY */
+			0x64, /* LCD */ 0xfc, /* PWM */ 0x60, /* SFC0 */
+			0x7c, /* SFC1 */ 0x90, /* CIM0 */ 0xac, /* ISPA */
+			0xa8, /* ISPS */ 0x80, /* ISPM */ 0x70, /* I2S */
+		};
+		int c; u32 r;
+		for (c = 0; c < (int)(sizeof(cgus)/sizeof(cgus[0])); c++) {
+			r = readl((void __iomem *)(CPM_BASE + cgus[c]));
+			r |= 0xff | (1 << 29);
+			writel(r, (void __iomem *)(CPM_BASE + cgus[c]));
+			while (readl((void __iomem *)(CPM_BASE + cgus[c])) & (1 << 28));
+			r = readl((void __iomem *)(CPM_BASE + cgus[c]));
+			r |= (1 << 27) | (1 << 29);
+			writel(r, (void __iomem *)(CPM_BASE + cgus[c]));
+			while (readl((void __iomem *)(CPM_BASE + cgus[c])) & (1 << 28));
+			r = readl((void __iomem *)(CPM_BASE + cgus[c]));
+			r &= ~((1 << 29) | (1 << 27));
+			writel(r, (void __iomem *)(CPM_BASE + cgus[c]));
+		}
+	}
+
 	pll_init();
 	t41_spl_puts("T41 SPL: PLL configured\n");
+
+	/* Full vendor clk_init: set PLL source for ALL CGUs.
+	 * Format: {reg_offset, sel_index << 30} */
+	{
+		static const struct { u32 off; u32 sel; } src[] = {
+			{0x2c, 2u<<30}, /* DDR -> MPLL (idx 2) */
+			{0xbc, 0u<<30}, /* EL200 -> APLL (idx 0) */
+			{0x54, 1u<<30}, /* MACPHY -> MPLL (idx 1) */
+			{0x64, 2u<<30}, /* LCD -> VPLL (idx 2) */
+			{0xfc, 2u<<30}, /* PWM -> VPLL (idx 2) */
+			{0x60, 1u<<30}, /* SFC0 -> MPLL (idx 1) */
+			{0x7c, 1u<<30}, /* SFC1 -> MPLL (idx 1) */
+			{0x90, 0u<<30}, /* CIM0 -> APLL (idx 0) */
+			{0xac, 1u<<30}, /* ISPA -> MPLL (idx 1) */
+			{0xa8, 1u<<30}, /* ISPS -> MPLL (idx 1) */
+			{0x80, 1u<<30}, /* ISPM -> MPLL (idx 1) */
+			{0x70, 2u<<30}, /* I2S -> VPLL (idx 2) */
+		};
+		int c; u32 r;
+		for (c = 0; c < (int)(sizeof(src)/sizeof(src[0])); c++) {
+			r = readl((void __iomem *)(CPM_BASE + src[c].off));
+			r &= ~(3u << 30);
+			r |= src[c].sel;
+			writel(r, (void __iomem *)(CPM_BASE + src[c].off));
+		}
+	}
 
 	timer_init();
 	sdram_init();

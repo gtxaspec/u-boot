@@ -83,7 +83,7 @@ static void cpccr_init(void)
 		;
 
 	cpccr = (T41_CPCCR_CFG & (0xff << 24)) |
-		(cpm_readl(CPM_CPCCR) & ~(0xff << 24));
+		(cpm_readl(CPM_CPCCR) & ~((0xff << 24) | (7 << 20)));
 	cpm_writel(cpccr, CPM_CPCCR);
 }
 

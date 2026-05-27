@@ -15,6 +15,7 @@ config SYS_SOC
 	default "t32" if SOC_T32
 	default "t33" if SOC_T33
 	default "t40" if SOC_T40
+	default "t41" if SOC_T41
 
 choice
 	prompt "Ingenic SoC select"
@@ -164,6 +165,24 @@ config SOC_T40
 	  OTG, Synopsys GMAC, SDHCI-style MSC. Variants: T40 (DDR2
 	  64 MB M14D5121632A default), T40N/T40XP (DDR3).
 
+config SOC_T41
+	bool "Ingenic T41"
+	select SUPPORT_LITTLE_ENDIAN
+	select SUPPORTS_CPU_MIPS32_R1
+	select SUPPORTS_CPU_MIPS32_R2
+	select SYS_CACHE_SHIFT_5
+	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select MIPS_L2_CACHE
+	select BINMAN
+	help
+	  Ingenic T41 XBurst2 dual-core camera SoC: 24 MHz EXTAL,
+	  APLL/MPLL/EPLL/VPLL, Innophy DDR3 PHY (16-bit bus on most
+	  variants - different from T40XP 32-bit). Same base addresses
+	  as T40. Single OTG (DWC2), Synopsys GMAC, SDHCI-style MSC,
+	  SFC SPI-flash boot. 13 variants in vendor source. Lab board
+	  uses T41NQ: APLL=1104, MPLL=1400 (DDR=700), DDR3-W631GU6NG
+	  128 MiB 16-bit, MX25L25645G 32 MiB SPI-NOR boot.
+
 endchoice
 
 source "arch/mips/mach-xburst/a1/Kconfig"
@@ -176,6 +195,7 @@ source "arch/mips/mach-xburst/t31/Kconfig"
 source "arch/mips/mach-xburst/t32/Kconfig"
 source "arch/mips/mach-xburst/t33/Kconfig"
 source "arch/mips/mach-xburst/t40/Kconfig"
+source "arch/mips/mach-xburst/t41/Kconfig"
 
 choice
 	prompt "Board select"
@@ -244,6 +264,13 @@ config TARGET_ISVP_T40
 	  Ingenic ISVP T40 reference board, DDR2 M14D5121632A,
 	  SFC NOR boot.
 
+config TARGET_ISVP_T41
+	bool "Ingenic ISVP-T41 reference board"
+	select SOC_T41
+	help
+	  Ingenic ISVP T41 reference board, DDR3 W631GU6NG 16-bit
+	  128 MiB, SFC NOR boot (MX25L25645G 32 MiB).
+
 endchoice
 
 source "board/ingenic/isvp-a1/Kconfig"
@@ -256,5 +283,6 @@ source "board/ingenic/isvp-t31/Kconfig"
 source "board/ingenic/isvp-t32/Kconfig"
 source "board/ingenic/isvp-t33/Kconfig"
 source "board/ingenic/isvp-t40/Kconfig"
+source "board/ingenic/isvp-t41/Kconfig"
 
 endmenu

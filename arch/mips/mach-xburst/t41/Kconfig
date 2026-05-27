@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-2.0+
+
+if SOC_T41
+
+choice
+	prompt "T41 SoC variant"
+	default T41_VARIANT_T41NQ
+	help
+	  T41 product variant. DDR parameters per variant come from
+	  the vendor U-Boot ddr_params_creator host-tool output for
+	  the specific chip + freq + bus config. Set per board /
+	  defconfig. 13 variants exist in vendor isvp_t41.h; only the
+	  lab-tested ones are exposed here.
+
+config T41_VARIANT_T41NQ
+	bool "T41NQ (DDR3-1400, 128 MiB, 16-bit, W631GU6NG)"
+	help
+	  T41NQ: DDR3 @ 700 MHz, 16-bit bus, 128 MiB W631GU6NG.
+	  APLL 1104 MHz, MPLL 1400 MHz, VPLL 1188 MHz. Per vendor
+	  include/configs/isvp_t41.h CONFIG_T41NQ block on the
+	  T41-1.2.6 branch.
+
+endchoice
+
+config T41_DRAM_SIZE_MB
+	int
+	default 128 if T41_VARIANT_T41NQ
+
+config SPL_T41_USB_BOOT
+	bool "T41 SPL: return to mask ROM for USB boot (dev loop)"
+	depends on SPL
+	help
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  PLLs and DDR, then return to the bootrom (jr ra) instead of
+	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
+	  U-Boot proper over USB. Used by the USB-boot / DFU loader
+	  defconfigs (isvp_t41nq_usbboot_defconfig).
+
+endif

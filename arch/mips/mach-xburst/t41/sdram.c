@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T41 DDR3 controller + Innophy PHY init (SPL)
+ * Ingenic T41 DDR3 init - minimal test version
  *
- * Faithful port of vendor T41-1.2.6 `arch/mips/cpu/xburst2/ddr_innophy.c`
- * sdram_init() DDR3 path for T41NQ (W631GU6NG 128 MiB 16-bit @ 700 MHz).
- *
- * T41 has a DIFFERENT Innophy PHY revision from T40 - register offsets
- * are reshuffled (PLL regs at 0x140+ vs T40's 0x80+, PLL_LOCK at 0x180
- * vs T40's 0xc8, DQ_WIDTH at 0x034 vs T40's 0x7c). This file uses
- * absolute PHY addresses from vendor `arch/mips/include/asm/ddr_innophy.h`
- * on the T41-1.2.6 branch.
- *
- * DDRC register values in <mach/t41nq-ddr.h> come from vendor
- * `ddr_params_creator` with T41NQ + W631GU6NG + DDR=700 + DW32=0.
+ * Skip our PHY PLL init entirely. Just do DDRC reset + DFI handshake
+ * + controller init and see if DDR works WITHOUT touching the PHY PLL.
+ * The bootrom may have already configured the PHY PLL for us.
  */
 
 #include <asm/io.h>
@@ -33,8 +25,6 @@ static void spl_put_hex(u32 v)
 		t41_spl_putc(h[(v >> i) & 0xf]);
 }
 
-/* Raw register access with explicit SYNC after every write.
- * Uses volatile pointers to prevent compiler reordering. */
 static inline void ddr_writel(u32 v, u32 off)
 {
 	*(volatile u32 *)(DDRC_BASE + (off)) = v;
@@ -47,456 +37,116 @@ static inline u32 ddr_readl(u32 off)
 	return *(volatile u32 *)(DDRC_BASE + (off));
 }
 
-/* T41 Innophy PHY registers (offsets from DDRC_BASE + DDR_PHY_OFFSET) */
-#define PHY_RST			(DDR_PHY_OFFSET + 0x000)
-#define PHY_MEM_CFG		(DDR_PHY_OFFSET + 0x004)
-#define PHY_TRAINING_CTRL	(DDR_PHY_OFFSET + 0x008)
-#define PHY_CL			(DDR_PHY_OFFSET + 0x014)
-#define PHY_AL			(DDR_PHY_OFFSET + 0x018)
-#define PHY_CWL			(DDR_PHY_OFFSET + 0x01c)
-#define PHY_DQ_WIDTH		(DDR_PHY_OFFSET + 0x034)
-#define PHY_PLL_FBDIVL		(DDR_PHY_OFFSET + 0x140)
-#define PHY_PLL_FBDIVH		(DDR_PHY_OFFSET + 0x144)
-#define PHY_PLL_PDIV		(DDR_PHY_OFFSET + 0x148)
-#define PHY_PLL_CTRL		(DDR_PHY_OFFSET + 0x14c)
-#define PHY_PLL_LOCK		(DDR_PHY_OFFSET + 0x180)
-#define PHY_CALIB_DONE		(DDR_PHY_OFFSET + 0x184)
+#define PHY_BASE	(DDRC_BASE + DDR_PHY_OFFSET)
+#define PHY(off)	(*(volatile u32 *)(PHY_BASE + (off)))
 
-/* DDRC APB region registers (offsets from DDRC_BASE) */
-#define DDRC_APB_OFF		(-0x4e0000 + 0x2000)
-#define APB_DWCFG		(DDRC_APB_OFF + 0x00)
-#define APB_DWSTATUS		(DDRC_APB_OFF + 0x04)
-#define APB_REMAP(n)		(DDRC_APB_OFF + 0x08 + 4 * ((n) - 1))
-#define APB_CGUC0		(DDRC_APB_OFF + 0x64)
-#define APB_CGUC1		(DDRC_APB_OFF + 0x68)
-#define APB_PREGPRO		(DDRC_APB_OFF + 0x6c)
+#define APB_OFF		(-0x4e0000 + 0x2000)
+#define APB_DWCFG	(APB_OFF + 0x00)
+#define APB_DWSTATUS	(APB_OFF + 0x04)
+#define APB_REMAP(n)	(APB_OFF + 0x08 + 4*((n)-1))
+#define APB_CGUC0	(APB_OFF + 0x64)
+#define APB_CGUC1	(APB_OFF + 0x68)
+#define APB_PREGPRO	(APB_OFF + 0x6c)
 
-#define DWCFG_DFI_INIT_START	(1 << 3)
-#define DWSTATUS_DFI_INIT_COMP	(1 << 0)
-#define CTRL_CKE		(1 << 1)
-#define LMR_START		(1 << 0)
-#define LMR_CMD_LMR		(2 << 6)
-#define LMR_CMD_ZQCL_CS0	(3 << 6)
-#define LMR_ADDR_BIT		12
-#define LMR_BA_BIT		9
+static u32 cpm_readl(unsigned int off) { return readl((void __iomem *)(CPM_BASE + off)); }
+static void cpm_writel(u32 v, unsigned int off) { writel(v, (void __iomem *)(CPM_BASE + off)); }
 
-static u32 cpm_readl(unsigned int off)
+void sdram_init(void)
 {
-	return readl((void __iomem *)(CPM_BASE + off));
-}
+	u32 val, regval;
 
-static void cpm_writel(u32 val, unsigned int off)
-{
-	writel(val, (void __iomem *)(CPM_BASE + off));
-}
+	t41_spl_puts("DDR: minimal init\n");
 
-static void ddr_clk_set_rate(void)
-{
-	unsigned int pll_rate = DDR_MPLL_RATE;
-	unsigned int rate = DDR_TARGET_RATE;
-	unsigned int cdr;
-	u32 regval;
+	/* DRCG bit 6 */
+	cpm_writel(cpm_readl(CPM_DRCG) | 0x40, CPM_DRCG);
 
-	/*
-	 * Vendor clk_init() -> cgu_clks_set() does a full CGU reset
-	 * cycle on every peripheral clock before programming:
-	 *   1. Set max divider + ce, poll busy
-	 *   2. Stop clock + ce, poll busy
-	 *   3. Clear ce + stop
-	 *   4. Set PLL source select (MPLL for DDR)
-	 *   5. Program actual divider + ce, poll busy
-	 *
-	 * Steps 1-3 reset the CGU state machine. Without this, the
-	 * DDR clock may be in an undefined state from bootrom.
-	 */
-
-	/* Step 1: max divider + ce */
-	regval = cpm_readl(CPM_DDRCDR);
-	regval |= 0xff | (1 << 29);	/* max div + ce */
-	cpm_writel(regval, CPM_DDRCDR);
-	while (cpm_readl(CPM_DDRCDR) & (1 << 28))
-		;
-
-	/* Step 2: stop clock + ce */
-	regval = cpm_readl(CPM_DDRCDR);
-	regval |= (1 << 27) | (1 << 29);	/* stop + ce */
-	cpm_writel(regval, CPM_DDRCDR);
-	while (cpm_readl(CPM_DDRCDR) & (1 << 28))
-		;
-
-	/* Step 3: clear ce + stop */
-	regval = cpm_readl(CPM_DDRCDR);
-	regval &= ~((1 << 29) | (1 << 27));
-	cpm_writel(regval, CPM_DDRCDR);
-
-	/* Step 4: PLL source = MPLL (bits 31:30 = 2) */
+	/* DDR CGU: MPLL source + div=1 */
 	regval = cpm_readl(CPM_DDRCDR);
 	regval &= ~(3 << 30);
 	regval |= (2 << 30);
 	cpm_writel(regval, CPM_DDRCDR);
-
-	/* Step 5: actual divider */
 	regval = cpm_readl(CPM_DDRCDR);
-	if (pll_rate % rate >= rate / 2)
-		pll_rate += rate - (pll_rate % rate);
-	else
-		pll_rate -= (pll_rate % rate);
-	cdr = (pll_rate / rate - 1) & 0xff;
 	regval &= ~(0xf | (0x3f << 24));
-	regval |= ((1 << 29) | cdr);
+	regval |= (1 << 29) | 1;
 	cpm_writel(regval, CPM_DDRCDR);
-	while (cpm_readl(CPM_DDRCDR) & (1 << 28))
-		;
-}
+	while (cpm_readl(CPM_DDRCDR) & (1 << 28));
 
-static void ddrc_reset_phy(void)
-{
-	ddr_writel(0xf << 20, DDRC_CTRL);
-	mdelay(1);
-	ddr_writel(0x8 << 20, DDRC_CTRL);
-	mdelay(1);
-}
+	/* DDRC reset - busy wait instead of mdelay (timer may not work
+	 * if pll_init was skipped) */
+	ddr_writel(0xf << 20, 0x010);
+	{ volatile int d; for (d=0; d<1000000; d++); }
+	ddr_writel(0x8 << 20, 0x010);
+	{ volatile int d; for (d=0; d<1000000; d++); }
 
-static void ddr_phy_init(void)
-{
-	u32 val;
-	int i = 0;
+	t41_spl_puts("PLK pre="); spl_put_hex(PHY(0x180)); t41_spl_puts("\n");
 
-	val = ddr_readl(PHY_PLL_FBDIVL);
-	val &= ~0xff;
-	val |= 0x1;
-	ddr_writel(val, PHY_PLL_FBDIVL);
-	/* Verify write took */
-	t41_spl_puts("FBL="); spl_put_hex(ddr_readl(PHY_PLL_FBDIVL)); t41_spl_puts("\n");
+	/* DON'T touch PHY PLL - use bootrom state */
+	/* Just configure MEM_CFG, DQ_WIDTH, CWL, CL, AL */
+	val = PHY(0x004); val &= ~0xff; val |= DDRP_MEMCFG_VALUE; PHY(0x004) = val;
+	PHY(0x034) = 0x3; /* 16-bit */
+	val = PHY(0x000); val &= ~0xff; val |= 0x0d; PHY(0x000) = val;
+	val = PHY(0x01c); val &= ~0xf; val |= DDRP_CWL_VALUE; PHY(0x01c) = val;
+	val = PHY(0x014); val &= ~0xf; val |= DDRP_CL_VALUE; PHY(0x014) = val;
+	PHY(0x018) = 0;
 
-	val = ddr_readl(PHY_PLL_FBDIVH);
-	val &= ~0xff;
-	val |= 0x80;
-	ddr_writel(val, PHY_PLL_FBDIVH);
-	t41_spl_puts("FBH="); spl_put_hex(ddr_readl(PHY_PLL_FBDIVH)); t41_spl_puts("\n");
+	t41_spl_puts("PLK post="); spl_put_hex(PHY(0x180)); t41_spl_puts("\n");
 
-	val = ddr_readl(PHY_PLL_CTRL);
-	val &= ~0xff;
-	val |= 0x28;
-	ddr_writel(val, PHY_PLL_CTRL);
-	t41_spl_puts("PC1="); spl_put_hex(ddr_readl(PHY_PLL_CTRL)); t41_spl_puts("\n");
-	udelay(500);
-
-	val = ddr_readl(PHY_PLL_PDIV);
-	val &= ~0x1f;
-	val |= 0x1;
-	ddr_writel(val, PHY_PLL_PDIV);
-
-	val = 0x20;
-	ddr_writel(val, PHY_PLL_CTRL);
-	udelay(5000);	/* 5ms settle */
-
-	/* PLL lock poll + retry is handled in the pll_sel loop above */
-
-	val = ddr_readl(PHY_MEM_CFG);
-	val &= ~0xff;
-	val |= DDRP_MEMCFG_VALUE;
-	ddr_writel(val, PHY_MEM_CFG);
-
-	ddr_writel(0x3, PHY_DQ_WIDTH);
-
-	val = ddr_readl(PHY_RST);
-	val &= ~0xff;
-	val |= 0x0d;
-	ddr_writel(val, PHY_RST);
-
-	val = ddr_readl(PHY_CWL);
-	val &= ~0xf;
-	val |= DDRP_CWL_VALUE;
-	ddr_writel(val, PHY_CWL);
-
-	val = ddr_readl(PHY_CL);
-	val &= ~0xf;
-	val |= DDRP_CL_VALUE;
-	ddr_writel(val, PHY_CL);
-
-	ddr_writel(0x0, PHY_AL);
-}
-
-static void ddrp_set_drv_odt(void)
-{
-	void __iomem *phy = (void __iomem *)(DDRC_BASE + DDR_PHY_OFFSET);
-
-	writel(0x00, phy + 0x140 * 4);
-	writel(0x00, phy + 0x141 * 4);
-	writel(0x00, phy + 0x150 * 4);
-	writel(0x00, phy + 0x151 * 4);
-	writel(0x0f, phy + 0x130 * 4);
-	writel(0x0f, phy + 0x131 * 4);
-	writel(0x03, phy + 0x132 * 4);
-	writel(0x03, phy + 0x133 * 4);
-	writel(0x14, phy + 0x142 * 4);
-	writel(0x14, phy + 0x143 * 4);
-	writel(0x14, phy + 0x152 * 4);
-	writel(0x14, phy + 0x153 * 4);
-}
-
-static void ddrc_dfi_init(void)
-{
-	u32 kgd_rtt_dic = 0x02;
-
-	ddr_writel(DWCFG_DFI_INIT_START, APB_DWCFG);
+	/* DFI init */
+	ddr_writel((1<<3), APB_DWCFG);
 	ddr_writel(0, APB_DWCFG);
-	while (!(ddr_readl(APB_DWSTATUS) & DWSTATUS_DFI_INIT_COMP))
-		;
-	ddr_writel(0, DDRC_CTRL);
-	udelay(5);
-	ddr_writel(DDRC_CFG_VALUE, DDRC_CFG);
-	udelay(5);
-	ddr_writel(CTRL_CKE, DDRC_CTRL);
-	udelay(5);
+	while (!(ddr_readl(APB_DWSTATUS) & 1));
+	t41_spl_puts("DWST="); spl_put_hex(ddr_readl(APB_DWSTATUS)); t41_spl_puts("\n");
 
-#define _LMR(n) \
-	(DDRC_DLMR_VALUE | LMR_START | LMR_CMD_LMR | \
-	 ((DDR_MR##n##_VALUE & 0xffff) << LMR_ADDR_BIT) | \
-	 (((DDR_MR##n##_VALUE >> 16) & 0x7) << LMR_BA_BIT))
+	ddr_writel(0, 0x010);
+	{ volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(DDRC_CFG_VALUE, 0x008);
+	{ volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(2, 0x010); /* CKE */
+	{ volatile int d; for(d=0;d<50000;d++); }
 
-	ddr_writel(0, DDRC_LMR); udelay(5);
-	ddr_writel(_LMR(2), DDRC_LMR); udelay(5);
-	ddr_writel(0, DDRC_LMR); udelay(5);
-	ddr_writel(_LMR(3), DDRC_LMR); udelay(5);
-	ddr_writel(0, DDRC_LMR); udelay(5);
-	ddr_writel((_LMR(1) & ~0x266000) | (kgd_rtt_dic << 12), DDRC_LMR);
-	udelay(5);
-	ddr_writel(0, DDRC_LMR); udelay(5);
-	ddr_writel(_LMR(0), DDRC_LMR); udelay(5);
-	ddr_writel(DDRC_DLMR_VALUE | LMR_START | LMR_CMD_ZQCL_CS0, DDRC_LMR);
-	udelay(5);
+	/* DDR3 LMR */
+#define _LMR(n) (DDRC_DLMR_VALUE | 1 | (2<<6) | \
+	((DDR_MR##n##_VALUE & 0xffff) << 12) | \
+	(((DDR_MR##n##_VALUE >> 16) & 0x7) << 9))
+	ddr_writel(0, 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(_LMR(2), 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(0, 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(_LMR(3), 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(0, 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel((_LMR(1) & ~0x266000) | (0x02 << 12), 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(0, 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(_LMR(0), 0x018); { volatile int d; for(d=0;d<50000;d++); }
+	ddr_writel(DDRC_DLMR_VALUE | 1 | (3<<6), 0x018); { volatile int d; for(d=0;d<50000;d++); } /* ZQCL */
 #undef _LMR
-}
 
-static void ddrc_prev_init(void)
-{
-	ddr_writel(DDRC_TIMING1_VALUE, DDRC_TIMING(1));
-	ddr_writel(DDRC_TIMING2_VALUE, DDRC_TIMING(2));
-	ddr_writel(DDRC_TIMING3_VALUE, DDRC_TIMING(3));
-	ddr_writel(DDRC_TIMING4_VALUE, DDRC_TIMING(4));
-	ddr_writel(DDRC_TIMING5_VALUE, DDRC_TIMING(5));
-	ddr_writel(DDRC_MMAP0_VALUE, DDRC_MMAP0);
-	ddr_writel(DDRC_MMAP1_VALUE, DDRC_MMAP1);
-	ddr_writel(DDRC_CTRL_VALUE & ~(7 << 12), DDRC_CTRL);
-}
+	/* Controller TIMINGs + MMAPs */
+	ddr_writel(DDRC_TIMING1_VALUE, 0x040);
+	ddr_writel(DDRC_TIMING2_VALUE, 0x048);
+	ddr_writel(DDRC_TIMING3_VALUE, 0x050);
+	ddr_writel(DDRC_TIMING4_VALUE, 0x058);
+	ddr_writel(DDRC_TIMING5_VALUE, 0x060);
+	ddr_writel(DDRC_MMAP0_VALUE, 0x078);
+	ddr_writel(DDRC_MMAP1_VALUE, 0x080);
+	ddr_writel(DDRC_CTRL_VALUE & ~(7 << 12), 0x010);
 
-static void ddrp_hardware_calibration(void)
-{
-	u32 val;
-	int timeout = 1000000;
+	/* Skip calibration for now */
 
-	ddr_writel(0x0, PHY_TRAINING_CTRL);
-	ddr_readl(PHY_TRAINING_CTRL);
-	ddr_writel(0x1, PHY_TRAINING_CTRL);
-	do {
-		val = ddr_readl(PHY_CALIB_DONE);
-	} while (((val & 0xf) != 0x3) && timeout--);
-	if (!timeout) {
-		t41_spl_puts("DDR: calibration timeout\n");
-	}
-	ddr_writel(0x0, PHY_TRAINING_CTRL);
-}
-
-static void remap_swap(int a, int b)
-{
-	u32 remmap[2], tmp[2];
-
-	remmap[0] = ddr_readl(APB_REMAP(a / 4 + 1));
-	remmap[1] = ddr_readl(APB_REMAP(b / 4 + 1));
-#define BIT_OF(bit) (((bit) % 4) * 8)
-#define MASK_OF(bit) (0x1f << BIT_OF(bit))
-	tmp[0] = (remmap[0] & MASK_OF(a)) >> BIT_OF(a);
-	tmp[1] = (remmap[1] & MASK_OF(b)) >> BIT_OF(b);
-	remmap[0] &= ~MASK_OF(a);
-	remmap[1] &= ~MASK_OF(b);
-	ddr_writel(remmap[0] | (tmp[1] << BIT_OF(a)), APB_REMAP(a / 4 + 1));
-	ddr_writel(remmap[1] | (tmp[0] << BIT_OF(b)), APB_REMAP(b / 4 + 1));
-#undef BIT_OF
-#undef MASK_OF
-}
-
-static void mem_remap(void)
-{
-	u32 start = 0, num = 0;
-
-	start += DDR_ROW + DDR_COL + (CONFIG_DDR_DW32 ? 4 : 2) / 2;
-	start -= 12;
-	if (DDR_BANK8) num += 3; else num += 2;
-	if (CONFIG_DDR_CS0 && CONFIG_DDR_CS1) num++;
-	for (; num > 0; num--)
-		remap_swap(num - 1, start + num - 1);
-}
-
-static void ddrc_post_init(void)
-{
-	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
-	mem_remap();
-	ddr_writel(DDRC_CTRL_VALUE, DDRC_CTRL);
+	/* Post init */
+	ddr_writel(DDRC_REFCNT_VALUE, 0x038);
+	ddr_writel(DDRC_CTRL_VALUE, 0x010);
 	ddr_writel(DDRC_CGUC0_VALUE, APB_CGUC0);
 	ddr_writel(DDRC_CGUC1_VALUE, APB_CGUC1);
-}
-
-static void ddr_set_vref_skew(void)
-{
-	static const int dqx_rx[] = {
-		0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10,
-		0x17, 0x19, 0x1b, 0x1d, 0x1f, 0x21, 0x23, 0x25,
-	};
-	static const int dqx_tx[] = {
-		0x03, 0x05, 0x07, 0x09, 0x0b, 0x0d, 0x0f, 0x11,
-		0x18, 0x1a, 0x1c, 0x1e, 0x20, 0x22, 0x24, 0x26,
-	};
-	void __iomem *phy = (void __iomem *)(DDRC_BASE + DDR_PHY_OFFSET);
-	int i;
-	u32 wl;
-
-	writel(0x8b, phy + 0x147 * 4);
-	writel(0x8b, phy + 0x157 * 4);
-
-	writel(0x11, phy + (0x1c0 + 0x00) * 4);
-	writel(0x11, phy + (0x1c0 + 0x12) * 4);
-	writel(0x11, phy + (0x1c0 + 0x2a) * 4);
-	writel(0x11, phy + (0x1c0 + 0x15) * 4);
-	writel(0x11, phy + (0x1c0 + 0x27) * 4);
-	writel(0x11, phy + (0x1c0 + 0x2b) * 4);
-	for (i = 0; i < 16; i++)
-		writel(0x0a, phy + (0x1c0 + dqx_rx[i]) * 4);
-
-	wl = readl(phy + 0x02 * 4);
-	wl |= 0x8;
-	writel(wl, phy + 0x02 * 4);
-
-	writel(0x08, phy + (0x1c0 + 0x01) * 4);
-	writel(0x08, phy + (0x1c0 + 0x13) * 4);
-	writel(0x08, phy + (0x1c0 + 0x14) * 4);
-	writel(0x08, phy + (0x1c0 + 0x16) * 4);
-	writel(0x08, phy + (0x1c0 + 0x28) * 4);
-	writel(0x08, phy + (0x1c0 + 0x29) * 4);
-	for (i = 0; i < 0x1d; i++)
-		writel(0x08, phy + (0x340 + i) * 4);
-	writel(0x08, phy + (0x340 + 0x1e) * 4);
-	writel(0x08, phy + (0x340 + 0x1f) * 4);
-	for (i = 0; i < 16; i++)
-		writel(0x0a, phy + (0x1c0 + dqx_tx[i]) * 4);
-}
-
-void sdram_init(void)
-{
-	t41_spl_puts("DDR: clk\n");
-
-	{
-		u32 regval;
-
-		/* DRCG bit 6 */
-		cpm_writel(cpm_readl(CPM_DRCG) | 0x40, CPM_DRCG);
-
-		/* Full CGU init matching vendor clk_init().
-		 * For each CGU: max div+ce, poll busy, stop+ce, poll busy,
-		 * clear ce+stop. Then set PLL source. Then set actual div.
-		 * Vendor does this for ALL CGUs before sdram_init. */
-#define CGU_RESET(off) do { \
-	regval = cpm_readl(off); \
-	regval |= 0xff | (1 << 29); \
-	cpm_writel(regval, off); \
-	while (cpm_readl(off) & (1 << 28)); \
-	regval = cpm_readl(off); \
-	regval |= (1 << 27) | (1 << 29); \
-	cpm_writel(regval, off); \
-	while (cpm_readl(off) & (1 << 28)); \
-	regval = cpm_readl(off); \
-	regval &= ~((1 << 29) | (1 << 27)); \
-	cpm_writel(regval, off); \
-} while (0)
-
-		/* Reset DDR, SFC0, SFC1 CGUs (vendor resets all) */
-		CGU_RESET(CPM_DDRCDR);
-		CGU_RESET(CPM_SFCCDR);  /* SFC0 at 0x60 */
-#undef CGU_RESET
-
-		/* Set PLL source select bits (31:30) */
-		/* DDR -> MPLL (sel=2) */
-		regval = cpm_readl(CPM_DDRCDR);
-		regval &= ~(3 << 30); regval |= (2 << 30);
-		cpm_writel(regval, CPM_DDRCDR);
-		/* SFC0 -> MPLL (sel=1) */
-		regval = cpm_readl(CPM_SFCCDR);
-		regval &= ~(3 << 30); regval |= (1 << 30);
-		cpm_writel(regval, CPM_SFCCDR);
-
-		/* DDR: actual divider = 1 (MPLL/2 = 700 MHz) */
-		regval = cpm_readl(CPM_DDRCDR);
-		regval &= ~(0xf | (0x3f << 24));
-		regval |= (1 << 29) | 1;
-		cpm_writel(regval, CPM_DDRCDR);
-		while (cpm_readl(CPM_DDRCDR) & (1 << 28))
-			;
-	}
-
-	/* Compute actual DDR rate from MPLL and CDR divider */
-	{
-		u32 mpll_reg = cpm_readl(CPM_CPMPCR);
-		u32 cdr_reg = cpm_readl(CPM_DDRCDR);
-		u32 m = (mpll_reg >> 20) & 0x3ff;
-		u32 n = (mpll_reg >> 14) & 0x1f;
-		u32 od1 = (mpll_reg >> 11) & 0x7;
-		u32 od0 = (mpll_reg >> 8) & 0x7;
-		u32 div = (cdr_reg & 0xff) + 1;
-		u32 mpll_mhz = (m * 24) / (n * od1 * od0);
-		u32 ddr_mhz = mpll_mhz / div;
-		t41_spl_puts("DDR rate=");
-		spl_put_hex(ddr_mhz);
-		t41_spl_puts("MHz\n");
-	}
-	t41_spl_puts("D:CDR="); spl_put_hex(cpm_readl(CPM_DDRCDR));
-	t41_spl_puts(" MPLL="); spl_put_hex(cpm_readl(CPM_CPMPCR));
-	t41_spl_puts(" APLL="); spl_put_hex(cpm_readl(CPM_CPAPCR));
-	t41_spl_puts(" CCSR="); spl_put_hex(cpm_readl(CPM_CPCCR));
-	t41_spl_puts(" DRCG="); spl_put_hex(cpm_readl(CPM_DRCG));
-	t41_spl_puts("\n");
-	ddrc_reset_phy();
-	t41_spl_puts("D:rst CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" PLK0="); spl_put_hex(ddr_readl(PHY_PLL_LOCK));
-	t41_spl_puts(" PLC0="); spl_put_hex(ddr_readl(PHY_PLL_CTRL));
-	t41_spl_puts("\n");
-
-	ddr_phy_init();
-	t41_spl_puts("D:phy CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" PLC="); spl_put_hex(ddr_readl(PHY_PLL_CTRL));
-	t41_spl_puts(" PLK="); spl_put_hex(ddr_readl(PHY_PLL_LOCK)); t41_spl_puts("\n");
-
-	ddrc_dfi_init();
-	t41_spl_puts("D:dfi CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" CFG="); spl_put_hex(ddr_readl(DDRC_CFG));
-	t41_spl_puts(" DWST="); spl_put_hex(ddr_readl(APB_DWSTATUS)); t41_spl_puts("\n");
-
-	ddrp_set_drv_odt();
-	ddrc_prev_init();
-	t41_spl_puts("D:prev CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" T1="); spl_put_hex(ddr_readl(DDRC_TIMING(1)));
-	t41_spl_puts(" MM0="); spl_put_hex(ddr_readl(DDRC_MMAP0)); t41_spl_puts("\n");
-
-	ddrp_hardware_calibration();
-	t41_spl_puts("D:cal CAL="); spl_put_hex(ddr_readl(PHY_CALIB_DONE)); t41_spl_puts("\n");
-
-	ddrc_post_init();
-	t41_spl_puts("D:post CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
-
-	ddr_writel(DDRC_AUTOSR_CNT_VALUE, DDRC_AUTOSR_CNT);
-	ddr_writel(DDRC_AUTOSR_EN_VALUE ? 1 : 0, DDRC_AUTOSR_EN);
-	ddr_writel(DDRC_HREGPRO_VALUE, DDRC_HREGPRO);
+	ddr_writel(DDRC_AUTOSR_CNT_VALUE, 0x030);
+	ddr_writel(0, 0x028);
+	ddr_writel(DDRC_HREGPRO_VALUE, 0x0d8);
 	ddr_writel(DDRC_PREGPRO_VALUE, APB_PREGPRO);
-	t41_spl_puts("D:prot CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
 
-	writel(0x0, (void __iomem *)0xb301206c);
-	writel(0xff000000, (void __iomem *)0xb3012040);
-	writel(0x2bd07460, (void __iomem *)0xb3012048);
-	writel(0x1, (void __iomem *)0xb301206c);
+	t41_spl_puts("CTRL="); spl_put_hex(ddr_readl(0x010)); t41_spl_puts("\n");
 
-	ddr_set_vref_skew();
-	t41_spl_puts("D:done CTRL="); spl_put_hex(ddr_readl(DDRC_CTRL));
-	t41_spl_puts(" REF="); spl_put_hex(ddr_readl(DDRC_REFCNT)); t41_spl_puts("\n");
+	/* Test read */
+	{
+		volatile u32 *a = (volatile u32 *)0xa0000000;
+		*a = 0xdeadbeef;
+		t41_spl_puts("RD="); spl_put_hex(*a); t41_spl_puts("\n");
+	}
 }

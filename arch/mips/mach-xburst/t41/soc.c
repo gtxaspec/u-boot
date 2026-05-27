@@ -145,8 +145,6 @@ void board_init_f(ulong dummy)
 	t41_spl_serial_init();
 	t41_spl_puts("\nT41 SPL: alive (pre-PLL)\n");
 
-	/* clk_prepare removed - the PHY PLL reads 0x12 regardless */
-
 	pll_init();
 	t41_spl_puts("T41 SPL: PLL configured\n");
 

@@ -338,12 +338,19 @@ static u32 hdr_be32(const u8 *p)
 	       ((u32)p[2] << 8) | (u32)p[3];
 }
 
+static int sfc_nor_load_wrapper(u32 src, u32 cnt, u32 dst)
+{
+	sfc_nor_load(src, cnt, dst);
+	return 0;
+}
+
 /*
  * Entry point used by board_init_f(): read the LZMA-compressed,
- * mkimage-wrapped U-Boot proper from NOR, decompress to its load
- * address and jump (no return). DRAM is already initialised.
+ * mkimage-wrapped U-Boot proper from SPI flash (NOR or NAND, per
+ * read_fn), decompress to its load address and jump (no return).
+ * DRAM is already initialised.
  */
-void t40_spl_load_uboot(void)
+void t40_spl_load_uboot_with(int (*read_fn)(u32 src, u32 cnt, u32 dst))
 {
 	u8 *scratch = (u8 *)T40_UBOOT_SCRATCH;
 	u32 ih_magic, ih_size, ih_load;
@@ -351,7 +358,10 @@ void t40_spl_load_uboot(void)
 	int ret;
 
 	/* Legacy mkimage header (64 bytes, big-endian fields). */
-	sfc_nor_load(T40_UBOOT_OFFSET, T40_IH_HDR_LEN, T40_UBOOT_SCRATCH);
+	if (read_fn(T40_UBOOT_OFFSET, T40_IH_HDR_LEN, T40_UBOOT_SCRATCH)) {
+		t40_spl_puts("SPL: U-Boot header read failed\n");
+		return;
+	}
 	ih_magic = hdr_be32(scratch + 0);
 	ih_size  = hdr_be32(scratch + 12);
 	ih_load  = hdr_be32(scratch + 16);
@@ -361,7 +371,7 @@ void t40_spl_load_uboot(void)
 	}
 
 	/*
-	 * The header fields come off NOR - bound them before they drive a
+	 * The header fields come off flash - bound them before they drive a
 	 * read length / decompress destination / jump. ih_size caps the
 	 * scratch write; ih_load must land in DRAM.
 	 */
@@ -376,8 +386,11 @@ void t40_spl_load_uboot(void)
 	}
 
 	/* Header + LZMA payload into DRAM scratch. */
-	sfc_nor_load(T40_UBOOT_OFFSET, T40_IH_HDR_LEN + ih_size,
-		     T40_UBOOT_SCRATCH);
+	if (read_fn(T40_UBOOT_OFFSET, T40_IH_HDR_LEN + ih_size,
+		    T40_UBOOT_SCRATCH)) {
+		t40_spl_puts("SPL: U-Boot payload read failed\n");
+		return;
+	}
 
 	/*
 	 * The lean SPL never runs the normal SPL malloc init. dlmalloc is
@@ -415,4 +428,9 @@ void t40_spl_load_uboot(void)
 	}
 
 	t40_jump_to_uboot(ih_load);
+}
+
+void t40_spl_load_uboot(void)
+{
+	t40_spl_load_uboot_with(sfc_nor_load_wrapper);
 }

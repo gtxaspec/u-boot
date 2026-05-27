@@ -150,18 +150,14 @@ void board_init_f(ulong dummy)
 	{
 		extern int sfc_nand_init(void);
 		extern int sfc_nand_load(u32 src, u32 cnt, u32 dst);
+		extern void t40_spl_load_uboot_with(
+			int (*read_fn)(u32 src, u32 cnt, u32 dst));
 		if (sfc_nand_init() < 0) {
 			t40_spl_puts("T40 SPL: NAND init failed - hang\n");
 			for (;;);
 		}
 		t40_spl_puts("T40 SPL: loading U-Boot from NAND...\n");
-		/* TODO: header parse + size from mkimage hdr; for first
-		 * cut, hardcode a generous read at the binman
-		 * u-boot-lzma offset (matches arch/mips/dts/t40-isvp-u-boot.dtsi
-		 * `u-boot { offset = <0x8000>; }`). */
-		sfc_nand_load(0x8000, 0x100000, 0x80100000);
-		t40_spl_puts("T40 SPL: jumping to U-Boot\n");
-		((void (*)(void))0x80100000)();
+		t40_spl_load_uboot_with(sfc_nand_load);
 		for (;;);
 	}
 #else

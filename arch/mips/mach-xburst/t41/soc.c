@@ -151,62 +151,16 @@ void board_init_f(ulong dummy)
 	timer_init();
 	sdram_init();
 
-	/* Dump key DDRC + PHY registers for DDR3 debug */
+	/* Immediately try DRAM access - no debug prints between
+	 * sdram_init and verify, to avoid CKE dropping during idle. */
 	{
-		volatile u32 *r;
-		int j;
-		/* DDRC: CFG CTRL REFCNT TIMING1-5 MMAP0 MMAP1 */
-		static const struct { u32 off; const char *n; } dregs[] = {
-			{0x008, "CFG"}, {0x010, "CTRL"}, {0x038, "REF"},
-			{0x040, "T1"}, {0x048, "T2"}, {0x050, "T3"},
-			{0x058, "T4"}, {0x060, "T5"},
-			{0x078, "MM0"}, {0x080, "MM1"},
-		};
-		/* PHY: PLL regs + calib */
-		static const struct { u32 off; const char *n; } pregs[] = {
-			{0x000, "RST"}, {0x004, "MCFG"}, {0x008, "TRN"},
-			{0x014, "CL"}, {0x01c, "CWL"}, {0x034, "DQW"},
-			{0x140, "FBL"}, {0x144, "FBH"}, {0x148, "PDV"},
-			{0x14c, "PLC"}, {0x180, "PLK"}, {0x184, "CAL"},
-		};
-		t41_spl_puts("DDRC:");
-		for (j = 0; j < (int)(sizeof(dregs)/sizeof(dregs[0])); j++) {
-			r = (volatile u32 *)(0xb34f0000 + dregs[j].off);
-			t41_spl_putc(' ');
-			t41_spl_puts(dregs[j].n);
-			t41_spl_putc('=');
-			spl_put_hex(*r);
-		}
-		t41_spl_puts("\nPHY:");
-		for (j = 0; j < (int)(sizeof(pregs)/sizeof(pregs[0])); j++) {
-			r = (volatile u32 *)(0xb3011000 + pregs[j].off);
-			t41_spl_putc(' ');
-			t41_spl_puts(pregs[j].n);
-			t41_spl_putc('=');
-			spl_put_hex(*r);
-		}
-		t41_spl_puts("\n");
+		volatile u32 *a = (volatile u32 *)0xa0000000;
+		*a = 0xdeadbeef;
+		if (*a == 0xdeadbeef)
+			t41_spl_puts("T41 SPL: DDR OK\n");
+		else
+			t41_spl_puts("T41 SPL: DDR verify FAILED\n");
 	}
-
-	/* Unprotect DDRC regs, rewrite REFCNT + CTRL, re-protect.
-	 * HREGPRO=1 locks DDRC registers; we set it in sdram_init but
-	 * the REFCNT RFC field and CKE bit get clobbered. */
-	writel(0, (void __iomem *)(0xb34f0000 + 0x0d8));	/* HREGPRO=0 */
-	writel(0x67aa0083, (void __iomem *)(0xb34f0000 + 0x038));
-	writel(0xb092, (void __iomem *)(0xb34f0000 + 0x010));
-	writel(1, (void __iomem *)(0xb34f0000 + 0x0d8));	/* HREGPRO=1 */
-	{
-		u32 ref = readl((void __iomem *)(0xb34f0000 + 0x038));
-		u32 ctl = readl((void __iomem *)(0xb34f0000 + 0x010));
-		t41_spl_puts("FIX REF="); spl_put_hex(ref);
-		t41_spl_puts(" CTRL="); spl_put_hex(ctl);
-		t41_spl_puts("\n");
-	}
-
-	if (dram_verify() == 0)
-		t41_spl_puts("T41 SPL: DDR OK\n");
-	else
-		t41_spl_puts("T41 SPL: DDR verify FAILED\n");
 
 #ifdef CONFIG_SPL_T41_USB_BOOT
 	t41_spl_sfc_clk_init();

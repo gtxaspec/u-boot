@@ -76,15 +76,45 @@ static void ddr_clk_set_rate(void)
 	unsigned int cdr;
 	u32 regval;
 
-	/* Select MPLL as DDR clock source (bits 31:30 = 2).
-	 * Vendor clk_init() -> cgu_clks_set() does this via the
-	 * cgu_clk_sel[DDR] table entry. Without this, DDR clock may
-	 * default to APLL or nothing and the PHY PLL won't lock. */
+	/*
+	 * Vendor clk_init() -> cgu_clks_set() does a full CGU reset
+	 * cycle on every peripheral clock before programming:
+	 *   1. Set max divider + ce, poll busy
+	 *   2. Stop clock + ce, poll busy
+	 *   3. Clear ce + stop
+	 *   4. Set PLL source select (MPLL for DDR)
+	 *   5. Program actual divider + ce, poll busy
+	 *
+	 * Steps 1-3 reset the CGU state machine. Without this, the
+	 * DDR clock may be in an undefined state from bootrom.
+	 */
+
+	/* Step 1: max divider + ce */
 	regval = cpm_readl(CPM_DDRCDR);
-	regval &= ~(3 << 30);
-	regval |= (2 << 30);	/* sel[2] = MPLL */
+	regval |= 0xff | (1 << 29);	/* max div + ce */
+	cpm_writel(regval, CPM_DDRCDR);
+	while (cpm_readl(CPM_DDRCDR) & (1 << 28))
+		;
+
+	/* Step 2: stop clock + ce */
+	regval = cpm_readl(CPM_DDRCDR);
+	regval |= (1 << 27) | (1 << 29);	/* stop + ce */
+	cpm_writel(regval, CPM_DDRCDR);
+	while (cpm_readl(CPM_DDRCDR) & (1 << 28))
+		;
+
+	/* Step 3: clear ce + stop */
+	regval = cpm_readl(CPM_DDRCDR);
+	regval &= ~((1 << 29) | (1 << 27));
 	cpm_writel(regval, CPM_DDRCDR);
 
+	/* Step 4: PLL source = MPLL (bits 31:30 = 2) */
+	regval = cpm_readl(CPM_DDRCDR);
+	regval &= ~(3 << 30);
+	regval |= (2 << 30);
+	cpm_writel(regval, CPM_DDRCDR);
+
+	/* Step 5: actual divider */
 	regval = cpm_readl(CPM_DDRCDR);
 	if (pll_rate % rate >= rate / 2)
 		pll_rate += rate - (pll_rate % rate);
@@ -310,7 +340,11 @@ static void ddrc_post_init(void)
 {
 	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
 	mem_remap();
-	ddr_writel(DDRC_CTRL_VALUE, DDRC_CTRL);
+	/* Write CTRL with PDT disabled (bits 14:12 = 0) during init.
+	 * PDT=3 (0xb092) enters power-down after 32 tCK idle, which
+	 * drops CKE before the SPL can verify DRAM. Leave power-down
+	 * disabled until after U-Boot proper takes over. */
+	ddr_writel((DDRC_CTRL_VALUE & ~(7 << 12)) | CTRL_CKE, DDRC_CTRL);
 	ddr_writel(DDRC_CGUC0_VALUE, APB_CGUC0);
 	ddr_writel(DDRC_CGUC1_VALUE, APB_CGUC1);
 }
@@ -363,11 +397,22 @@ void sdram_init(void)
 {
 	t41_spl_puts("DDR: clk\n");
 
-	/* Ungate DDR clock (CLKGR0 bit 31) + set DRCG bit 6.
-	 * In USB-boot mode the bootrom may not have enabled these. */
+	/* Full CGU init matching vendor clk_init() + clk_set_rate(DDR).
+	 * The vendor calls clk_init() BEFORE sdram_init(), which:
+	 *   1. Ungates SFC0/SFC1 in CLKGR0, LZMA/IVDC in CLKGR1
+	 *   2. Resets all CGU dividers: max div + ce, poll busy,
+	 *      stop + ce, poll busy, clear ce + stop
+	 *   3. Selects PLL sources (MPLL for DDR, SFC, MACPHY)
+	 * Without steps 1-3, the DDR clock CGU is in bootrom-left
+	 * state and the DDRC can't drive CKE. */
 	{
-		u32 v = cpm_readl(CPM_CLKGR0);
-		cpm_writel(v & ~CPM_CLKGR0_DDR, CPM_CLKGR0);
+		u32 v;
+
+		/* Ungate clocks vendor enables */
+		v = cpm_readl(CPM_CLKGR0);
+		v &= ~(CPM_CLKGR0_SFC | CPM_CLKGR0_DDR);
+		cpm_writel(v, CPM_CLKGR0);
+
 		v = cpm_readl(CPM_DRCG);
 		cpm_writel(v | (1 << 6), CPM_DRCG);
 	}

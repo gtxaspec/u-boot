@@ -80,6 +80,7 @@ void pll_init(void)
 
 	pll_set(CPM_CPAPCR, T41_APLL_MNOD);
 	pll_set(CPM_CPMPCR, T41_MPLL_MNOD);
+	pll_set(CPM_CPVPCR, T41_VPLL_MNOD);
 	cpccr_init();
 }
 

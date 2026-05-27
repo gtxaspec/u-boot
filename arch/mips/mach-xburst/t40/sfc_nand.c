@@ -351,12 +351,6 @@ static int spinand_init(void)
 		return -1;
 	}
 
-	t40_spl_puts("SPL: NAND id=");
-	puthex32((curr_device->id_manufactory << 8) | curr_device->device_id);
-	t40_spl_puts(" pagesize=");
-	puthex32(curr_device->pagesize);
-	t40_spl_puts("\n");
-
 	/* Disable on-chip write-protect (status1.BP0..2 := 0). */
 	x = 0;
 	SFC_SEND_COMMAND(&sfc, CMD_SET_FEATURE, 1, FEATURE_REG_PROTECT,

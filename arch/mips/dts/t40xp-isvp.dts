@@ -236,6 +236,7 @@
 		reg = <0xb3500000 0x40000>;
 		clocks = <&cgu T40_CLK_OTG0>;
 		dr_mode = "host";
+		hnp-srp-disable;	/* see t40-isvp.dts for rationale */
 		status = "okay";
 	};
 };

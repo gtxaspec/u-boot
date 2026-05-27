@@ -49,6 +49,24 @@ _start:
 	.word 0xffff00aa
 	.word 0x00000000
 	.space 496, 0
+#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
+	/*
+	 * T40 SFC SPI-NAND boot header.
+	 *
+	 * Byte 8 = 0x00: NOR/NAND flash-type discriminator the T40 mask
+	 * ROM checks in FUN_bfc02070 (0xaa = SPI NOR, 0x00 = SPI NAND).
+	 *
+	 * Bytes 10-11 = NAND geometry hints the mask ROM reads in the
+	 * NAND branch (bVar1=true): byte 10 << 5 -> _DAT_80000070 (OOB
+	 * size, vendor 2 -> 64 B), byte 11 << 10 -> _DAT_80000074 (page
+	 * size, vendor 2 -> 2048 B). Vendor SPL on 2-KiB-page SPI-NAND
+	 * sets both to 2.
+	 *
+	 * Byte 9 = CRC, written by binman ingenic_t31_spl after CRC
+	 * computation.
+	 */
+	.word 0x02020000		/* SPI NAND: byte 8=0x00, 10=2, 11=2 */
+	.space 500, 0
 #else
 	.word 0x000000aa		/* SPI NOR */
 	.space 500, 0

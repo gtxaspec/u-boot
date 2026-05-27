@@ -493,3 +493,33 @@ int sfc_nand_init(void)
 	sfc_controller_init();
 	return spinand_init();
 }
+
+#ifdef CONFIG_SPL_T40_NAND_PROBE
+/*
+ * SFC NAND read-path diagnostic for the USB-boot SPL: probe the chip
+ * and dump the first 32 bytes of NAND offset 0. Used to validate the
+ * SFC NAND code on real silicon before committing to a cold-boot
+ * flash layout. No-op if probe fails.
+ */
+void sfc_nand_probe_dump(void)
+{
+	u8 *buf = (u8 *)0x80100000;
+	int i;
+
+	if (sfc_nand_init() != 0)
+		return;
+
+	if (sfc_nand_load(0, 32, (u32)(uintptr_t)buf) != 0) {
+		t40_spl_puts("SPL: NAND read FAILED\n");
+		return;
+	}
+
+	t40_spl_puts("SPL: NAND[0..31]:\n  ");
+	for (i = 0; i < 32; i++) {
+		t40_spl_putc("0123456789abcdef"[(buf[i] >> 4) & 0xf]);
+		t40_spl_putc("0123456789abcdef"[buf[i] & 0xf]);
+		t40_spl_putc(' ');
+	}
+	t40_spl_puts("\n");
+}
+#endif

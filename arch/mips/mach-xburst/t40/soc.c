@@ -136,8 +136,32 @@ void board_init_f(ulong dummy)
 
 #ifdef CONFIG_SPL_T40_USB_BOOT
 	t40_spl_sfc_clk_init();
+#ifdef CONFIG_SPL_T40_NAND_PROBE
+	t40_spl_puts("T40 SPL: probing SPI-NAND...\n");
+	{
+		extern int sfc_nand_init(void);
+		(void)sfc_nand_init();
+	}
+#endif
 	t40_spl_puts("T40 SPL: returning to mask ROM (USB boot)\n");
 	return;
+#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
+	t40_spl_sfc_clk_init();
+	{
+		extern int sfc_nand_init(void);
+		extern int sfc_nand_load(u32 src, u32 cnt, u32 dst);
+		if (sfc_nand_init() < 0) {
+			t40_spl_puts("T40 SPL: NAND init failed - hang\n");
+			for (;;);
+		}
+		t40_spl_puts("T40 SPL: loading U-Boot from NAND...\n");
+		/* TODO: header parse + size from mkimage hdr; for first
+		 * cut, hardcode a generous read of 1 MiB at fixed offset. */
+		sfc_nand_load(0x20000, 0x100000, 0x80100000);
+		t40_spl_puts("T40 SPL: jumping to U-Boot\n");
+		((void (*)(void))0x80100000)();
+		for (;;);
+	}
 #else
 	t40_spl_puts("T40 SPL: loading U-Boot...\n");
 	t40_spl_load_uboot();

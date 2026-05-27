@@ -209,6 +209,13 @@
 		reg = <0xb3500000 0x40000>;
 		clocks = <&cgu T40_CLK_OTG0>;
 		dr_mode = "host";
+		/* The T40 DWC2 OTG port comes up with CONIDSTS = 1
+		 * (B-device) even when wired to an A-receptacle, so the
+		 * dwc2 host driver never enables port power and `usb
+		 * start` only enumerates the root hub. hnp-srp-disable
+		 * tells the driver to set GUSBCFG.FORCEHOSTMODE,
+		 * bypassing the ID-pin check. Safe on a host-only port. */
+		hnp-srp-disable;
 		status = "okay";
 	};
 };

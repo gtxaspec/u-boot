@@ -427,6 +427,21 @@ static const struct ingenic_i2s_soc soc_t32  = { .mpll_hz = 1200000000u,
 	.aic_codec_select = T32_CODEC_SEL_BITS,
 	.aic_slave_clear = T32_AIC_SLAVE_BITS };
 
+/*
+ * T41 (XBurst2). Same AIC IP base layout as T31 (AICCR at 0x4, no extra
+ * AICCR1/AICCR2 like T40), CPM I2S split CDR at 0x70/0x84, AIC gate at
+ * CLKGR0 bit 11. But the AICFR bit polarity matches T32: RMASTER(1)/
+ * TMASTER(2) set the AIC as I2S master (vs T31 SYNCD/BCKD which CLEAR
+ * to make AIC slave), and only ICDC bit 5 selects the internal codec
+ * (no ICS bit on T41). MPLL is 1400 MHz on T41NQ.
+ */
+static const struct ingenic_i2s_soc soc_t41  = { .mpll_hz = 1400000000u,
+	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
+	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
+	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
+	.aic_codec_select = T32_CODEC_SEL_BITS,
+	.aic_slave_clear = T32_AIC_SLAVE_BITS };
+
 static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t10-aic",  .data = (ulong)&soc_t10 },
 	{ .compatible = "ingenic,t20-aic",  .data = (ulong)&soc_t20 },
@@ -436,6 +451,7 @@ static const struct udevice_id ingenic_i2s_ids[] = {
 	{ .compatible = "ingenic,t31-aic",  .data = (ulong)&soc_t31 },
 	{ .compatible = "ingenic,t32-aic",  .data = (ulong)&soc_t32 },
 	{ .compatible = "ingenic,t40-aic",  .data = (ulong)&soc_t40 },
+	{ .compatible = "ingenic,t41-aic",  .data = (ulong)&soc_t41 },
 	{ .compatible = "ingenic,c100-aic", .data = (ulong)&soc_c100 },
 	{ }
 };

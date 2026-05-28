@@ -72,6 +72,26 @@
 #define D_CHR_2b	0xac
 #define D_CSRR_44	0x110
 
+/*
+ * E-block codec register offsets (T41). Renamed/relaid register map
+ * from the D-block: no _XX suffix, DAC analog path consolidated on
+ * CANACR1/CHR/CHPOUTLGR. DAC I2S iface in CDCR[4:3], DAC I2S master in
+ * CACR1[7:6] = 0x3, volume in CHPOUTLGR[4:0]. Source: vendor SDK
+ * 4.4.94 audio/t41/oss3/inner_codecs/codec.c codec_init() +
+ * codec_enable_playback().
+ */
+#define E_CGR		0x00
+#define E_CACR1		0x0c
+#define E_CDCR		0x10
+#define E_CDLCBMSR	0x1c
+#define E_CDBCR		0x80
+#define E_CCR		0x84
+#define E_CAACR		0x88
+#define E_CANACR1	0xa4
+#define E_CHR		0xa8
+#define E_CHPOUTLGR	0xac
+#define E_CSRR		0x110
+
 /* CPM AIC gate - the codec island shares it; ungate defensively. */
 #define CPM_BASE	0xb0000000
 #define CPM_CLKGR0	0x20
@@ -103,6 +123,7 @@ enum jz_codec_soc {
 	JZ_CODEC_T30_T21,/* A-block, value|=value<<1|1 ramp */
 	JZ_CODEC_T31_C100,/* B-block */
 	JZ_CODEC_T40,	/* D-block, DAC path on CHR_29/2a/2b */
+	JZ_CODEC_T41,	/* E-block, DAC path on CANACR1/CHR/CHPOUTLGR */
 };
 
 struct jz_codec_priv {
@@ -369,6 +390,62 @@ static void jz_codec_d_powerup(struct jz_codec_priv *p)
 	mdelay(1);
 }
 
+/*
+ * E-block (T41) power-up + DAC route. Faithful port of the vendor SDK
+ * 4.4.94 audio/t41/oss3/inner_codecs/codec.c codec_init() (reset + DAC
+ * dc-voltage + 8-step precharge ramp on CCR) followed by codec_enable_
+ * playback() (DAC I2S iface on CDCR[4:3], DAC I2S MASTER on CACR1[7:6],
+ * CANACR1 + CHR analog driver chain, CHPOUTLGR replay volume, drop CCR
+ * to low-power). Vendor msleep()s become mdelay() - they are analog
+ * settling requirements, not just defensive padding.
+ */
+static void jz_codec_e_powerup(struct jz_codec_priv *p)
+{
+	int i;
+	u32 value = 0;
+
+	/* codec_init: reset, DAC dc-voltage bias, 8-step precharge ramp */
+	codec_set(p, E_CGR, 0, 1, 0x0);
+	mdelay(1);
+	codec_set(p, E_CGR, 0, 1, 0x3);
+	mdelay(1);
+	codec_set(p, E_CANACR1, 4, 5, 0x1);	/* DAC dc voltage */
+	mdelay(1);
+	codec_set(p, E_CCR, 0, 7, 0x1);
+	mdelay(1);
+	codec_set(p, E_CDBCR, 6, 6, 0x1);	/* reference voltage */
+	mdelay(1);
+	for (i = 0; i <= 7; i++) {
+		value |= value << 1 | 0x01;
+		codec_set(p, E_CCR, 0, 7, value);
+		mdelay(20);
+	}
+	codec_set(p, E_CAACR, 5, 5, 0x1);	/* current source */
+	mdelay(10);
+	codec_set(p, E_CCR, 0, 7, 0x02);	/* min charge current */
+	mdelay(20);
+
+	/* codec_enable_playback: DAC iface + analog driver chain */
+	codec_set(p, E_CDCR, 3, 4, 0x2);	/* DAC iface = I2S */
+	codec_set(p, E_CACR1, 6, 7, 0x3);	/* DAC I2S MASTER */
+
+	codec_set(p, E_CANACR1, 7, 7, 0x1);	/* DAC current source */
+	codec_set(p, E_CANACR1, 6, 6, 0x1);	/* DAC ref voltage buffer */
+	codec_set(p, E_CANACR1, 4, 5, 0x2);	/* POP sound */
+	codec_set(p, E_CHR, 4, 4, 0x1);		/* HPDRV enable */
+	codec_set(p, E_CHR, 5, 5, 0x1);		/* HPDRV end-init */
+	codec_set(p, E_CANACR1, 3, 3, 0x1);	/* DAC ref voltage */
+	codec_set(p, E_CANACR1, 2, 2, 0x1);	/* DAC clock */
+	codec_set(p, E_CANACR1, 1, 1, 0x1);	/* DAC module */
+	mdelay(10);
+	codec_set(p, E_CANACR1, 0, 0, 0x1);	/* DAC end-init */
+	codec_set(p, E_CHR, 6, 6, 0x1);		/* unmute DRV */
+	codec_set(p, E_CHPOUTLGR, 0, 4, p->volume);
+	codec_set(p, E_CCR, 0, 7, 0x1);		/* low-power */
+	codec_set(p, E_CDLCBMSR, 0, 0, 0x0);	/* spk noise mitigation */
+	mdelay(1);
+}
+
 static int jz_codec_set_params(struct udevice *dev, int interface,
 				int rate, int mclk_freq,
 				int bits_per_sample, uint channels)
@@ -380,7 +457,10 @@ static int jz_codec_set_params(struct udevice *dev, int interface,
 	clrbits_le32((void __iomem *)(CPM_BASE + CPM_CLKGR0),
 		     CPM_CLKGR0_AIC);
 
-	if (p->soc == JZ_CODEC_T40) {
+	if (p->soc == JZ_CODEC_T41) {
+		jz_codec_e_powerup(p);
+		codec_set(p, E_CSRR, 0, 2, jz_codec_fs(rate));
+	} else if (p->soc == JZ_CODEC_T40) {
 		jz_codec_d_powerup(p);
 		codec_set(p, D_CSRR_44, 0, 2, jz_codec_fs(rate));
 	} else if (p->soc == JZ_CODEC_T31_C100) {
@@ -444,6 +524,7 @@ static const struct udevice_id jz_codec_ids[] = {
 	{ .compatible = "ingenic,t30-codec",  .data = JZ_CODEC_T30_T21 },
 	{ .compatible = "ingenic,t31-codec",  .data = JZ_CODEC_T31_C100 },
 	{ .compatible = "ingenic,t40-codec",  .data = JZ_CODEC_T40 },
+	{ .compatible = "ingenic,t41-codec",  .data = JZ_CODEC_T41 },
 	{ .compatible = "ingenic,c100-codec", .data = JZ_CODEC_T31_C100 },
 	{ }
 };

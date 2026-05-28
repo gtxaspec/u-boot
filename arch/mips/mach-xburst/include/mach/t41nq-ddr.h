@@ -30,14 +30,30 @@
 #define DDR_MPLL_RATE		1400000000U
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
 
-/* T41NQ PLL MNOD values from vendor isvp_t41.h:
- *   APLL = 1104 MHz: (92<<20)|(1<<14)|(2<<11)|(1<<8)
- *   MPLL = 1400 MHz: (350<<20)|(2<<14)|(3<<11)|(1<<8)
- *   VPLL = 1188 MHz: (99<<20)|(1<<14)|(2<<11)|(1<<8)
+/* T41NQ PLL MNOD values - faithful copy of vendor isvp_t41.h.
+ *
+ * T41 PLL bitfield layout (from arch-t41/clk.h cpm_cpxpcr_t):
+ *   PLLEN[0], RESERVE[1], LOCK[2], PLL_ON[3],
+ *   PLLRG[6:4], PLLOD1[10:7], PLLOD0[13:11], PLLN[19:14], PLLM[28:20].
+ *
+ * Frequency = EXTAL(24MHz) * (PLLM+1) * 2 / ((PLLN+1) * 2^PLLOD1 * (PLLOD0+1))
+ *   Note: in vendor pll_get_rate() the formula names are swapped, but
+ *   the bit positions are: (cpxpcr>>11)&0x7=od1, (cpxpcr>>7)&0xf=od0.
+ *
+ *   APLL = 1104 MHz: (0x5b<<20)|(0<<14)|(1<<11)|(1<<7)|(3<<4)
+ *     m=91, n=0, od1=1, od0=1, rg=3 -> 24*92*2/(1*2*2) = 1104
+ *   MPLL = 1400 MHz: (0x15d<<20)|(2<<14)|(1<<11)|(1<<7)|(1<<4)
+ *     m=349, n=2, od1=1, od0=1, rg=1 -> 24*350*2/(3*2*2) = 1400
+ *   VPLL = 1080 MHz: (0x59<<20)|(0<<14)|(1<<11)|(1<<7)|(3<<4)
+ *     m=89, n=0, od1=1, od0=1, rg=3 -> 24*90*2/(1*2*2) = 1080
+ *
+ * Prior encoding used T40-style layout ((1<<8) for od0), which on
+ * T41 produces wildly different frequencies (MPLL ~351 instead of
+ * 1400, so DDR ~78MHz instead of 700MHz with the divider we use).
  */
-#define T41_APLL_MNOD		((92 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-#define T41_MPLL_MNOD		((350 << 20) | (2 << 14) | (3 << 11) | (1 << 8))
-#define T41_VPLL_MNOD		((99 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
+#define T41_APLL_MNOD		((0x5b << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4))
+#define T41_MPLL_MNOD		((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4))
+#define T41_VPLL_MNOD		((0x59 << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4))
 
 /* DDRC register values from ddr_params_creator (T41NQ + W631GU6NG + 700 MHz + 16-bit) */
 #define DDRC_CFG_VALUE		0x02002a35

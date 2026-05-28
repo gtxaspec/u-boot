@@ -481,3 +481,57 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx = {
 	.par		= { [IDP_ODT_PD] = 0x00, [IDP_ODT_PU] = 0x00, [IDP_CMD_RC_PD] = 0x05, [IDP_CMD_RC_PU] = 0x05, [IDP_CLK_RC_PD] = 0x05, [IDP_CLK_RC_PU] = 0x05, [IDP_DQX_RC_PD] = 0x0f, [IDP_DQX_RC_PU] = 0x0f, [IDP_VREF] = 0x8b, [IDP_KGD_ODT] = 0x01, [IDP_KGD_DS] = 0x01, [IDP_KGD_RTT_DIC] = 0x06, [IDP_SKEW_DQS0R] = 0x12, [IDP_SKEW_DQS1R] = 0x12, [IDP_SKEW_DQRX] = 0x0b, [IDP_SKEW_DQS0T] = 0x08, [IDP_SKEW_DQS1T] = 0x08, [IDP_SKEW_DQTX] = 0x0b, [IDP_SKEW_TRX] = 0x03 },
 };
 
+
+/* ==================================================================
+ * T40 family (DDR2)
+ *
+ * Values from vendor T40-1.3.1 ddr_params_creator output, mirrored
+ * from arch/mips/mach-xburst/include/mach/t40n-ddr.h. T40N and T40NN
+ * (Wyze-class camera-module silkscreen) use the same M14D5121632A
+ * DDR2 chip at the same DDR-500 setpoint; both DT variants resolve
+ * to this entry.
+ *
+ * .par[] efuse table is left at compiler defaults (zero): the T40
+ * family PHY path does not consume the IDP_* values - drive/ODT
+ * lives in hard-coded vendor T40N constants in ddr_innophy_phy_t40.c,
+ * and the per-bit skew table is also static.
+ *
+ * .remap[] is zeroed: vendor T40 DDR2 mem_remap is an explicit skip
+ * (REMMAP is DDR3-only on T40 - the DDR2 memory layout is already
+ * correct via MMAP0/MMAP1).
+ * ================================================================== */
+
+/* ----- T40N / T40NN (M14D5121632A, DDR2 @ 500 MHz, 128 MiB) ----- */
+const struct ingenic_ddr_variant ingenic_ddr_variant_t40n = {
+	.name		= "T40N",
+	.chip		= "M14D5121632A",
+	.type		= INGENIC_DDR_TYPE_DDR2,
+	.family		= INGENIC_DDR_FAMILY_T40,
+	.bus_width	= 32,
+	.chip0_size	= 0x08000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1000000000u,
+	.ddr_hz		= 500000000u,
+	.ddrc_cfg	= 0x28002825,
+	.ddrc_ctrl	= 0x00008092,
+	.ddrc_dlmr	= 0x00000000,
+	.ddrc_mmap0	= 0x000020f8,
+	.ddrc_mmap1	= 0x00002800,
+	.ddrc_refcnt	= 0x21f20081,
+	.ddrc_timing	= { 0x050c0806, 0x04060407, 0x03080208, 0x1e1e1705, 0x46000055 },
+	.ddrc_autosr_cnt= 0x20000f3c,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x00000011,
+	.ddrp_cl	= 0x00000007,
+	.ddrp_cwl	= 0x00000005,
+	.mr0		= 0x00000f73,
+	.mr1		= 0x00002040,
+	.mr2		= 0x00004000,
+	.mr3		= 0x00006000,
+	.mr10		= 0,
+	.mr63		= 0,
+};

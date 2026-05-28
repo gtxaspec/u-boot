@@ -2,4 +2,5 @@
 
 obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ddr_innophy.o
 obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ddr_innophy_phy.o
+obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ddr_innophy_phy_t40.o
 obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ddr_innophy_types.o

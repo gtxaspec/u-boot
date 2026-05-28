@@ -91,15 +91,14 @@
 #define CPM_DRCG		0xd0
 
 /* Per-variant DDR values: geometry, clocks, controller VALUEs,
- * PHY VALUEs, MR0..3, REMMAP_ARRAY. */
+ * PHY VALUEs, MR0..3, REMMAP_ARRAY. Vendor T40-1.3.1 has no separate
+ * T40NN target; T40N and T40NN share the same DDR2-500 setpoint. */
 #if defined(CONFIG_T40_VARIANT_T40XP)
 #include <mach/t40xp-ddr.h>
 #elif defined(CONFIG_T40_VARIANT_T40A)
 #include <mach/t40a-ddr.h>
-#elif defined(CONFIG_T40_VARIANT_T40N)
+#else /* T40_VARIANT_T40N or T40_VARIANT_T40NN */
 #include <mach/t40n-ddr.h>
-#else
-#include <mach/t40nn-ddr.h>
 #endif
 
 /* Compat alias for code still referencing the old single name. */

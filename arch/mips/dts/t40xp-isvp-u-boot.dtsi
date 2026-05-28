@@ -1,43 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Binman image description for the Ingenic ISVP-T40 SFC-NOR boot.
+ * Binman image description for the Ingenic ISVP-T40XP SFC-NAND boot.
  *
- * Mirrors the A1 binman layout - T40 is the XBurst2 sibling of A1 and
- * uses the same vendor `0x03040506 / 0x55aa5502 / 0x000000aa` SFC-NOR
- * boot header at flash offset 0, with LZMA U-Boot at 0x8000 (SPL pad
- * clears 0x6000 with margin). The bootrom's FUN_bfc02070 Port-A SFC
- * path scans for the 0x55aa5502 marker in the first sector.
+ * T40XP uses SPI-NAND (DDR3 256 MiB, vs T40NN's DDR2 NOR + 128 MiB).
+ * The bootrom's NAND boot path expects no INGE block at SPL offset
+ * 0x100 (vendor SPI-NAND SPL ships with all zeros there); we set the
+ * etype's `ingenic,no-inge` boolean to suppress the INGE write.
  *
- * T40 differs from A1: at SPL-entry time the UART clock is not the
- * raw 24 MHz EXTAL - PCLK runs through the bootrom-default CPCCR
- * divider and is too slow for the SPL's hard-coded 115200/16/24M
- * baud divisor (the receiver sees 0x00 frames). The
- * `ingenic,inge-descriptors` property below tells the bootrom to
- * program APLL/MPLL/CPCCR/SFC clocks *before* it jumps to the SPL,
- * so the SPL's UART setup runs against a sane PCLK. Values come from
- * the vendor U-Boot 2013 T40-1.3.1 tools/ingenic-tools/spl_params_fixer.c
- * `descriptors[]` table (CONFIG_SPL_SFC path):
+ * The custom NAND U-Boot loader in arch/mips/mach-xburst/t40/sfc_nand.c
+ * reads the legacy mkimage header + LZMA payload from NAND offset
+ * T40_NAND_UBOOT_OFFSET (0x80000), so keep U-Boot at 0x80000 here.
+ * The 64 KiB SPL window is comfortable for DM-in-SPL builds.
  *
- *   APLL  = 600 MHz  : (set 0xb0000010, poll 0xb0000010, val 0x03205101,
- *                      hmask 0x08, lmask 0)
- *   MPLL  = 1200 MHz : (set 0xb0000014, poll 0xb0000014, val 0x06405101,
- *                      hmask 0x08, lmask 0)
- *   CPCCR DIV        : (set 0xb0000000, poll 0xb00000d4, val 0x557b5510,
- *                      hmask 0,    lmask 0x07)
- *   CPCCR SEL        : (set 0xb0000000, poll 0xffffffff (no-poll),
- *                      val 0x9a0b5510, hmask 0, lmask 0)
- *   SFC SSICDR 24 MHz: (set 0xb0000060, poll 0xb0000060, val 0x60000018,
- *                      hmask 0,    lmask 0x10000000)
- *
- * The descriptor table is generic infrastructure - any T-series board's
- * binman dtsi can use it to program its own clocks before the SPL runs.
- *
- * 'make' produces:
- *   u-boot-spl-t40.bin       : SPL with the finalized SFC-NOR boot
- *                              header + INGE descriptor table,
- *                              bootable standalone.
- *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
- *                              at 0x8000 - flash at offset 0.
+ * `ingenic,min-spl-length` covers the BSS region: with DM-in-SPL the
+ * SPL ends before SPL_BSS_START_ADDR + SPL_BSS_MAX_SIZE = 0x80016000,
+ * so we pad the SPL file (with 0xff) to that length, so the bootrom
+ * caches enough SRAM to back BSS during board_init_f.
  */
 
 / {
@@ -47,21 +25,13 @@
 };
 
 &binman {
-	u-boot-spl-t40 {
-		filename = "u-boot-spl-t40.bin";
+	u-boot-spl-t40xp {
+		filename = "u-boot-spl-t40xp.bin";
 
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
-
-			/*
-			 * T40XP SPI-NAND bootrom path does not consume an
-			 * INGE block at SPL offset 0x100 - the vendor SPI-
-			 * NAND SPL ships with all zeros there. Setting
-			 * INGE magic at 0x100 causes the bootrom NAND boot
-			 * path to reject the image (silent UART). Suppress
-			 * the INGE write entirely for SFCNAND.
-			 */
 			ingenic,no-inge;
+			ingenic,min-spl-length = <0x16000>;
 		};
 	};
 
@@ -72,12 +42,12 @@
 		spl {
 			type = "blob";
 			offset = <0x0>;
-			filename = "u-boot-spl-t40.bin";
+			filename = "u-boot-spl-t40xp.bin";
 		};
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x80000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

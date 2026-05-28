@@ -151,8 +151,15 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # of SRAM (incl. padding bytes loaded from NAND). The padding
         # MUST be in the file so binman's CRC and bootrom's CRC see
         # the same bytes.
+        #
+        # If `ingenic,min-spl-length` is set (BSS coverage; see the
+        # NOR-path commentary below), pad UP to that length too. The
+        # bootrom NAND loader has the same cache-as-SRAM semantics as
+        # NOR: anything past SPL_LENGTH is not cache-locked, so a BSS
+        # touch into uninit DRAM crashes silently. Padding with 0xff
+        # to bss_end is the per-vendor convention.
         if self.no_inge:
-            stored_size = (orig_size + 0x3f) & ~0x3f
+            stored_size = (max(orig_size, self.min_spl_length) + 0x3f) & ~0x3f
             if stored_size > orig_size:
                 data.extend(b'\xff' * (stored_size - orig_size))
 

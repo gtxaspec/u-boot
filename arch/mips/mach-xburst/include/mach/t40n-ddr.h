@@ -1,17 +1,27 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Ingenic T40N DDR2 controller + Innophy PHY register values.
+ * Ingenic T40N / T40NN DDR2 controller + Innophy PHY register values.
  *
- * Vendor T40N setpoint per isvp_common.h: 128 MiB single chip, 32-bit
- * DDR2 @ 550 MHz, MPLL=1100, APLL=912. M14D5121632A chip.
+ * Direct output of vendor U-Boot `tools/ingenic-tools/
+ * ddr_params_creator` built from the T40-1.3.1 branch with
+ * `isvp_t40n_sfcnor` (CONFIG_T40N + DDR_500M + APLL_912M +
+ * CONFIG_DDR2_M14D5121632A + CONFIG_DDR_DW32=1, CS0-only).
  *
- * Values are direct output of vendor `tools/ingenic-tools/
- * ddr_params_creator` host-tool configured with `isvp_t40n_sfcnor`
- * (CONFIG_T40N + CONFIG_DDR2_M14D5121632A + DDR_550M + DW32=1, CS0
- * only). Untested in mainline - selecting T40_VARIANT_T40N runs the
- * Innophy DDR2 init from these values at the vendor 550 MHz target.
- * For the cloner-derived 500 MHz timings that the lab T40 board
- * ("T40NN") boots cleanly on, use T40_VARIANT_T40NN (t40nn-ddr.h).
+ * 128 MiB single M14D5121632A chip, 32-bit DDR2 @ 500 MHz,
+ * MPLL=1000, APLL=912. HW-validated on the lab T40 board (silkscreen
+ * "T40NN") - cold-boot from SFC NOR with DRAM=128 MiB, all peripherals
+ * up.
+ *
+ * T40NN: the camera-module silkscreen we see in the wild on Wyze-class
+ * boards. Vendor T40-1.3.1 has no separate T40NN target and treats
+ * this silicon as plain T40N at the same DDR2-500 setpoint. Both
+ * T40_VARIANT_T40N and T40_VARIANT_T40NN select this header so the
+ * config matches whichever name the user expects.
+ *
+ * Note an older vendor branch (T40-main / T40-1.2.0) targets the
+ * higher T40N DDR_550M setpoint with different timing/refresh values.
+ * We track T40-1.3.1, the same vintage the lab cloner blob is derived
+ * from.
  */
 
 #ifndef __T40N_DDR_H__
@@ -27,26 +37,26 @@
 #define DDR_CHIP_0_SIZE		0x08000000	/* 128 MiB */
 #define DDR_CHIP_1_SIZE		0
 
-/* Clock target: MPLL=1100 -> DDR=MPLL/2=550 MHz */
-#define DDR_MPLL_RATE		1100000000U
+/* Clock target: MPLL=1000 -> DDR=MPLL/2=500 MHz */
+#define DDR_MPLL_RATE		1000000000U
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
 
-/* APLL=912 MHz, MPLL=1100 MHz (M<<20 | N<<14 | OD1<<11 | OD0<<8) */
+/* APLL and MPLL M/N/OD encoding (M<<20 | N<<14 | OD1<<11 | OD0<<8) */
 #define T40_APLL_MNOD		((76 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-#define T40_MPLL_MNOD		((275 << 20) | (2 << 14) | (3 << 11) | (1 << 8))
+#define T40_MPLL_MNOD		((125 << 20) | (1 << 14) | (3 << 11) | (1 << 8))
 
 /* DDRC register values from ddr_params_creator */
 #define DDRC_CFG_VALUE		0x28002825
 #define DDRC_CTRL_VALUE		0x00008092
 #define DDRC_MMAP0_VALUE	0x000020f8
 #define DDRC_MMAP1_VALUE	0x00002800
-#define DDRC_REFCNT_VALUE	0x24850083
-#define DDRC_TIMING1_VALUE	0x050d0906
-#define DDRC_TIMING2_VALUE	0x04060507
-#define DDRC_TIMING3_VALUE	0x03090209
-#define DDRC_TIMING4_VALUE	0x22201906
-#define DDRC_TIMING5_VALUE	0x4e000055
-#define DDRC_AUTOSR_CNT_VALUE	0x230010c2
+#define DDRC_REFCNT_VALUE	0x21f20081
+#define DDRC_TIMING1_VALUE	0x050c0806
+#define DDRC_TIMING2_VALUE	0x04060407
+#define DDRC_TIMING3_VALUE	0x03080208
+#define DDRC_TIMING4_VALUE	0x1e1e1705
+#define DDRC_TIMING5_VALUE	0x46000055
+#define DDRC_AUTOSR_CNT_VALUE	0x20000f3c
 #define DDRC_AUTOSR_EN_VALUE	0x00000000
 #define DDRC_HREGPRO_VALUE	0x00000001
 #define DDRC_PREGPRO_VALUE	0x00000001
@@ -57,7 +67,7 @@
 #define DDRP_MEMCFG_VALUE	0x00000011	/* DDR2, burst 8 */
 #define DDRP_CL_VALUE		0x00000007
 #define DDRP_CWL_VALUE		0x00000005
-#define DDR_MR0_VALUE		0x00000173
+#define DDR_MR0_VALUE		0x00000f73
 #define DDR_MR1_VALUE		0x00002040
 #define DDR_MR2_VALUE		0x00004000
 #define DDR_MR3_VALUE		0x00006000

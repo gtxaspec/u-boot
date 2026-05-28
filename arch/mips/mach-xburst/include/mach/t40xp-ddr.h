@@ -2,15 +2,15 @@
 /*
  * Ingenic T40XP DDR3 controller + Innophy PHY register values.
  *
- * Output of vendor `tools/ingenic-tools/ddr_params_creator` host
- * tool with CONFIG_T40XP + M15T1G1664A_2C + DDR=600MHz + DW32=1
- * + CS0-only inputs.
+ * Direct output of vendor U-Boot `tools/ingenic-tools/
+ * ddr_params_creator` built from the T40-1.3.1 branch with
+ * `isvp_t40xp_sfcnor` (CONFIG_T40XP + DDR_600M + APLL_1008M +
+ * CONFIG_DDR3_M15T1G1664A_2C + CONFIG_DDR_DW32=1, CS0-only).
  *
- * 256 MiB single chip, 32-bit DDR3-1333 @ 600 MHz, MPLL=1200,
- * APLL=1008.
- *
- * Untested on real silicon yet - T40XP board lab connector
- * power=B0R11, boot=B1R10.
+ * 256 MiB single M15T1G1664A_2C chip, 32-bit DDR3-1333 @ 600 MHz,
+ * MPLL=1200, APLL=1008. HW-validated on the lab T40XP board
+ * (power=B0R11, boot=B1R10) - cold-boot from SFC NOR with
+ * DRAM=256 MiB, all peripherals up.
  */
 
 #ifndef __T40XP_DDR_H__

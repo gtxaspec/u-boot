@@ -431,6 +431,8 @@ static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
 	{ .compatible = "ingenic,t40-gmac", .data = (ulong)&t40_gmac_data },
+	/* T41 reuses the T40 data: MPLL is read from CPM at runtime. */
+	{ .compatible = "ingenic,t41-gmac", .data = (ulong)&t40_gmac_data },
 	{ }
 };
 

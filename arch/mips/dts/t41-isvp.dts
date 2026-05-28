@@ -29,8 +29,9 @@
 	 * sdram_init() with hardware DQS calibration enabled.
 	 */
 	ddr: memory-controller@b34f0000 {
-		compatible = "ingenic,t41nq-ddr-innophy";
+		compatible = "ingenic,t41-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
+		ingenic,variant = "t41nq";
 		bootph-all;
 	};
 

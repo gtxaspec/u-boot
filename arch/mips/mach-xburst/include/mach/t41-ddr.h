@@ -91,8 +91,38 @@
 #define CPM_DRCG		0xd0
 
 /* Per-variant DDR values: geometry, clocks, controller VALUEs,
- * PHY VALUEs, MR0..3, REMMAP_ARRAY. */
+ * PHY VALUEs, MR0..3, REMMAP_ARRAY. All headers are direct output of
+ * vendor T41-1.2.6 ddr_params_creator; only T41NQ has HW-validated
+ * sdram_init right now. The other 12 variants live here as
+ * documentation / future-port reference until sdram.c gets a
+ * vendor-style ddr_params refactor. */
+#if defined(CONFIG_T41_VARIANT_T41A)
+#include <mach/t41a-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41L)
+#include <mach/t41l-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41LQ)
+#include <mach/t41lq-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41N)
+#include <mach/t41n-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41XQ)
+#include <mach/t41xq-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZG)
+#include <mach/t41zg-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZGC)
+#include <mach/t41zgc-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZL)
+#include <mach/t41zl-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZM)
+#include <mach/t41zm-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZMC)
+#include <mach/t41zmc-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZN)
+#include <mach/t41zn-ddr.h>
+#elif defined(CONFIG_T41_VARIANT_T41ZX)
+#include <mach/t41zx-ddr.h>
+#else /* T41_VARIANT_T41NQ */
 #include <mach/t41nq-ddr.h>
+#endif
 
 /* Compat alias for code still referencing the old single name. */
 #define DDRP_MR0_VALUE		DDR_MR0_VALUE

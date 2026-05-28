@@ -286,16 +286,48 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
  * probe skips it - DRAM is already alive.
  * ------------------------------------------------------------------ */
 
+/* Map ingenic,variant DT string to the per-variant config table. */
+static const struct {
+	const char *name;
+	const struct ingenic_ddr_variant *cfg;
+} ingenic_ddr_variants[] = {
+	{ "t41a",   &ingenic_ddr_variant_t41a   },
+	{ "t41l",   &ingenic_ddr_variant_t41l   },
+	{ "t41lq",  &ingenic_ddr_variant_t41lq  },
+	{ "t41n",   &ingenic_ddr_variant_t41n   },
+	{ "t41nq",  &ingenic_ddr_variant_t41nq  },
+	{ "t41xq",  &ingenic_ddr_variant_t41xq  },
+	{ "t41zg",  &ingenic_ddr_variant_t41zg  },
+	{ "t41zgc", &ingenic_ddr_variant_t41zgc },
+	{ "t41zl",  &ingenic_ddr_variant_t41zl  },
+	{ "t41zm",  &ingenic_ddr_variant_t41zm  },
+	{ "t41zmc", &ingenic_ddr_variant_t41zmc },
+	{ "t41zn",  &ingenic_ddr_variant_t41zn  },
+	{ "t41zx",  &ingenic_ddr_variant_t41zx  },
+};
+
 static int ingenic_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_ddr_variant *v;
+	const struct ingenic_ddr_variant *v = NULL;
+	const char *variant_name;
 	fdt_addr_t base;
 	u64 size;
+	int i;
 
-	v = (const struct ingenic_ddr_variant *)dev_get_driver_data(dev);
+	variant_name = dev_read_string(dev, "ingenic,variant");
+	if (!variant_name) {
+		dev_err(dev, "missing ingenic,variant property\n");
+		return -EINVAL;
+	}
+	for (i = 0; i < ARRAY_SIZE(ingenic_ddr_variants); i++) {
+		if (!strcmp(variant_name, ingenic_ddr_variants[i].name)) {
+			v = ingenic_ddr_variants[i].cfg;
+			break;
+		}
+	}
 	if (!v) {
-		dev_err(dev, "no variant config bound to compatible\n");
+		dev_err(dev, "unknown ingenic,variant '%s'\n", variant_name);
 		return -ENODEV;
 	}
 	p->cfg = v;
@@ -339,32 +371,7 @@ static const struct ram_ops ingenic_ddr_ops = {
 };
 
 static const struct udevice_id ingenic_ddr_ids[] = {
-	{ .compatible = "ingenic,t41a-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41a },
-	{ .compatible = "ingenic,t41l-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41l },
-	{ .compatible = "ingenic,t41lq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41lq },
-	{ .compatible = "ingenic,t41n-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41n },
-	{ .compatible = "ingenic,t41nq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41nq },
-	{ .compatible = "ingenic,t41xq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41xq },
-	{ .compatible = "ingenic,t41zg-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zg },
-	{ .compatible = "ingenic,t41zgc-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zgc },
-	{ .compatible = "ingenic,t41zl-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zl },
-	{ .compatible = "ingenic,t41zm-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zm },
-	{ .compatible = "ingenic,t41zmc-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zmc },
-	{ .compatible = "ingenic,t41zn-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zn },
-	{ .compatible = "ingenic,t41zx-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zx },
+	{ .compatible = "ingenic,t41-ddr-innophy" },
 	{ }
 };
 

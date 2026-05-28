@@ -32,19 +32,6 @@
 
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
-			/*
-			 * T31 mask ROM SFC NOR path does NOT consume an INGE
-			 * block at 0x100. If INGE magic is present there the
-			 * bootrom rejects the image (silent UART, no
-			 * fallback). The etype writes an INGE block by
-			 * default for T40/T41-style images; suppress it for
-			 * T31. Empirically: cold boot worked at commit
-			 * 3cc0f03ab574 when the etype emitted NO INGE
-			 * (image[0x100] = 0x0000_0000); subsequent etype
-			 * changes that began writing INGE unconditionally
-			 * regressed T31 cold boot to silent.
-			 */
-			ingenic,no-inge;
 		};
 	};
 

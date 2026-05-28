@@ -124,6 +124,16 @@ ENTRY(_start)
 #endif
 
 reset:
+#ifdef CONFIG_SOC_T41
+	/* T41 (XBurst2): skip ALL CP0 init. The vendor T41 start.S
+	 * does zero CP0 setup - just GP + SP + jump to board_init_f.
+	 * Writing CP0_STATUS (ERL=1) breaks DRAM access on XBurst2.
+	 * Writing CP0_COUNT may trap. Reading CP0_EBASE for CPU ID
+	 * check hangs on dual-core XBurst2 if core 1 is alive.
+	 * Jump straight to the post-CP0 init code. */
+	b	4f
+	 nop
+#else
 	mtc0	zero, CP0_COUNT	# clear cp0 count for most accurate boot timing
 #if __mips_isa_rev >= 6
 	mfc0	t0, CP0_CONFIG, 5
@@ -155,6 +165,8 @@ reset:
 	and	t0, ST0_IMPL
 	or	t0, ST0_BEV | ST0_ERL | STATUS_SET
 	mtc0	t0, CP0_STATUS
+#endif /* !CONFIG_SOC_T41 */
+4:
 
 	/*
 	 * Check whether CP0 Config1 is implemented. If not continue

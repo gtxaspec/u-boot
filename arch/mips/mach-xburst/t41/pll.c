@@ -65,7 +65,6 @@ static void pll_set(unsigned int reg, u32 mnod)
  * CPCCR vendor T41NQ production values per include/configs/isvp_t41.h
  * DDR_700M block: PDIV=12, H2DIV=6, H0DIV=6, L2DIV=3, CDIV=1. SEL
  * bits: SCLKA=2, CPU=1(APLL), H0=2(MPLL), H2=2(MPLL).
- * = 0x9a0b5520 (T41NQ, differs from T40 in L2DIV: 3 vs 2).
  */
 #define T41_CPCCR_CFG	((2 << 30) | (1 << 28) | (2 << 26) | (2 << 24) | \
 			 ((12 - 1) << 16) | ((6 - 1) << 12) | \

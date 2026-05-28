@@ -17,10 +17,10 @@
  *  * Vendor's DDR_CHIP_0_SIZE / DDR_CHIP_1_SIZE / REMMAP_ARRAY macros
  *    become fields on the variant struct.
  *
- * SPL-time entry point: ingenic_ddr_sdram_init() is exported as a
- * non-DM helper for the existing SPL bring-up sequence that runs
- * before driver model is up. U-Boot proper relies on the UCLASS_RAM
- * probe to populate gd->bd->bi_dram.
+ * Probes via the UCLASS_RAM uclass off DT in both SPL and U-Boot
+ * proper. SPL's probe runs ingenic_ddr_sdram_init() to actually
+ * bring DRAM up; U-Boot proper's probe skips the init (SPL already
+ * did it) and just records the size for ram_get_info() consumers.
  */
 
 #define LOG_CATEGORY UCLASS_RAM
@@ -211,12 +211,41 @@ static void ddrc_autosr_setup(struct ingenic_ddr_priv *p)
  * Top-level init - matches vendor sdram_init() phase ordering.
  * ------------------------------------------------------------------ */
 
+/* CGU DDR clock divider. Programs the controller's input clock to
+ * the variant's ddr_hz before the PHY PLL setup; the Innophy PHY
+ * takes the CGU output as its reference clock and ddr_phy_init()
+ * assumes that input is at ddr_hz. Matches vendor clk_set_rate(DDR,
+ * ddrfreq): cdr = mpll/ddr - 1. */
+#define CPM_BASE_KSEG1		0xb0000000u
+#define CPM_DDRCDR_OFFSET	0x2cu
+
+static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
+{
+	void __iomem *ddrcdr = (void __iomem *)(CPM_BASE_KSEG1 + CPM_DDRCDR_OFFSET);
+	u32 cdr = (v->mpll_hz / v->ddr_hz) - 1;
+	u32 r;
+
+	r = readl(ddrcdr);
+	r &= ~(3u << 30);
+	r |= (2u << 30);		/* source = MPLL */
+	writel(r, ddrcdr);
+
+	r = readl(ddrcdr);
+	r &= ~(0xf | (0x3fu << 24));
+	r |= (1u << 29) | (cdr & 0xf);	/* CE | divider */
+	writel(r, ddrcdr);
+	while (readl(ddrcdr) & (1u << 28))
+		;
+}
+
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 {
 	int ret;
 
 	debug("ingenic-ddr: init %s (%s, %u MHz)\n",
 	      p->cfg->name, p->cfg->chip, p->cfg->ddr_hz / 1000000);
+
+	ingenic_ddr_cgu_init(p->cfg);
 
 	ddrc_reset_phy(p);
 
@@ -248,33 +277,14 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 }
 
 /* ------------------------------------------------------------------
- * Non-DM entry point - SPL board_init_f calls this before driver
- * model is up. Builds a stack-allocated priv struct and runs the
- * full init sequence.
- * ------------------------------------------------------------------ */
-int ingenic_ddr_init(const struct ingenic_ddr_variant *cfg, void __iomem *base)
-{
-	struct ingenic_ddr_priv priv = {
-		.cfg = cfg,
-		.base = base,
-	};
-
-	return ingenic_ddr_sdram_init(&priv);
-}
-
-/* ------------------------------------------------------------------
- * UCLASS_RAM driver (U-Boot proper only).
+ * UCLASS_RAM driver. Probes off DT in both SPL (DDR bring-up) and
+ * U-Boot proper (just records DRAM size for ram_get_info() consumers,
+ * because SPL already brought the controller up).
  *
- * SPL never reaches this - the T41 SPL has a custom board_init_f that
- * doesn't initialize driver model, so SPL drives DRAM bring-up via
- * the non-DM ingenic_ddr_init() helper above. In U-Boot proper SPL
- * already initialized DRAM; the probe just records size for
- * ram_get_info(). Gating the of_match + U_BOOT_DRIVER out of SPL
- * also lets the linker GC the 12 variant structs the SPL build does
- * not reference (only the configured CONFIG_T41_VARIANT_* variant is
- * pulled in via t41_pick_variant() in sdram.c).
+ * Phase split: ingenic_ddr_sdram_init() is the actual init work, run
+ * exactly once per cold-boot from the SPL probe. The proper-side
+ * probe skips it - DRAM is already alive.
  * ------------------------------------------------------------------ */
-#ifndef CONFIG_XPL_BUILD
 
 static int ingenic_ddr_probe(struct udevice *dev)
 {
@@ -301,13 +311,16 @@ static int ingenic_ddr_probe(struct udevice *dev)
 		size = 0x20000000ULL;
 	p->ram_size = (u32)size;
 
-	/* DRAM bring-up runs in SPL via the non-DM ingenic_ddr_init()
-	 * helper (T41 SPL has a custom board_init_f that doesn't reach
-	 * the standard board_init_r where DM gets initialized; running
-	 * the init through the UCLASS_RAM probe in SPL would require a
-	 * non-trivial SPL framework refactor). U-Boot proper enters this
-	 * probe with DRAM already live - just record the size for
-	 * ram_get_info() consumers. */
+	/* SPL: actually bring DRAM up here.
+	 * U-Boot proper: SPL already did it - just leave ram_size set. */
+	if (IS_ENABLED(CONFIG_XPL_BUILD)) {
+		int ret = ingenic_ddr_sdram_init(p);
+
+		if (ret) {
+			dev_err(dev, "sdram_init failed: %d\n", ret);
+			return ret;
+		}
+	}
 
 	return 0;
 }
@@ -363,5 +376,3 @@ U_BOOT_DRIVER(ingenic_ddr_innophy) = {
 	.probe		= ingenic_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_ddr_priv),
 };
-
-#endif /* !CONFIG_XPL_BUILD */

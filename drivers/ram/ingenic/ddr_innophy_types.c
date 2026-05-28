@@ -579,3 +579,203 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp = {
 	.mr63		= 0,
 	.remap		= { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
 };
+
+#ifdef CONFIG_SOC_A1
+/*
+ * ----- A1 family -----
+ * Transcribed from vendor A1-1.7.0 (ddr_reg_values_a1*.c controller
+ * values + the ddr3_param PHY tuning), cross-checked against the
+ * HW-validated arch/mips/mach-xburst/a1/sdram.c. DDR3 / family A1.
+ * ddrc_dlmr=0x02 so the shared MR_DDR3 macro reproduces the vendor A1
+ * LMR base word 0x83; mr1 has the per-SKU kgd ODT/DS patch pre-baked
+ * (vendor patches MR1 bits A9/A6/A2 from kgd_odt + A5/A1 from kgd_ds).
+ * ddrc_ctrl=0xb092: ddrc_prev_init writes it & ~(7<<12)=0x8092, post
+ * writes 0xb092 - matching the vendor A1 prev/post CTRL values.
+ * Only A1N is validated on silicon; A1NT/A1X/A1L are build-only vendor
+ * transcriptions.
+ */
+
+/* ----- A1N (W632GU6NG, DDR3 @ 800 MHz, 16-bit, 256 MiB) ----- */
+const struct ingenic_ddr_variant ingenic_ddr_variant_a1n = {
+	.name		= "A1N",
+	.chip		= "W632GU6NG",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_A1,
+	.bus_width	= 16,
+	.chip0_size	= 0x10000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1600000000u,
+	.ddr_hz		= 800000000u,
+	.ddrc_cfg	= 0x4a004a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000002,
+	.ddrc_mmap0	= 0x000020f0,
+	.ddrc_mmap1	= 0x00003000,
+	.ddrc_refcnt	= 0x41c30081,
+	.ddrc_timing	= { 0x07130d08, 0x0809070b, 0x030c040c, 0x252b1f07, 0x80069055 },
+	.ddrc_autosr_cnt= 0x40000c41,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x0000000a,
+	.ddrp_cl	= 0x0000000b,
+	.ddrp_cwl	= 0x00000008,
+	.mr0		= 0x00001f70,
+	.mr1		= 0x00010006,	/* kgd_odt=1 kgd_ds=1 baked */
+	.mr2		= 0x00020018,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
+	.a1_phy = {
+		.odt_pd = 1, .odt_pu = 0,
+		.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+		.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+		.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+		.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+		.dq_a = 0x10, .dq_b = 0x07,
+		.vref = 0x80,
+		.dqs_a = 0x20, .dqs_b = 0x20,
+	},
+};
+
+/* ----- A1NT (M15T1G1664A, DDR3 @ 700 MHz, 32-bit, 256 MiB) ----- */
+const struct ingenic_ddr_variant ingenic_ddr_variant_a1nt = {
+	.name		= "A1NT",
+	.chip		= "M15T1G1664A",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_A1,
+	.bus_width	= 32,
+	.chip0_size	= 0x10000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1400000000u,
+	.ddr_hz		= 700000000u,
+	.ddrc_cfg	= 0x2a002a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000002,
+	.ddrc_mmap0	= 0x000020f0,
+	.ddrc_mmap1	= 0x00003000,
+	.ddrc_refcnt	= 0x67a90081,
+	.ddrc_timing	= { 0x07120c08, 0x0809060b, 0x030a040a, 0x20261b06, 0x80058054 },
+	.ddrc_autosr_cnt= 0x26000aab,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x0000000a,
+	.ddrp_cl	= 0x0000000b,
+	.ddrp_cwl	= 0x00000008,
+	.mr0		= 0x00001d70,
+	.mr1		= 0x00010042,	/* kgd_odt=2 kgd_ds=1 baked */
+	.mr2		= 0x00020018,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
+	.a1_phy = {
+		.odt_pd = 3, .odt_pu = 1,
+		.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+		.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+		.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+		.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+		.dq_a = 0x10, .dq_b = 0x0f,
+		.vref = 0x80,
+		.dqs_a = 0x20, .dqs_b = 0x21,
+	},
+};
+
+/* ----- A1X (W632GU6NG x2, DDR3 @ 700 MHz, 32-bit, 512 MiB) ----- */
+const struct ingenic_ddr_variant ingenic_ddr_variant_a1x = {
+	.name		= "A1X",
+	.chip		= "W632GU6NG",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_A1,
+	.bus_width	= 32,
+	.chip0_size	= 0x20000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1400000000u,
+	.ddr_hz		= 700000000u,
+	.ddrc_cfg	= 0x4a004a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000002,
+	.ddrc_mmap0	= 0x000020e0,
+	.ddrc_mmap1	= 0x00004000,
+	.ddrc_refcnt	= 0x79a90081,
+	.ddrc_timing	= { 0x07120c08, 0x0809060b, 0x030a040a, 0x20261b06, 0x80058054 },
+	.ddrc_autosr_cnt= 0x38000aab,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x0000000a,
+	.ddrp_cl	= 0x0000000b,
+	.ddrp_cwl	= 0x00000008,
+	.mr0		= 0x00001d70,
+	.mr1		= 0x00010040,	/* kgd_odt=2 kgd_ds=0 baked */
+	.mr2		= 0x00020018,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x03100f0e, 0x07060504, 0x0b0a0908, 0x01000d0c, 0x13121102 },
+	.a1_phy = {
+		.odt_pd = 5, .odt_pu = 11,
+		.drvcmd_pd = 0x1e, .drvcmd_pu = 0x1e,
+		.drvcmdck_pd = 0x1e, .drvcmdck_pu = 0x1e,
+		.dq_drv_a_pd = 0x0f, .dq_drv_a_pu = 0x0f,
+		.dq_drv_b_pd = 0x0f, .dq_drv_b_pu = 0x0f,
+		.dq_a = 0x0f, .dq_b = 0x0d,
+		.vref = 0xa0,
+		.dqs_a = 0x21, .dqs_b = 0x21,
+	},
+};
+
+/* ----- A1L (W631GU6NG, DDR3 @ 800 MHz, 16-bit, 128 MiB) ----- */
+const struct ingenic_ddr_variant ingenic_ddr_variant_a1l = {
+	.name		= "A1L",
+	.chip		= "W631GU6NG",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_A1,
+	.bus_width	= 16,
+	.chip0_size	= 0x08000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1600000000u,
+	.ddr_hz		= 800000000u,
+	.ddrc_cfg	= 0x2a002a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000002,
+	.ddrc_mmap0	= 0x000020f8,
+	.ddrc_mmap1	= 0x00002800,
+	.ddrc_refcnt	= 0x41c30081,
+	.ddrc_timing	= { 0x07130d08, 0x0708070a, 0x030c040c, 0x21281d07, 0x80059045 },
+	.ddrc_autosr_cnt= 0x40000c41,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x0000000a,
+	.ddrp_cl	= 0x0000000a,
+	.ddrp_cwl	= 0x00000007,
+	.mr0		= 0x00001f60,
+	.mr1		= 0x00010006,	/* kgd_odt=1 kgd_ds=1 baked */
+	.mr2		= 0x00020018,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x030e0d0c, 0x07060504, 0x0b0a0908, 0x0f020100, 0x13121110 },
+	.a1_phy = {
+		.odt_pd = 1, .odt_pu = 1,
+		.drvcmd_pd = 0x0e, .drvcmd_pu = 0x0e,
+		.drvcmdck_pd = 0x0e, .drvcmdck_pu = 0x0e,
+		.dq_drv_a_pd = 0x14, .dq_drv_a_pu = 0x14,
+		.dq_drv_b_pd = 0x14, .dq_drv_b_pu = 0x14,
+		.dq_a = 0x0e, .dq_b = 0x0e,
+		.vref = 0x80,
+		.dqs_a = 0x1c, .dqs_b = 0x1c,
+	},
+};
+#endif /* CONFIG_SOC_A1 */

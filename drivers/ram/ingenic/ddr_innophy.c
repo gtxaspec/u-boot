@@ -105,6 +105,13 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 			;
 	}
 
+#ifdef CONFIG_SOC_A1
+	/* A1 vendor settles 50 us after dfi_init_complete before deasserting
+	 * dfi_reset_n; T40/T41 go straight on. */
+	if (v->family == INGENIC_DDR_FAMILY_A1)
+		udelay(50);
+#endif
+
 	ddr_writel(p, 0, DDRC_CTRL);			/* dfi_reset_n high */
 	udelay(5);
 	ddr_writel(p, v->ddrc_cfg, DDRC_CFG);
@@ -112,9 +119,14 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 	 * Vendor T40 ddrc_dfi_init: 500 us settle AFTER CFG write, BEFORE
 	 * raising CKE - DRAM needs time to see configuration latched before
 	 * CKE + commands are valid. Skipping made dram_verify intermittently
-	 * fail. T41 used a shorter 5 us delay so leave that branch.
+	 * fail. T41 used a shorter 5 us delay so leave that branch. A1 also
+	 * uses the 500 us settle.
 	 */
-	if (v->family == INGENIC_DDR_FAMILY_T40)
+	if (v->family == INGENIC_DDR_FAMILY_T40
+#ifdef CONFIG_SOC_A1
+	    || v->family == INGENIC_DDR_FAMILY_A1
+#endif
+	   )
 		udelay(500);
 	else
 		udelay(5);
@@ -181,8 +193,18 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 		ddr_writel(p, MR_DDR3(v->mr3), DDRC_LMR);
 		udelay(5);
 		ddr_writel(p, 0, DDRC_LMR); udelay(5);
-		ddr_writel(p, (MR_DDR3(v->mr1) & ~0x266000) | (kgd_rtt_dic << 12),
-			   DDRC_LMR);
+		/*
+		 * A1 pre-bakes the kgd ODT/DS patch into mr1 at transcription
+		 * (vendor patches MR1 bits A9/A6/A2 + A5/A1 from kgd_odt/kgd_ds);
+		 * emit it verbatim. T40/T41 patch RTT_DIC at runtime instead.
+		 */
+#ifdef CONFIG_SOC_A1
+		if (v->family == INGENIC_DDR_FAMILY_A1)
+			ddr_writel(p, MR_DDR3(v->mr1), DDRC_LMR);
+		else
+#endif
+			ddr_writel(p, (MR_DDR3(v->mr1) & ~0x266000) |
+				   (kgd_rtt_dic << 12), DDRC_LMR);
 		udelay(5);
 		ddr_writel(p, 0, DDRC_LMR); udelay(5);
 		ddr_writel(p, MR_DDR3(v->mr0), DDRC_LMR);
@@ -261,6 +283,18 @@ static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
 	u32 r;
 
 	/*
+	 * A1 has a shifted CPM map (DDRCDR at 0x3c, not 0x2c) and ungates
+	 * the DDR clock itself, so it cannot share the divider write below;
+	 * it uses its own CGU path in ddr_innophy_phy_a1.c.
+	 */
+#ifdef CONFIG_SOC_A1
+	if (v->family == INGENIC_DDR_FAMILY_A1) {
+		ingenic_ddr_a1_cgu_init(v);
+		return;
+	}
+#endif
+
+	/*
 	 * Source-mux select: T41's vendor cgu_clk_sel[DDR] sets MPLL at
 	 * bits 31:30 = 0b10; T40 vendor leaves the source bits alone and
 	 * relies on the bootrom-left value, so on the T40 family we skip
@@ -299,9 +333,15 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 	 * via hard-coded T40N values (vendor t40n_phy_driver_odt is folded
 	 * into ingenic_ddr_t40_phy_init); the T41 path uses the efuse
 	 * par[] table programmed by ingenic_ddr_phy_set_drv_odt() below.
+	 * The A1 path programs drive/ODT/DQS/DQ/VREF from its a1_phy table
+	 * inside ingenic_ddr_a1_phy_init() (A1 builds only).
 	 */
 	if (is_t40)
 		ret = ingenic_ddr_t40_phy_init(p);
+#ifdef CONFIG_SOC_A1
+	else if (v->family == INGENIC_DDR_FAMILY_A1)
+		ret = ingenic_ddr_a1_phy_init(p);
+#endif
 	else
 		ret = ingenic_ddr_phy_init(p);
 	if (ret)
@@ -309,13 +349,23 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 
 	ddrc_dfi_init(p);
 
-	if (!is_t40)
+	/* T41 programs drive/ODT here; T40 folds it into phy_init, A1 into
+	 * a1_phy_init. */
+	if (!is_t40
+#ifdef CONFIG_SOC_A1
+	    && v->family != INGENIC_DDR_FAMILY_A1
+#endif
+	   )
 		ingenic_ddr_phy_set_drv_odt(p);
 
 	ddrc_prev_init(p);
 
 	if (is_t40)
 		ret = ingenic_ddr_t40_phy_hw_calibration(p);
+#ifdef CONFIG_SOC_A1
+	else if (v->family == INGENIC_DDR_FAMILY_A1)
+		ret = ingenic_ddr_a1_phy_hw_calibration(p);
+#endif
 	else
 		ret = ingenic_ddr_phy_hw_calibration(p);
 	if (ret)
@@ -327,6 +377,11 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 	if (is_t40) {
 		ingenic_ddr_t40_post_phy_fixups(p);
 		ingenic_ddr_t40_phy_set_skew(p);
+#ifdef CONFIG_SOC_A1
+	} else if (v->family == INGENIC_DDR_FAMILY_A1) {
+		/* A1 vendor tail: rfifo (MEM_CFG bit5 + RFIFO[2:0]=3). */
+		ingenic_ddr_a1_post_phy_fixups(p);
+#endif
 	} else {
 		/* Optimize DDR bandwidth (T41 vendor magic writes at end). */
 		writel(0x0,         (void __iomem *)(0xb301206cu));
@@ -372,6 +427,14 @@ static const struct {
 	{ "t40n",   &ingenic_ddr_variant_t40n   },
 	{ "t40nn",  &ingenic_ddr_variant_t40n   },	/* alias - same silicon */
 	{ "t40xp",  &ingenic_ddr_variant_t40xp  },
+#ifdef CONFIG_SOC_A1
+	/* A1 family */
+	{ "a1n",    &ingenic_ddr_variant_a1n    },
+	{ "a1nt",   &ingenic_ddr_variant_a1nt   },
+	{ "a1x",    &ingenic_ddr_variant_a1x    },
+	{ "a1a",    &ingenic_ddr_variant_a1x    },	/* A1A reuses the A1X profile (no A1A HW yet) */
+	{ "a1l",    &ingenic_ddr_variant_a1l    },
+#endif
 };
 
 static int ingenic_ddr_probe(struct udevice *dev)
@@ -444,6 +507,7 @@ static const struct udevice_id ingenic_ddr_ids[] = {
 	 * the DT level (so each board's DT names the SoC explicitly).
 	 * The variant struct is selected by the `ingenic,variant` DT
 	 * property, not the compatible. */
+	{ .compatible = "ingenic,a1-ddr-innophy" },
 	{ .compatible = "ingenic,t40-ddr-innophy" },
 	{ .compatible = "ingenic,t41-ddr-innophy" },
 	{ }

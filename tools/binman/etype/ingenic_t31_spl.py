@@ -115,11 +115,36 @@ class Entry_ingenic_t31_spl(Entry_blob):
         if 0x20 + descriptors_bytes > INGE_BLOCK_MAX:
             self.Raise("'ingenic,inge-descriptors' table too large for "
                        "256-byte INGE block")
-        # Vendor T40 SPI-NAND SPL headers do NOT carry an INGE block at
-        # offset 0x100 - the file there is all zeros. With INGE magic
-        # present, the bootrom NAND boot path rejects the image (silent
-        # UART, no fallback). Boards that boot from SPI-NAND set the
-        # `ingenic,no-inge` boolean to suppress the INGE write.
+        # INGE block (offset 0x100, magic 'INGE', SPL_LENGTH, and
+        # optional CGU descriptor table) is an XBurst2 mask ROM
+        # feature: the bootrom programs the descriptors before
+        # jumping to SPL so the SPL inherits sane PLLs / CPCCR / SFC
+        # clocks. XBurst1 mask ROMs (T10/T20/T21/T23/T30/T31) predate
+        # this and treat the INGE magic at 0x100 as an invalid header
+        # field - they silently reject the image (no UART, no
+        # fallback). XBurst2 NAND boot paths (T40XP) also reject INGE
+        # because the NAND header layout differs from the NOR one.
+        #
+        # Net rule: emit INGE only when the board has actually
+        # declared `ingenic,inge-descriptors` to fill it. Boards that
+        # just need a flat SPL header (CRC + SPL_LENGTH, no INGE)
+        # leave the property unset and get a vendor-shaped no-INGE
+        # image automatically. There is no longer a separate
+        # `ingenic,no-inge` boolean (deleted - presence-of-descriptors
+        # is the signal).
+        self.emit_inge = bool(self.inge_descriptors)
+        # Backwards-compat: the previous etype version required
+        # `ingenic,no-inge` on NAND/T31 dtsis. Honour the old
+        # property for downstream branches that still set it (it just
+        # forces no-INGE; same behaviour as omitting descriptors).
+        if fdt_util.GetBool(self._node, 'ingenic,no-inge'):
+            self.emit_inge = False
+        # `no_inge` retained as the NAND-style alignment switch -
+        # boards with SPI-NAND need the 64-byte SPL pad whether or
+        # not they emit INGE. Default to "NAND alignment" only when
+        # the board explicitly opts out of INGE via the legacy
+        # property; for clean XBurst1 NOR boards (no descriptors,
+        # no explicit no-inge) we keep the NOR alignment path.
         self.no_inge = fdt_util.GetBool(self._node, 'ingenic,no-inge')
         # Minimum SPL_LENGTH to stamp, in bytes from CONFIG_SPL_TEXT_BASE.
         # T-series bootroms lock cache lines as SRAM only for the address
@@ -275,7 +300,7 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # INGE_length tracks effective size (file + min_spl_length pad)
         # so the bootrom-side cap matches the stamped SPL_LENGTH.
         # Rounded up to 512 with 0x180 margin per the cap formula.
-        if not self.no_inge:
+        if self.emit_inge:
             inge_length = (max(size, self.min_spl_length) + 0x180 + 511) & ~511
         else:
             inge_length = (size + 511) & ~511
@@ -284,7 +309,7 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # boots T40NN cleanly to U-Boot. Our build with INGE mirrored
         # at 0x40 was silent on cold boot but worked on warm reset.
         # Drop the 0x40 mirror to mirror vendor layout exactly.
-        if not self.no_inge:
+        if self.emit_inge:
             for inge_off in (INGE_OFFSET,):
                 data[inge_off:inge_off + 4] = \
                     INGE_MAGIC.to_bytes(4, 'little')

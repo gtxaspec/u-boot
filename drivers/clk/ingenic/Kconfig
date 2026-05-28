@@ -96,3 +96,15 @@ config CLK_INGENIC_T40
 	  (same XBurst2 CGU layout) with T40-specific register offsets
 	  in mach/t40.h. Will diverge as T40-specific peripherals get
 	  wired up.
+
+config CLK_INGENIC_T41
+	bool "Ingenic T41 CGU clock driver"
+	depends on CLK && ARCH_XBURST
+	help
+	  Clock driver for the Ingenic T41 (XBurst2) SoC Clock/Power
+	  Manager (CGU). T41 is in the same family as T40 but the PLL
+	  encoding differs (9-bit PLLM, OD0/OD1 at new positions, new
+	  PLLRG field), the CPM register offsets shift (CLKGR0/1 at
+	  0x20/0x28, SFC0CDR at 0x60, MACCDR at 0x54), and the CLKGR
+	  bit map is entirely different. Provides rate/gate control
+	  for the leaf peripheral clocks (SFC, MMC, GMAC).

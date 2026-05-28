@@ -138,9 +138,7 @@ _start:
 	/*
 	 * A1 / T40 (XBurst2): GPIO drive strength / Schmitt trigger
 	 * setup is done in C code (soc.c board_init_f) since it is
-	 * not pad-critical for the default UART pad routing. If
-	 * board-specific drive-strength tuning is needed it can be
-	 * added here per SoC.
+	 * not pad-critical for the default UART pad routing.
 	 */
 #elif !defined(CONFIG_SOC_T33)
 	/*
@@ -207,8 +205,6 @@ _start:
 
 	/* CU0=UM=EXL=IE=0, BEV=ERL=1, IP2~7=1 */
 #if !defined(CONFIG_SOC_T41)
-	/* T41 vendor start.S does NOT touch CP0 - the bootrom-left state
-	 * is used as-is. Writing CP0_STATUS breaks DDR PHY PLL lock. */
 	li	t0, 0x0040FC04
 	mtc0	t0, CP0_STATUS
 #endif

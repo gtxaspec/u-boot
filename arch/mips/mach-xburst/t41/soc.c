@@ -202,10 +202,10 @@ void board_init_f(ulong dummy)
 	timer_init();
 	sdram_init();
 
-	/* Immediately try DRAM access - no debug prints between
-	 * sdram_init and verify, to avoid CKE dropping during idle. */
+	/* KSEG1 (uncached) DRAM probe - confirms PHY HW calibration
+	 * landed and the bootrom DMA path will work for stage 2. */
 	{
-		volatile u32 *a = (volatile u32 *)0x81000000;
+		volatile u32 *a = (volatile u32 *)0xa0200000;
 		*a = 0xdeadbeef;
 		if (*a == 0xdeadbeef)
 			t41_spl_puts("T41 SPL: DDR OK\n");

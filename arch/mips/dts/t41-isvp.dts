@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /dts-v1/;
 
-#include <dt-bindings/clock/ingenic,t40-cgu.h>
-#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/clock/ingenic,t41-cgu.h>
 
 / {
-	compatible = "ingenic,t40";
+	compatible = "ingenic,t41";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -23,48 +22,48 @@
 	};
 
 	cgu: clock-controller@b0000000 {
-		compatible = "ingenic,t40-cgu";
+		compatible = "ingenic,t41-cgu";
 		reg = <0xb0000000 0x1000>;
 		#clock-cells = <1>;
 		u-boot,dm-pre-reloc;
 	};
 
 	pinctrl: pinctrl@b0010000 {
-		compatible = "ingenic,t40-pinctrl";
+		compatible = "ingenic,t41-pinctrl";
 		reg = <0xb0010000 0x8000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 
 		gpa: gpio@0 {
-			compatible = "ingenic,t40-gpio";
+			compatible = "ingenic,t41-gpio";
 			reg = <0>;
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
 
 		gpb: gpio@1 {
-			compatible = "ingenic,t40-gpio";
+			compatible = "ingenic,t41-gpio";
 			reg = <1>;
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
 
 		gpc: gpio@2 {
-			compatible = "ingenic,t40-gpio";
+			compatible = "ingenic,t41-gpio";
 			reg = <2>;
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
 
 		gpd: gpio@3 {
-			compatible = "ingenic,t40-gpio";
+			compatible = "ingenic,t41-gpio";
 			reg = <3>;
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
 
 		gpe: gpio@4 {
-			compatible = "ingenic,t40-gpio";
+			compatible = "ingenic,t41-gpio";
 			reg = <4>;
 			gpio-controller;
 			#gpio-cells = <2>;
@@ -97,46 +96,12 @@
 	};
 
 	/*
-	 * AIC (audio interface controller) + on-chip codec. PIO playback
-	 * driven by U-Boot's `sound` command. T40 has the same B-block
-	 * codec layout as T31 (extended with extra CHR/CMR/CTR regs for
-	 * the 2nd ADC channel; for tone playback we touch only the
-	 * T31-shared subset).
-	 */
-	aic: audio-controller@b0020000 {
-		compatible = "ingenic,t40-aic";
-		reg = <0xb0020000 0x100>;
-		#sound-dai-cells = <0>;
-		status = "disabled";
-	};
-
-	codec: audio-codec@b0021000 {
-		compatible = "ingenic,t40-codec";
-		reg = <0xb0021000 0x170>;
-		#sound-dai-cells = <0>;
-		status = "disabled";
-	};
-
-	sound: sound {
-		compatible = "ingenic,t40-sound";
-		status = "disabled";
-
-		cpu {
-			sound-dai = <&aic>;
-		};
-
-		codec {
-			sound-dai = <&codec>;
-		};
-	};
-
-	/*
 	 * TCU (timer/counter unit) container mirroring T31's binding. U-Boot
 	 * only needs the watchdog child for sysreset; the WDT self-clocks
 	 * from the 32 kHz RTC so the TCU clock provider is not required.
 	 */
 	tcu: timer@b0002000 {
-		compatible = "ingenic,t40-tcu", "ingenic,jz4760-tcu",
+		compatible = "ingenic,t41-tcu", "ingenic,jz4760-tcu",
 			     "simple-mfd";
 		reg = <0xb0002000 0x1000>;
 		#address-cells = <1>;
@@ -144,18 +109,18 @@
 		ranges = <0x0 0xb0002000 0x1000>;
 
 		watchdog: watchdog@0 {
-			compatible = "ingenic,t40-watchdog",
+			compatible = "ingenic,t41-watchdog",
 				     "ingenic,jz4780-watchdog";
 			reg = <0x0 0x10>;
 		};
 	};
 
 	sfc: spi@b3440000 {
-		compatible = "ingenic,t40-sfc";
+		compatible = "ingenic,t41-sfc";
 		reg = <0xb3440000 0x10000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		clocks = <&cgu T40_CLK_SFC>;
+		clocks = <&cgu T41_CLK_SFC>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_sfc>;
 		spi-max-frequency = <50000000>;
@@ -169,9 +134,9 @@
 	};
 
 	msc0: mmc@b3060000 {
-		compatible = "ingenic,t40-mmc";
+		compatible = "ingenic,t41-mmc";
 		reg = <0xb3060000 0x10000>;
-		clocks = <&cgu T40_CLK_MSC0>;
+		clocks = <&cgu T41_CLK_MSC0>;
 		clock-names = "mmc";
 		bus-width = <4>;
 		broken-cd;
@@ -179,9 +144,9 @@
 	};
 
 	gmac0: ethernet@b34b0000 {
-		compatible = "ingenic,t40-gmac";
+		compatible = "ingenic,t41-gmac";
 		reg = <0xb34b0000 0x2000>;
-		clocks = <&cgu T40_CLK_GMAC0>;
+		clocks = <&cgu T41_CLK_GMAC0>;
 		phy-mode = "rmii";
 		phy-handle = <&gmac0_phy>;
 		ingenic,mode-reg = <0xb00000e8>;
@@ -202,35 +167,20 @@
 	};
 
 	/*
-	 * T40 has a single DWC2 USB OTG at 0x13500000 (A1 has three).
+	 * T41 has a single DWC2 USB OTG at 0xb3500000 (XBurst2 layout shared
+	 * with T40 / A1). NOR-boot DT runs the port as a USB host so the
+	 * board can enumerate ASIX-style USB ethernet without DFU.
 	 */
 	otg0: usb@b3500000 {
 		compatible = "snps,dwc2";
 		reg = <0xb3500000 0x40000>;
-		clocks = <&cgu T40_CLK_OTG0>;
+		clocks = <&cgu T41_CLK_OTG0>;
 		dr_mode = "host";
-		/* The T40 DWC2 OTG port comes up with CONIDSTS = 1
-		 * (B-device) even when wired to an A-receptacle, so the
-		 * dwc2 host driver never enables port power and `usb
-		 * start` only enumerates the root hub. hnp-srp-disable
-		 * tells the driver to set GUSBCFG.FORCEHOSTMODE,
-		 * bypassing the ID-pin check. Safe on a host-only port. */
+		/* Same CONIDSTS=1 quirk as T40: the OTG port enumerates as a
+		 * B-device even on A-receptacle wiring, so the dwc2 host
+		 * driver never powers the port. hnp-srp-disable forces
+		 * GUSBCFG.FORCEHOSTMODE, bypassing the ID-pin check. */
 		hnp-srp-disable;
 		status = "okay";
 	};
-};
-
-&aic {
-	status = "okay";
-};
-
-&codec {
-	status = "okay";
-	/* Speaker-amp enable: SDK default PB31, active-high. Override
-	 * here per board if the amp is on a different pin/polarity. */
-	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
-};
-
-&sound {
-	status = "okay";
 };

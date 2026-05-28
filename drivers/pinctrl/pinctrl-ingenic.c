@@ -281,7 +281,9 @@ static int t31_pinctrl_probe(struct udevice *dev)
 
 	p->is_t32_family = device_is_compatible(dev, "ingenic,t32-pinctrl") ||
 			   device_is_compatible(dev, "ingenic,t33-pinctrl");
-	p->is_t40 = device_is_compatible(dev, "ingenic,t40-pinctrl");
+	/* T41 reuses the T40 6-pin / function-1 SFC layout. */
+	p->is_t40 = device_is_compatible(dev, "ingenic,t40-pinctrl") ||
+		    device_is_compatible(dev, "ingenic,t41-pinctrl");
 
 	if (device_is_compatible(dev, "ingenic,a1-pinctrl")) {
 		p->groups = a1_groups;
@@ -309,6 +311,7 @@ static const struct udevice_id t31_pinctrl_ids[] = {
 	{ .compatible = "ingenic,t31-pinctrl" },
 	{ .compatible = "ingenic,t32-pinctrl" },
 	{ .compatible = "ingenic,t33-pinctrl" },
+	{ .compatible = "ingenic,t41-pinctrl" },
 	{ }
 };
 
@@ -417,6 +420,7 @@ static const struct udevice_id t31_gpio_ids[] = {
 	{ .compatible = "ingenic,t31-gpio" },
 	{ .compatible = "ingenic,t32-gpio" },
 	{ .compatible = "ingenic,t33-gpio" },
+	{ .compatible = "ingenic,t41-gpio" },
 	{ }
 };
 

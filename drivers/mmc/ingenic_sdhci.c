@@ -82,6 +82,7 @@ static int ingenic_sdhci_bind(struct udevice *dev)
 static const struct udevice_id ingenic_sdhci_ids[] = {
 	{ .compatible = "ingenic,t32-mmc" },
 	{ .compatible = "ingenic,t40-mmc" },
+	{ .compatible = "ingenic,t41-mmc" },
 	{ }
 };
 

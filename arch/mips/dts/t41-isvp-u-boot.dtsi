@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T41 SFC-NOR boot.
+ *
+ * Mirrors the T40 SFC-NOR binman layout - T41 is the XBurst2 sibling of
+ * T40 and uses the same vendor `0x03040506 / 0x55aa5502 / 0x000000aa`
+ * SFC-NOR boot header at flash offset 0, with LZMA U-Boot at 0x8000.
+ *
+ * INGE descriptors program the PLLs / CPCCR / SFC clock before the
+ * bootrom jumps to the SPL. T41 PLL encoding differs from T40 (PLLM
+ * is 9 bits, PLLOD0/OD1 at different positions, a new PLLRG[6:4]
+ * field), so the PLL register values are T41-specific. Values come
+ * from vendor U-Boot 2013 T41-1.2.6
+ * tools/ingenic-tools/spl_params_fixer.c descriptors[]:
+ *
+ *   APLL  = 600 MHz  : (set 0xb0000010, poll 0xb0000010, val 0x04a00931,
+ *                      hmask 0x08, lmask 0)
+ *     PLLM=0x4a PLLN=0 PLLOD0=1 PLLOD1=2 PLLRG=3
+ *   MPLL  = 1200 MHz : (set 0xb0000014, poll 0xb0000014, val 0x063008b1,
+ *                      hmask 0x08, lmask 0)
+ *     PLLM=0x63 PLLN=0 PLLOD0=1 PLLOD1=1 PLLRG=3
+ *   VPLL  = 1000 MHz : (set 0xb00000e0, poll 0xb00000e0, val 0x07c00931,
+ *                      hmask 0x08, lmask 0)
+ *     PLLM=0x7c PLLN=0 PLLOD0=1 PLLOD1=2 PLLRG=3
+ *   CPCCR DIV        : (set 0xb0000000, poll 0xb00000d4, val 0x557b5510,
+ *                      hmask 0,    lmask 0x07)
+ *   CPCCR SEL        : (set 0xb0000000, poll 0xffffffff (no-poll),
+ *                      val 0x9a0b5510, hmask 0, lmask 0)
+ *   SFC0CDR 60 MHz   : (set 0xb0000060, poll 0xb0000060, val 0x60000204,
+ *                      hmask 0,    lmask 0x10000000)
+ *     240 MHz / 4 = 60 MHz SFC clock
+ *
+ * The SPL then reprograms APLL/MPLL/VPLL to the T41NQ production
+ * operating point (APLL=1104, MPLL=1400, VPLL=1080) in pll_init().
+ *
+ * Note: T41NQ uses MPLL=1200 for the bootrom stage; the cold-boot
+ * SPL switches MPLL to 1400 MHz only AFTER DDR setup runs against
+ * the temporary 1200 (DDR is reprogrammed during sdram_init).
+ *
+ * 'make' produces:
+ *   u-boot-spl-t41.bin       : SPL with the finalized SFC-NOR boot
+ *                              header + INGE descriptor table.
+ *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
+ *                              at 0x8000 - flash at offset 0 of NOR.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t41 {
+		filename = "u-boot-spl-t41.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+
+			ingenic,inge-descriptors = <
+				0xb0000010 0xb0000010 0x04a00931 0x00000008 0x00000000
+				0xb0000014 0xb0000014 0x063008b1 0x00000008 0x00000000
+				0xb00000e0 0xb00000e0 0x07c00931 0x00000008 0x00000000
+				0xb0000000 0xb00000d4 0x557b5510 0x00000000 0x00000007
+				0xb0000000 0xffffffff 0x9a0b5510 0x00000000 0x00000000
+				0xb0000060 0xb0000060 0x60000204 0x00000000 0x10000000
+			>;
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t41.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

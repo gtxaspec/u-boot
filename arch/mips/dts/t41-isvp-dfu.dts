@@ -21,11 +21,17 @@
 		reg = <0x0 0x10000000>;
 	};
 
+	ddr: memory-controller@b34f0000 {
+		compatible = "ingenic,t41nq-ddr-innophy";
+		reg = <0xb34f0000 0x3000>;
+		bootph-all;
+	};
+
 	cgu: clock-controller@b0000000 {
 		compatible = "ingenic,t41-cgu";
 		reg = <0xb0000000 0x1000>;
 		#clock-cells = <1>;
-		u-boot,dm-pre-reloc;
+		bootph-all;
 	};
 
 	pinctrl: pinctrl@b0010000 {

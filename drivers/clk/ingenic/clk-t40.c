@@ -269,6 +269,7 @@ static int t40_cgu_probe(struct udevice *dev)
 
 static const struct udevice_id t40_cgu_ids[] = {
 	{ .compatible = "ingenic,t40-cgu" },
+	{ .compatible = "ingenic,t41-cgu" },
 	{ }
 };
 

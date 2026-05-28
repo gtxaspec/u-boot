@@ -89,18 +89,37 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 	u32 dlmr = v->ddrc_dlmr;
 	u32 kgd_rtt_dic = v->par[IDP_KGD_RTT_DIC];
 
-	/* Bring DFI up and program controller CFG */
-	ddr_writel(p, DDRC_DWCFG_DFI_INIT_START, DDRC_DWCFG);
-	ddr_writel(p, 0, DDRC_DWCFG);
-	while (!(ddr_readl(p, DDRC_DWSTATUS) & DDRC_DWSTATUS_DFI_INIT_COMP))
-		;
+	/*
+	 * Bring DFI up and program controller CFG. DWCFG bit 0 selects
+	 * buswidth: 0=16-bit, 1=32-bit (matches vendor sdram_init T40
+	 * DDR_DW32 branch). Defaults to 16-bit for any variant that
+	 * leaves bus_width=16 (the existing T41 SKUs).
+	 */
+	{
+		u32 dwcfg_buswidth = (v->bus_width == 32) ? 1u : 0u;
+
+		ddr_writel(p, DDRC_DWCFG_DFI_INIT_START | dwcfg_buswidth,
+			   DDRC_DWCFG);
+		ddr_writel(p, dwcfg_buswidth, DDRC_DWCFG);
+		while (!(ddr_readl(p, DDRC_DWSTATUS) & DDRC_DWSTATUS_DFI_INIT_COMP))
+			;
+	}
 
 	ddr_writel(p, 0, DDRC_CTRL);			/* dfi_reset_n high */
 	udelay(5);
 	ddr_writel(p, v->ddrc_cfg, DDRC_CFG);
-	udelay(5);
+	/*
+	 * Vendor T40 ddrc_dfi_init: 500 us settle AFTER CFG write, BEFORE
+	 * raising CKE - DRAM needs time to see configuration latched before
+	 * CKE + commands are valid. Skipping made dram_verify intermittently
+	 * fail. T41 used a shorter 5 us delay so leave that branch.
+	 */
+	if (v->family == INGENIC_DDR_FAMILY_T40)
+		udelay(500);
+	else
+		udelay(5);
 	ddr_writel(p, DDRC_CTRL_CKE, DDRC_CTRL);	/* CKE high */
-	udelay(5);
+	udelay(10);
 
 	/* Type-specific MR programming. */
 	switch (v->type) {
@@ -120,17 +139,33 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 			   DDRC_LMR);
 		udelay(5);
 		ddr_writel(p, MR_DDR2(v->mr0), DDRC_LMR);
-		ddr_writel(p, 0x400003, DDRC_LMR);
-		udelay(10);
-		ddr_writel(p, 0x43, DDRC_LMR);
-		udelay(10);
-		ddr_writel(p, 0x43, DDRC_LMR);
-		udelay(10);
-		ddr_writel(p, 0xa73083, DDRC_LMR);
-		ddr_writel(p, 0x384283, DDRC_LMR);
-		ddr_writel(p, 0x4283, DDRC_LMR);
-		ddr_writel(p, 0xc3, DDRC_LMR);
-		udelay(500);
+
+		if (v->family == INGENIC_DDR_FAMILY_T40) {
+			/* Vendor T40 DDR2 sequence: 5ms MR0 settle, PCHG, AUREF
+			 * x2, then another 5ms before HW calibration runs. */
+			udelay(5);
+			udelay(5 * 1000);
+			ddr_writel(p, 0x400003, DDRC_LMR);
+			udelay(100);
+			ddr_writel(p, 0x43, DDRC_LMR);
+			udelay(5);
+			ddr_writel(p, 0x43, DDRC_LMR);
+			udelay(5 * 1000);
+		} else {
+			/* T41 vendor sequence: shorter delays + four trailing
+			 * extended-LMR words (likely ZQ/EMR sub-modes). */
+			ddr_writel(p, 0x400003, DDRC_LMR);
+			udelay(10);
+			ddr_writel(p, 0x43, DDRC_LMR);
+			udelay(10);
+			ddr_writel(p, 0x43, DDRC_LMR);
+			udelay(10);
+			ddr_writel(p, 0xa73083, DDRC_LMR);
+			ddr_writel(p, 0x384283, DDRC_LMR);
+			ddr_writel(p, 0x4283, DDRC_LMR);
+			ddr_writel(p, 0xc3, DDRC_LMR);
+			udelay(500);
+		}
 #undef MR_DDR2
 		break;
 	}
@@ -225,10 +260,18 @@ static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
 	u32 cdr = (v->mpll_hz / v->ddr_hz) - 1;
 	u32 r;
 
-	r = readl(ddrcdr);
-	r &= ~(3u << 30);
-	r |= (2u << 30);		/* source = MPLL */
-	writel(r, ddrcdr);
+	/*
+	 * Source-mux select: T41's vendor cgu_clk_sel[DDR] sets MPLL at
+	 * bits 31:30 = 0b10; T40 vendor leaves the source bits alone and
+	 * relies on the bootrom-left value, so on the T40 family we skip
+	 * the source write and only re-program CE + divider.
+	 */
+	if (v->family != INGENIC_DDR_FAMILY_T40) {
+		r = readl(ddrcdr);
+		r &= ~(3u << 30);
+		r |= (2u << 30);		/* source = MPLL */
+		writel(r, ddrcdr);
+	}
 
 	r = readl(ddrcdr);
 	r &= ~(0xf | (0x3fu << 24));
@@ -240,38 +283,59 @@ static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
 
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 {
+	const struct ingenic_ddr_variant *v = p->cfg;
+	bool is_t40 = (v->family == INGENIC_DDR_FAMILY_T40);
 	int ret;
 
-	debug("ingenic-ddr: init %s (%s, %u MHz)\n",
-	      p->cfg->name, p->cfg->chip, p->cfg->ddr_hz / 1000000);
+	debug("ingenic-ddr: init %s (%s, %u MHz, family %d)\n",
+	      v->name, v->chip, v->ddr_hz / 1000000, v->family);
 
-	ingenic_ddr_cgu_init(p->cfg);
+	ingenic_ddr_cgu_init(v);
 
 	ddrc_reset_phy(p);
 
-	ret = ingenic_ddr_phy_init(p);
+	/*
+	 * Family-specific PHY init. The T40 path also programs drive/ODT
+	 * via hard-coded T40N values (vendor t40n_phy_driver_odt is folded
+	 * into ingenic_ddr_t40_phy_init); the T41 path uses the efuse
+	 * par[] table programmed by ingenic_ddr_phy_set_drv_odt() below.
+	 */
+	if (is_t40)
+		ret = ingenic_ddr_t40_phy_init(p);
+	else
+		ret = ingenic_ddr_phy_init(p);
 	if (ret)
 		return ret;
 
 	ddrc_dfi_init(p);
 
-	ingenic_ddr_phy_set_drv_odt(p);
+	if (!is_t40)
+		ingenic_ddr_phy_set_drv_odt(p);
+
 	ddrc_prev_init(p);
 
-	ret = ingenic_ddr_phy_hw_calibration(p);
+	if (is_t40)
+		ret = ingenic_ddr_t40_phy_hw_calibration(p);
+	else
+		ret = ingenic_ddr_phy_hw_calibration(p);
 	if (ret)
 		return ret;
 
 	ddrc_post_init(p);
 	ddrc_autosr_setup(p);
 
-	/* Optimize DDR bandwidth (vendor magic writes at end of init). */
-	writel(0x0,         (void __iomem *)(0xb301206cu));
-	writel(0xff000000,  (void __iomem *)(0xb3012040u));
-	writel(0x2bd07460,  (void __iomem *)(0xb3012048u));
-	writel(0x1,         (void __iomem *)(0xb301206cu));
+	if (is_t40) {
+		ingenic_ddr_t40_post_phy_fixups(p);
+		ingenic_ddr_t40_phy_set_skew(p);
+	} else {
+		/* Optimize DDR bandwidth (T41 vendor magic writes at end). */
+		writel(0x0,         (void __iomem *)(0xb301206cu));
+		writel(0xff000000,  (void __iomem *)(0xb3012040u));
+		writel(0x2bd07460,  (void __iomem *)(0xb3012048u));
+		writel(0x1,         (void __iomem *)(0xb301206cu));
 
-	ingenic_ddr_phy_set_vref_skew(p);
+		ingenic_ddr_phy_set_vref_skew(p);
+	}
 
 	return 0;
 }
@@ -304,6 +368,9 @@ static const struct {
 	{ "t41zmc", &ingenic_ddr_variant_t41zmc },
 	{ "t41zn",  &ingenic_ddr_variant_t41zn  },
 	{ "t41zx",  &ingenic_ddr_variant_t41zx  },
+	/* T40 family */
+	{ "t40n",   &ingenic_ddr_variant_t40n   },
+	{ "t40nn",  &ingenic_ddr_variant_t40n   },	/* alias - same silicon */
 };
 
 static int ingenic_ddr_probe(struct udevice *dev)
@@ -371,6 +438,12 @@ static const struct ram_ops ingenic_ddr_ops = {
 };
 
 static const struct udevice_id ingenic_ddr_ids[] = {
+	/* The same UCLASS_RAM driver covers every XBurst2 SoC that uses
+	 * this IP; the per-SoC compatible exists for binding clarity at
+	 * the DT level (so each board's DT names the SoC explicitly).
+	 * The variant struct is selected by the `ingenic,variant` DT
+	 * property, not the compatible. */
+	{ .compatible = "ingenic,t40-ddr-innophy" },
 	{ .compatible = "ingenic,t41-ddr-innophy" },
 	{ }
 };

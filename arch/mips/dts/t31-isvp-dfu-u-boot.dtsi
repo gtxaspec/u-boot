@@ -27,6 +27,10 @@
 
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
+			/* T31 mask ROM rejects images with INGE magic at
+			 * 0x100; suppress so the unused-by-USB-boot binman
+			 * image still matches the cold-boot layout. */
+			ingenic,no-inge;
 		};
 	};
 

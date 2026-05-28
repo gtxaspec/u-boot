@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Ingenic T41NQ DDR3 controller + Innophy PHY register values.
+ * Ingenic T41ZGC DDR3 controller + Innophy PHY register values.
  *
  * Direct output of vendor U-Boot `tools/ingenic-tools/ddr_creator_chip/
  * ddr_params_creator` built from the T41-1.2.6 branch with
- * `isvp_t41nq_sfc_nor` defconfig (CONFIG_T41NQ +
- * CONFIG_DDR3_W631GU6NG + DDR_700M + APLL_1104M + DW32=0,
+ * `isvp_t41zgc_sfc_nor` defconfig (CONFIG_T41ZGC +
+ * CONFIG_DDR3_W632GU6NG + DDR_700M + APLL_1104M + DW32=0,
  * CS0-only).
  *
- * 128 MiB single W631GU6NG chip, 16-bit DDR3 @ 700 MHz,
+ * 256 MiB single W632GU6NG chip, 16-bit DDR3 @ 700 MHz,
  * APLL=1104, MPLL=1400, VPLL=1080.
  *
  * Untested in mainline (only T41NQ has HW-validated sdram_init right
@@ -17,8 +17,8 @@
  * refactor that consumes these values).
  */
 
-#ifndef __T41NQ_DDR_H__
-#define __T41NQ_DDR_H__
+#ifndef __T41ZGC_DDR_H__
+#define __T41ZGC_DDR_H__
 
 #define CONFIG_T41_DDR3		1
 
@@ -29,14 +29,14 @@
 #define CONFIG_DDR_DW32		0	/* 16-bit bus */
 #define CONFIG_DDR_CS0		1
 #define CONFIG_DDR_CS1		0
-#define DDR_CHIP_0_SIZE		0x08000000	/* 128 MiB */
+#define DDR_CHIP_0_SIZE		0x10000000	/* 256 MiB */
 #define DDR_CHIP_1_SIZE		0
 
 /* Clock target: MPLL=1400 -> DDR=MPLL/2=700 MHz */
 #define DDR_MPLL_RATE		1400000000U
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
 
-/* T41NQ PLL MNOD - vendor T41-1.2.6 isvp_t41.h. Bit layout:
+/* T41ZGC PLL MNOD - vendor T41-1.2.6 isvp_t41.h. Bit layout:
  *   PLLEN[0], LOCK[2], PLL_ON[3], PLLRG[6:4],
  *   PLLOD1[10:7], PLLOD0[13:11], PLLN[19:14], PLLM[28:20].
  */
@@ -44,19 +44,19 @@
 #define T41_MPLL_MNOD		((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4))
 #define T41_VPLL_MNOD		((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4))
 
-/* DDRC register values from ddr_params_creator (T41NQ + W631GU6NG + 700 MHz + 16-bit) */
-#define DDRC_CFG_VALUE		0x02002a35
+/* DDRC register values from ddr_params_creator (T41ZGC + W632GU6NG + 700 MHz + 16-bit) */
+#define DDRC_CFG_VALUE		0x02004a35
 #define DDRC_CTRL_VALUE		0x0000b092
 #define DDRC_DLMR_VALUE		0x00000000
-#define DDRC_MMAP0_VALUE	0x000020f8
-#define DDRC_MMAP1_VALUE	0x00002800
-#define DDRC_REFCNT_VALUE	0x67aa0083
+#define DDRC_MMAP0_VALUE	0x000020f0
+#define DDRC_MMAP1_VALUE	0x00003000
+#define DDRC_REFCNT_VALUE	0x40aa0083
 #define DDRC_TIMING1_VALUE	0x07120b08
 #define DDRC_TIMING2_VALUE	0x0708060a
 #define DDRC_TIMING3_VALUE	0x030a040a
 #define DDRC_TIMING4_VALUE	0x19221805
 #define DDRC_TIMING5_VALUE	0x00050054
-#define DDRC_AUTOSR_CNT_VALUE	0x26001556
+#define DDRC_AUTOSR_CNT_VALUE	0x3f001556
 #define DDRC_AUTOSR_EN_VALUE	0x00000000
 #define DDRC_HREGPRO_VALUE	0x00000001
 #define DDRC_PREGPRO_VALUE	0x00000001
@@ -73,7 +73,7 @@
 #define DDR_MR3_VALUE		0x00030000
 
 /* REMMAP_ARRAY from ddr_params_creator */
-#define T41_REMMAP_ARRAY	{ 0x030e0d0c, 0x07060504, 0x0b0a0908, \
-			  0x0f020100, 0x13121110 }
+#define T41_REMMAP_ARRAY	{ 0x030f0e0d, 0x07060504, 0x0b0a0908, \
+			  0x0201000c, 0x13121110 }
 
-#endif /* __T41NQ_DDR_H__ */
+#endif /* __T41ZGC_DDR_H__ */

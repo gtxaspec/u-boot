@@ -39,12 +39,21 @@
 #define DDRC_CTRL_CKE		(1 << 1)
 #define DDRC_CTRL_ALH		(1 << 3)
 
-/* DDRC LMR bits */
+/* DDRC LMR bits (matches vendor ddr_innophy.h - cmd at bit 6, BA at
+ * bit 9, address at bit 12; this got transliterated wrong on the first
+ * pass and led to bogus MR programming + training timeout). */
 #define DDRC_LMR_START		(1 << 0)
-#define DDRC_LMR_CMD_LMR	(0 << 4)
-#define DDRC_LMR_CMD_ZQCL_CS0	(6 << 4)
-#define DDRC_LMR_DDR_ADDR_BIT	16
-#define DDRC_LMR_BA_BIT		8
+#define DDRC_LMR_TMRD_BIT	1
+#define DDRC_LMR_CMD_BIT	6
+#define DDRC_LMR_CMD_PREC	(0 << DDRC_LMR_CMD_BIT)
+#define DDRC_LMR_CMD_AUREF	(1 << DDRC_LMR_CMD_BIT)
+#define DDRC_LMR_CMD_LMR	(2 << DDRC_LMR_CMD_BIT)
+#define DDRC_LMR_CMD_ZQCL_CS0	(3 << DDRC_LMR_CMD_BIT)
+#define DDRC_LMR_CMD_ZQCL_CS1	(4 << DDRC_LMR_CMD_BIT)
+#define DDRC_LMR_BA_BIT		9
+#define DDRC_LMR_DDR_ADDR_BIT	12
+#define DDRC_LMR_MA_BIT		16	/* LPDDR2 MA[9:0] */
+#define DDRC_LMR_OP_BIT		24	/* LPDDR2 OP[9:0] */
 
 /* DDRC STATUS bits */
 #define DDRC_STATUS_MISS	(1 << 6)
@@ -190,6 +199,15 @@ int ingenic_ddr_phy_init(struct ingenic_ddr_priv *p);
 int ingenic_ddr_phy_hw_calibration(struct ingenic_ddr_priv *p);
 void ingenic_ddr_phy_set_drv_odt(struct ingenic_ddr_priv *p);
 void ingenic_ddr_phy_set_vref_skew(struct ingenic_ddr_priv *p);
+
+/* ----- Top-level init (ddr_innophy.c) ----- */
+int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p);
+
+/* Non-DM entry point: usable from SPL pre-DM code (T41 board_init_f
+ * needs to bring DRAM up before driver model is fully alive). Caller
+ * supplies the variant struct + controller base; the function builds
+ * a local priv, runs the full init sequence, and returns. */
+int ingenic_ddr_init(const struct ingenic_ddr_variant *cfg, void __iomem *base);
 
 /* ----- Per-variant configs (ddr_innophy_types.c) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41nq;

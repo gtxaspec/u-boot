@@ -29,77 +29,10 @@ DECLARE_GLOBAL_DATA_PTR;
 void pll_init(void);
 void clk_ungate_uart(unsigned int idx);
 void t41_spl_serial_init(void);
-void t41_spl_puts(const char *s);
-void t41_spl_putc(char c);
-void t41_spl_load_uboot(void);
 void t41_spl_sfc_clk_init(void);
 int timer_init(void);
 
 #ifdef CONFIG_XPL_BUILD
-static void spl_put_hex(u32 v)
-{
-	static const char hex[] = "0123456789abcdef";
-	int i;
-
-	t41_spl_puts("0x");
-	for (i = 28; i >= 0; i -= 4)
-		t41_spl_putc(hex[(v >> i) & 0xf]);
-}
-
-#define T41_DRAM_SIZE	(CONFIG_T41_DRAM_SIZE_MB * 1024u * 1024u)
-
-static int dram_verify(void)
-{
-	static const u32 pat[] = {
-		0xdeadbeef, 0x12345678, 0xa5a5a5a5, 0x5a5a5a5a,
-		0xffffffff, 0x00000000,
-	};
-	volatile u32 *a;
-	u32 off;
-	int p;
-
-	a = (volatile u32 *)0xa0000000;
-	*a = 0xdeadbeef;
-	{
-		u32 got = *a;
-		static const char hc[] = "0123456789abcdef";
-		char buf[14];
-		int j;
-		buf[0] = '0'; buf[1] = 'x';
-		for (j = 7; j >= 0; j--)
-			buf[9 - j] = hc[(got >> (j * 4)) & 0xf];
-		buf[10] = '\n'; buf[11] = 0;
-		t41_spl_puts("RD=");
-		t41_spl_puts(buf);
-		if (got != 0xdeadbeef) {
-			t41_spl_puts("DDR: pat fail\n");
-			return -1;
-		}
-	}
-	for (p = 1; p < (int)ARRAY_SIZE(pat); p++) {
-		*a = pat[p];
-		if (*a != pat[p]) {
-			t41_spl_puts("DDR: pat fail\n");
-			return -1;
-		}
-	}
-
-	/* Coarse sweep across the part, one word per 1 MB. */
-	for (off = 0; off < T41_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		*a = 0xa0000000u + off;
-	}
-	for (off = 0; off < T41_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		if (*a != 0xa0000000u + off) {
-			t41_spl_puts("DDR: sweep fail\n");
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
 gd_t gdata __section(".bss");
 
 extern char __bss_start[], __bss_end[];
@@ -146,7 +79,6 @@ void board_init_f(ulong dummy)
 
 	clk_ungate_uart(T41_CONSOLE_UART);
 	t41_spl_serial_init();
-	t41_spl_puts("\nT41 SPL: alive (pre-PLL)\n");
 
 	/* Full vendor clk_prepare: stop ALL CGU clocks before pll_init */
 	{
@@ -174,7 +106,6 @@ void board_init_f(ulong dummy)
 	}
 
 	pll_init();
-	t41_spl_puts("T41 SPL: PLL configured\n");
 
 	/* Full vendor clk_init: set PLL source for ALL CGUs.
 	 * Format: {reg_offset, sel_index << 30} */
@@ -210,14 +141,8 @@ void board_init_f(ulong dummy)
 	 * which together find the device, look up the variant struct via
 	 * the compatible string, and call the driver's .probe (which in
 	 * SPL phase runs ingenic_ddr_sdram_init() against the variant). */
-	{
-		int ret = spl_init();
-
-		if (ret) {
-			t41_spl_puts("T41 SPL: spl_init failed\n");
-			hang();
-		}
-	}
+	if (spl_init())
+		hang();
 
 	/* The CGU DDR clock divider (CPM_DDRCDR) has to be programmed
 	 * before the RAM driver's PHY PLL setup since the Innophy PHY
@@ -226,24 +151,23 @@ void board_init_f(ulong dummy)
 	 * beforehand. */
 	{
 		struct udevice *dev;
-		int ret = uclass_first_device_err(UCLASS_RAM, &dev);
 
-		if (ret) {
-			t41_spl_puts("T41 SPL: DDR probe failed\n");
+		if (uclass_first_device_err(UCLASS_RAM, &dev))
 			hang();
-		}
 	}
 
-	/* KSEG1 (uncached) DRAM probe - confirms PHY HW calibration
-	 * landed and the bootrom DMA path will work for stage 2. */
-	{
-		volatile u32 *a = (volatile u32 *)0xa0200000;
-		*a = 0xdeadbeef;
-		if (*a == 0xdeadbeef)
-			t41_spl_puts("T41 SPL: DDR OK\n");
-		else
-			t41_spl_puts("T41 SPL: DDR verify FAILED\n");
-	}
+	/* Switch to DM serial output so board_init_r framework printf
+	 * goes somewhere visible. spl_init already brought DM up; this
+	 * probes the UART uclass and points printf at it. */
+	preloader_console_init();
+
+	/* Re-program CPM_SFCCDR so the SFC SPI driver (used for both the
+	 * cold-boot SFC NOR load and any DM operations against the flash
+	 * later) has a usable clock. The bootrom used the SFC to load the
+	 * SPL, but our pll_init / CGU re-source above may have left
+	 * SFCCDR in a stale state. vendor t41_spl_sfc_clk_init() programs
+	 * source/div/CE consistent with the SFC controller's expectation. */
+	t41_spl_sfc_clk_init();
 
 #ifdef CONFIG_SPL_T41_USB_BOOT
 	/* USB-boot dev path: return to mask ROM. The bootrom uploads
@@ -251,28 +175,24 @@ void board_init_f(ulong dummy)
 	 * skip board_init_r() - SPL framework's board_init_r() never
 	 * returns, but the vendor USB-boot pattern requires the mask ROM
 	 * to take control back after DRAM is up so it can upload U-Boot. */
-	t41_spl_sfc_clk_init();
-	t41_spl_puts("T41 SPL: returning to mask ROM (USB boot)\n");
 	return;
 #else
-	/* SFC NOR cold-boot: SPL loads U-Boot proper from NOR offset
-	 * 0x10000 to DRAM 0x80100000 via a small SFC-direct reader
-	 * (arch/mips/mach-xburst/t41/sfc.c), decompresses LZMA, then
-	 * jumps. DRAM and the RAM uclass are already up at this point
-	 * via the standard SPL DM scan that ran above.
-	 *
-	 * Custom loader instead of standard spl_load_image_spi: the SPI
-	 * flash uclass path requires SPL_SPI + SPL_DM_SPI_FLASH +
-	 * SPL_SERIAL + bootph-all tags on uart/sfc/pinctrl/flash/cgu DT
-	 * nodes, and the SFC driver depends on the clocks property
-	 * surviving fdtgrep (CONFIG_OF_SPL_REMOVE_PROPS strips it by
-	 * default). Vendor and most upstream Ingenic ports keep the
-	 * custom loader. Worth revisiting if upstream review requests
-	 * the standard flow. */
-	t41_spl_puts("T41 SPL: loading U-Boot...\n");
-	t41_spl_load_uboot();
-	for (;;)
-		;
+	/* SFC NOR cold-boot: hand off to the standard SPL framework
+	 * board_init_r(). It runs boot_from_devices() against
+	 * spl_boot_device() (BOOT_DEVICE_SPI below), which uses the SPI
+	 * flash uclass to load u-boot-lzma.img from NOR offset
+	 * CONFIG_SYS_SPI_U_BOOT_OFFS to DRAM, decompresses LZMA, and
+	 * jumps. Does not return. */
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
 }
+
+#ifndef CONFIG_SPL_T41_USB_BOOT
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
+}
+#endif
+
 #endif /* CONFIG_XPL_BUILD */

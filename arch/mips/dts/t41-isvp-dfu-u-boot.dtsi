@@ -6,8 +6,10 @@
  * via the mask ROM (tools/t31-usbboot.py - the protocol is generic
  * across XBurst1 and XBurst2), so the binman flash images here are
  * not used in the USB-boot flow. They are kept consistent with the
- * t41-isvp SFC-NOR layout (headered SPL at 0, LZMA U-Boot at 0x8000)
- * so a stray 'make' still produces a sensible flash image.
+ * t41-isvp SFC-NOR layout (headered SPL at 0, LZMA U-Boot at 0x10000)
+ * so a stray 'make' still produces a sensible flash image. The DFU
+ * loader SPL is ~34 KiB, so U-Boot must sit at 0x10000 (not 0x8000)
+ * or binman reports an overlap and the build fails.
  */
 
 / {
@@ -37,7 +39,7 @@
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x10000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

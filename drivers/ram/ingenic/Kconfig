@@ -1,0 +1,17 @@
+config RAM_INGENIC_DDR_INNOPHY
+	bool "Ingenic XBurst2 DDR controller + Innophy PHY"
+	depends on RAM
+	depends on ARCH_XBURST
+	select SPL_RAM if SPL
+	help
+	  Driver for the Ingenic XBurst2 DDR memory controller paired with
+	  the on-chip Innophy DDR PHY (Innophy IP integrated by Ingenic on
+	  T40/T41/A1 and related XBurst2 SoCs). Supports DDR2, DDR3,
+	  LPDDR2 and LPDDR3 chips with hardware DQS calibration enabled by
+	  default. Per-variant timing tables match by DT compatible string,
+	  so a single driver instance covers every T41 SKU (T41A, T41L,
+	  T41LQ, T41N, T41NQ, T41XQ, T41ZG, T41ZGC, T41ZL, T41ZM, T41ZMC,
+	  T41ZN, T41ZX) and the T40 family.
+
+	  Ported from vendor U-Boot 2013 branch T41-1.2.6
+	  (arch/mips/cpu/xburst2/ddr_innophy.c).

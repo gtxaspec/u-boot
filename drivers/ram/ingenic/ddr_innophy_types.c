@@ -535,3 +535,47 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40n = {
 	.mr10		= 0,
 	.mr63		= 0,
 };
+
+/* ----- T40XP (M15T1G1664A_2C, DDR3 @ 600 MHz, 256 MiB) -----
+ *
+ * Values from vendor T40-1.3.1 ddr_params_creator output, mirrored
+ * from arch/mips/mach-xburst/include/mach/t40xp-ddr.h. T40XP uses
+ * DDR3 (not DDR2) at the DDR-600 setpoint with a 32-bit bus and an
+ * 8-bank chip. The DDR3 LMR sequence and REMMAP path is shared with
+ * T41 variants - only the family-specific PHY / drive-ODT / per-bit
+ * skew runs on the T40 branch.
+ */
+const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp = {
+	.name		= "T40XP",
+	.chip		= "M15T1G1664A_2C",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_T40,
+	.bus_width	= 32,
+	.chip0_size	= 0x10000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1200000000u,
+	.ddr_hz		= 600000000u,
+	.ddrc_cfg	= 0x2a002a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000002,	/* DDR3-specific */
+	.ddrc_mmap0	= 0x000020f0,
+	.ddrc_mmap1	= 0x00003000,
+	.ddrc_refcnt	= 0x62910083,
+	.ddrc_timing	= { 0x07110a08, 0x0809050b, 0x03090409, 0x1c201705, 0x80057054 },
+	.ddrc_autosr_cnt= 0x21001249,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x00000010,
+	.ddrp_cl	= 0x0000000b,
+	.ddrp_cwl	= 0x00000009,
+	.mr0		= 0x00001b70,
+	.mr1		= 0x00010042,
+	.mr2		= 0x00020018,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
+};

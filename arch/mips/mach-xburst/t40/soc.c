@@ -13,6 +13,11 @@
  */
 
 #include <config.h>
+#include <dm.h>
+#include <hang.h>
+#include <init.h>
+#include <ram.h>
+#include <spl.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -25,57 +30,10 @@ DECLARE_GLOBAL_DATA_PTR;
 void pll_init(void);
 void clk_ungate_uart(unsigned int idx);
 void t40_spl_serial_init(void);
-void t40_spl_puts(const char *s);
-void t40_spl_putc(char c);
-void __weak sdram_init(void) { }
-void t40_spl_load_uboot(void);
 void t40_spl_sfc_clk_init(void);
 int timer_init(void);
 
 #ifdef CONFIG_XPL_BUILD
-static void spl_put_hex(u32 v)
-{
-	static const char hex[] = "0123456789abcdef";
-	int i;
-
-	t40_spl_puts("0x");
-	for (i = 28; i >= 0; i -= 4)
-		t40_spl_putc(hex[(v >> i) & 0xf]);
-}
-
-#define T40_DRAM_SIZE	(CONFIG_T40_DRAM_SIZE_MB * 1024u * 1024u)
-
-static int dram_verify(void)
-{
-	static const u32 pat[] = {
-		0xdeadbeef, 0x12345678, 0xa5a5a5a5, 0x5a5a5a5a,
-		0xffffffff, 0x00000000,
-	};
-	volatile u32 *a;
-	u32 off;
-	int p;
-
-	a = (volatile u32 *)0xa0000000;
-	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-		*a = pat[p];
-		if (*a != pat[p])
-			return -1;
-	}
-
-	/* Coarse sweep across the part, one word per 1 MB. */
-	for (off = 0; off < T40_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		*a = 0xa0000000u + off;
-	}
-	for (off = 0; off < T40_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		if (*a != 0xa0000000u + off)
-			return -1;
-	}
-
-	return 0;
-}
-
 gd_t gdata __section(".bss");
 
 extern char __bss_start[], __bss_end[];
@@ -122,49 +80,72 @@ void board_init_f(ulong dummy)
 
 	clk_ungate_uart(T40_CONSOLE_UART);
 	t40_spl_serial_init();
-	t40_spl_puts("\nT40 SPL: alive (pre-PLL)\n");
 
 	pll_init();
-	t40_spl_puts("T40 SPL: PLL configured\n");
 
 	timer_init();
-	sdram_init();
-	if (dram_verify() == 0)
-		t40_spl_puts("T40 SPL: DDR OK\n");
-	else
-		t40_spl_puts("T40 SPL: DDR verify FAILED\n");
+
+	/* Bring driver model up so the UCLASS_RAM driver in
+	 * drivers/ram/ingenic/ can probe off the memory-controller node
+	 * in DT. spl_init() runs dm_init_and_scan() + dm_autoprobe();
+	 * we then explicitly probe the RAM uclass to bring DRAM up. */
+	if (spl_init())
+		hang();
+
+	{
+		struct udevice *dev;
+
+		if (uclass_first_device_err(UCLASS_RAM, &dev))
+			hang();
+	}
+
+	preloader_console_init();
+
+	/* Re-program CPM_SFCCDR so the SFC SPI driver (used for both the
+	 * cold-boot SFC NOR load and any DM operations against the flash
+	 * later) has a usable clock. The bootrom configured the SFC for
+	 * its own load, but our pll_init / CGU re-source above may have
+	 * left SFCCDR in a stale state. */
+	t40_spl_sfc_clk_init();
 
 #ifdef CONFIG_SPL_T40_USB_BOOT
-	t40_spl_sfc_clk_init();
 #ifdef CONFIG_SPL_T40_NAND_PROBE
 	{
 		extern void sfc_nand_probe_dump(void);
-		t40_spl_puts("T40 SPL: probing SPI-NAND...\n");
+		printf("T40 SPL: probing SPI-NAND...\n");
 		sfc_nand_probe_dump();
 	}
 #endif
-	t40_spl_puts("T40 SPL: returning to mask ROM (USB boot)\n");
+	/* USB-boot dev path: return to mask ROM. The bootrom uploads
+	 * U-Boot proper to 0x80100000 and jumps to it. */
 	return;
 #elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
-	t40_spl_sfc_clk_init();
 	{
 		extern int sfc_nand_init(void);
 		extern int sfc_nand_load(u32 src, u32 cnt, u32 dst);
 		extern void t40_spl_load_uboot_with(
 			int (*read_fn)(u32 src, u32 cnt, u32 dst));
-		if (sfc_nand_init() < 0) {
-			t40_spl_puts("T40 SPL: NAND init failed - hang\n");
-			for (;;);
-		}
-		t40_spl_puts("T40 SPL: loading U-Boot from NAND...\n");
+		if (sfc_nand_init() < 0)
+			hang();
 		t40_spl_load_uboot_with(sfc_nand_load);
 		for (;;);
 	}
 #else
-	t40_spl_puts("T40 SPL: loading U-Boot...\n");
-	t40_spl_load_uboot();
-	for (;;)
-		;
+	/* SFC NOR cold-boot: hand off to the standard SPL framework
+	 * board_init_r(). It runs boot_from_devices() against
+	 * spl_boot_device() (BOOT_DEVICE_SPI below), which uses the SPI
+	 * flash uclass to load u-boot-lzma.img from NOR offset
+	 * CONFIG_SYS_SPI_U_BOOT_OFFS, LZMA-decompresses to DRAM and
+	 * jumps. Does not return. */
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
 }
+
+#ifndef CONFIG_SPL_T40_USB_BOOT
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
+}
+#endif
 #endif /* CONFIG_XPL_BUILD */

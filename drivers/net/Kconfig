@@ -412,13 +412,14 @@ config ETH_DESIGNWARE_THEAD
 	  present on T-Head SoCs.
 
 config ETH_DESIGNWARE_INGENIC
-	bool "Ingenic XBurst1 T-series glue for Synopsys Designware Ethernet MAC"
+	bool "Ingenic XBurst T-Series glue for Synopsys Designware Ethernet MAC"
 	depends on ETH_DESIGNWARE && ARCH_XBURST
 	select DW_ALTDESCRIPTOR
 	help
 	  This provides the glue layer (PHY-mode/speed select, MAC-PHY
 	  clock and PHY reset GPIO) to use the Synopsys Designware
-	  Ethernet MAC present on Ingenic XBurst1 T-series SoCs (T31 etc.).
+	  Ethernet MAC present on Ingenic XBurst T-Series SoCs (T31/T40/
+	  T41 etc.).
 
 config DW_ALTDESCRIPTOR
 	bool "Designware Ethernet MAC uses alternate (enhanced) descriptors"

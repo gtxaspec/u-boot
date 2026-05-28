@@ -4,8 +4,12 @@
  *
  * T40XP uses SPI-NAND (DDR3 256 MiB, vs T40NN's DDR2 NOR + 128 MiB).
  * The bootrom's NAND boot path expects no INGE block at SPL offset
- * 0x100 (vendor SPI-NAND SPL ships with all zeros there); we set the
- * etype's `ingenic,no-inge` boolean to suppress the INGE write.
+ * 0x100 (vendor SPI-NAND SPL ships with all zeros there). Since the
+ * etype now defaults to no-INGE (only emits when
+ * `ingenic,inge-descriptors` is supplied), we simply omit
+ * descriptors. The `ingenic,no-inge` boolean below is retained as
+ * the NAND-style 64-byte block alignment switch (the vendor
+ * `spl_pad_to_block.c` rule for the secure-boot hash module).
  *
  * The custom NAND U-Boot loader in arch/mips/mach-xburst/t40/sfc_nand.c
  * reads the legacy mkimage header + LZMA payload from NAND offset

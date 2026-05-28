@@ -94,8 +94,12 @@
  * PHY VALUEs, MR0..3, REMMAP_ARRAY. */
 #if defined(CONFIG_T40_VARIANT_T40XP)
 #include <mach/t40xp-ddr.h>
-#else
+#elif defined(CONFIG_T40_VARIANT_T40A)
+#include <mach/t40a-ddr.h>
+#elif defined(CONFIG_T40_VARIANT_T40N)
 #include <mach/t40n-ddr.h>
+#else
+#include <mach/t40nn-ddr.h>
 #endif
 
 /* Compat alias for code still referencing the old single name. */

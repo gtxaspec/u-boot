@@ -4,32 +4,69 @@ if SOC_T40
 
 choice
 	prompt "T40 SoC variant"
-	default T40_VARIANT_T40N
+	default T40_VARIANT_T40NN
 	help
-	  T40 product variant. DDR parameters per variant come from
-	  the vendor U-Boot ddr_params_creator host-tool output for
-	  the specific chip + freq + bus config. Set per board /
-	  defconfig.
+	  T40 product variant. The four T40 SKUs per vendor
+	  include/configs/isvp_common.h:
+	    T40A  - DDR3 32-bit dual-rank 1 GiB (M15T4G16256A_2S)
+	    T40N  - DDR2 32-bit       128 MiB (M14D5121632A)
+	    T40NN - DDR2 32-bit       128 MiB (M14D5121632A, cloner setpoint)
+	    T40XP - DDR3 32-bit       256 MiB (M15T1G1664A_2C)
+	  DDR parameters per variant come from the vendor U-Boot
+	  `tools/ingenic-tools/ddr_params_creator` host-tool output for
+	  the specific chip + freq + bus configuration. Vendor does not
+	  ship a separate T40NN target - mainline keeps T40NN distinct
+	  to preserve the cloner-derived 500 MHz DDR2 timings that the
+	  lab T40 board (silkscreen "T40NN") boots cleanly on.
+
+config T40_VARIANT_T40A
+	bool "T40A (DDR3-1333, 1 GiB dual-rank, 32-bit) [untested]"
+	help
+	  T40A: DDR3 32-bit dual-rank M15T4G16256A_2S (1 GiB total per
+	  ddr_params_creator; vendor isvp_common.h tags as
+	  CONFIG_DDR_128M for SoC addressing). APLL 1008 MHz, MPLL 1400
+	  MHz (DDR=700 MHz). Values are direct ddr_params_creator output
+	  from isvp_t40a_sfcnor; not yet validated in mainline (no T40A
+	  hardware in the lab).
 
 config T40_VARIANT_T40N
-	bool "T40N (DDR2-500, 128 MiB, 32-bit)"
+	bool "T40N (DDR2-1100, 128 MiB, 32-bit) [untested]"
 	help
-	  T40N: DDR2 @ 500 MHz, 32-bit bus, 128 MiB M14D5121632A.
-	  APLL 912 MHz, MPLL 1000 MHz, per vendor
-	  include/configs/isvp_t40.h DDR_500M / APLL_912M block.
+	  T40N: DDR2 32-bit 128 MiB M14D5121632A. APLL 912 MHz, MPLL
+	  1100 MHz (DDR=550 MHz), per vendor isvp_common.h CONFIG_T40N /
+	  DDR_550M block. Values are direct ddr_params_creator output
+	  from isvp_t40n_sfcnor; not yet validated in mainline at the
+	  vendor 550 MHz target. For the conservative 500 MHz cloner
+	  timings that the lab T40 board boots on, select T40NN.
+
+config T40_VARIANT_T40NN
+	bool "T40NN (DDR2-1000, 128 MiB, 32-bit) [HW-validated]"
+	help
+	  T40NN: DDR2 32-bit 128 MiB M14D5121632A. APLL 912 MHz, MPLL
+	  1000 MHz (DDR=500 MHz), cloner-derived from
+	  thingino-cloner/firmwares/t40. The conservative setpoint vs
+	  the vendor T40N 550 MHz; the cloner underclocks for margin and
+	  this is the setpoint that boots cleanly on the lab T40 board
+	  (silkscreen "T40NN"). HW-validated. Vendor isvp_common.h has
+	  no separate T40NN target - it groups this silicon under
+	  CONFIG_T40N at the higher vendor 550 MHz clock.
 
 config T40_VARIANT_T40XP
-	bool "T40XP (DDR3-1333, 256 MiB, 32-bit)"
+	bool "T40XP (DDR3-1200, 256 MiB, 32-bit) [HW-validated]"
 	help
-	  T40XP: DDR3 @ 600 MHz, 32-bit bus, 256 MiB M15T1G1664A_2C.
-	  APLL 1008 MHz, MPLL 1200 MHz, per vendor
-	  include/configs/isvp_t40.h DDR_600M / APLL_1008M block.
+	  T40XP: DDR3 32-bit 256 MiB M15T1G1664A_2C. APLL 1008 MHz,
+	  MPLL 1200 MHz (DDR=600 MHz). Cloner-derived (vendor
+	  isvp_common.h CONFIG_T40XP block targets MPLL 1400 MHz / DDR
+	  700 MHz; mainline runs the conservative cloner value until the
+	  vendor 700 MHz timings are validated). HW-validated.
 
 endchoice
 
 config T40_DRAM_SIZE_MB
 	int
+	default 128 if T40_VARIANT_T40A
 	default 128 if T40_VARIANT_T40N
+	default 128 if T40_VARIANT_T40NN
 	default 256 if T40_VARIANT_T40XP
 
 config SPL_T40_USB_BOOT

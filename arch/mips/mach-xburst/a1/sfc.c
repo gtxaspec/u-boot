@@ -40,13 +40,12 @@ DECLARE_GLOBAL_DATA_PTR;
  *   flash 0           : SPL (boot header + SPL code)
  *   flash UBOOT_OFFSET : U-Boot proper raw image (run at 0x80100000)
  *
- * The headered SPL is ~17 KB and CONFIG_SPL_MAX_SIZE is 0x5800
- * (22.5 KB), so 0x8000 (32 KB) is a clean, comfortably-clear
- * boundary - no point wasting flash on a 0x10000 gap. This MUST
- * stay in sync with the U-Boot entry offset in the binman image
- * (arch/mips/dts/a1-isvp-u-boot.dtsi).
+ * With DM-in-SPL (UCLASS_RAM DDR driver) the headered SPL grew to
+ * ~34 KB, past the old 0x8000 boundary, so U-Boot moved to 0x10000
+ * (64 KB). This MUST stay in sync with the U-Boot entry offset in the
+ * binman image (arch/mips/dts/a1-isvp-u-boot.dtsi).
  */
-#define A1_UBOOT_OFFSET	0x8000		/* must match binman u-boot @ */
+#define A1_UBOOT_OFFSET	0x10000		/* must match binman u-boot @ */
 #define A1_UBOOT_LOAD_ADDR	0x80100000	/* CONFIG_SYS_TEXT_BASE */
 /*
  * U-Boot proper is a gzip payload wrapped in a 64-byte legacy mkimage

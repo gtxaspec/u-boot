@@ -32,8 +32,13 @@
 #define G_OSTCCR_PRESCALE_4	0x1		/* EXTAL / 4 */
 #define G_OST_RATE		(24000000 / 4)	/* 6 MHz */
 
-#ifndef CONFIG_XPL_BUILD
-
+/*
+ * Built in SPL too: DM-in-SPL DDR bring-up routes through the generic
+ * udelay()/mdelay() (drivers/ram/ingenic uses them), which need a real
+ * timebase. XBurst2 has no CP0 Count, so without the Global OST the SPL
+ * udelay() spins forever - board_init_f calls timer_init() before the
+ * UCLASS_RAM probe.
+ */
 static u32 gost_readl(u32 off)
 {
 	return readl((void __iomem *)(G_OST_BASE + off));
@@ -70,5 +75,3 @@ ulong notrace get_tbclk(void)
 {
 	return G_OST_RATE;
 }
-
-#endif /* !CONFIG_XPL_BUILD */

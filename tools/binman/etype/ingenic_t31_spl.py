@@ -121,6 +121,23 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # UART, no fallback). Boards that boot from SPI-NAND set the
         # `ingenic,no-inge` boolean to suppress the INGE write.
         self.no_inge = fdt_util.GetBool(self._node, 'ingenic,no-inge')
+        # Minimum SPL_LENGTH to stamp, in bytes from CONFIG_SPL_TEXT_BASE.
+        # T-series bootroms lock cache lines as SRAM only for the address
+        # range MIN(SPL_LENGTH, _DAT_80000000) starting at the load
+        # address; bytes accessed past the loaded region (typically the
+        # SPL's BSS region beyond the file's .data end) miss cache and
+        # fetch from uninitialised DRAM. Boards whose BSS lands past the
+        # actual file size need to bump SPL_LENGTH so the bootrom locks
+        # SRAM lines through the BSS area. The bootrom happily loads
+        # past file-EOF (into the U-Boot proper region on the SFC NOR
+        # layout) - those junk bytes land in BSS area, which gets
+        # zeroed during SPL startup anyway, so the overload is benign.
+        #
+        # Value is the byte offset from CONFIG_SPL_TEXT_BASE through the
+        # last address the SPL needs cache-locked (= __bss_end -
+        # CONFIG_SPL_TEXT_BASE, rounded up).
+        self.min_spl_length = fdt_util.GetInt(
+            self._node, 'ingenic,min-spl-length', 0)
 
     def GetDefaultFilename(self):
         return 'spl/u-boot-spl.bin'
@@ -214,9 +231,15 @@ class Entry_ingenic_t31_spl(Entry_blob):
             # cap and matches vendor.
             pass
         else:
-            inge_len_for_cap = (size + 511) & ~511
+            # If the board asked for a larger SPL_LENGTH than the file
+            # (to cover BSS past file-EOF, see above), grow the cap
+            # computation to accommodate. Bootrom rejects stored >
+            # INGE_length - 0x180, so INGE_length must be at least
+            # min_spl_length + 0x180 rounded up to 512.
+            effective_size = max(size, self.min_spl_length)
+            inge_len_for_cap = (effective_size + 0x180 + 511) & ~511
             cap = inge_len_for_cap - 0x180
-            stored_size = min(size, cap)
+            stored_size = min(effective_size, cap)
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             stored_size.to_bytes(4, 'little')
 
@@ -242,7 +265,13 @@ class Entry_ingenic_t31_spl(Entry_blob):
         # 5 entries (so total = 152 = 0x98, ends at 0xd8 - well before
         # the 0x100 mirror) and the etype rejects anything that would
         # overflow the 0x100 block boundary.
-        inge_length = (size + 511) & ~511
+        # INGE_length tracks effective size (file + min_spl_length pad)
+        # so the bootrom-side cap matches the stamped SPL_LENGTH.
+        # Rounded up to 512 with 0x180 margin per the cap formula.
+        if not self.no_inge:
+            inge_length = (max(size, self.min_spl_length) + 0x180 + 511) & ~511
+        else:
+            inge_length = (size + 511) & ~511
         # Vendor T40N SFCNOR SPL binary places INGE only at 0x100.
         # 2026-05-26 cold-boot A/B test: vendor (INGE@0x100 only) cold-
         # boots T40NN cleanly to U-Boot. Our build with INGE mirrored

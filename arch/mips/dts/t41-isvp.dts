@@ -22,6 +22,18 @@
 		reg = <0x0 0x10000000>;
 	};
 
+	/*
+	 * DDR controller + Innophy PHY. The compatible string selects
+	 * the per-variant timing table from drivers/ram/ingenic/
+	 * ddr_innophy_types.c. SPL probes this off DT and runs
+	 * sdram_init() with hardware DQS calibration enabled.
+	 */
+	ddr: memory-controller@b34f0000 {
+		compatible = "ingenic,t41nq-ddr-innophy";
+		reg = <0xb34f0000 0x3000>;
+		u-boot,dm-pre-reloc;
+	};
+
 	cgu: clock-controller@b0000000 {
 		compatible = "ingenic,t41-cgu";
 		reg = <0xb0000000 0x1000>;

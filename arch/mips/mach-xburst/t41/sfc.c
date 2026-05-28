@@ -40,13 +40,13 @@ DECLARE_GLOBAL_DATA_PTR;
  *   flash 0           : SPL (boot header + SPL code)
  *   flash UBOOT_OFFSET : U-Boot proper raw image (run at 0x80100000)
  *
- * The headered SPL is ~17 KB and CONFIG_SPL_MAX_SIZE is 0x5800
- * (22.5 KB), so 0x8000 (32 KB) is a clean, comfortably-clear
- * boundary - no point wasting flash on a 0x10000 gap. This MUST
- * stay in sync with the U-Boot entry offset in the binman image
- * (arch/mips/dts/a1-isvp-u-boot.dtsi).
+ * SPL grew to ~38 KB once DM-in-SPL landed (DM core + libfdt + RAM
+ * uclass + per-variant tables). 0x10000 (64 KB) gives the SPL the
+ * full vendor BIG_SPL ceiling (100 KB) of headroom while still
+ * sector-aligned. MUST stay in sync with the U-Boot entry offset in
+ * the binman image (arch/mips/dts/t41-isvp-u-boot.dtsi).
  */
-#define T41_UBOOT_OFFSET	0x8000		/* must match binman u-boot @ */
+#define T41_UBOOT_OFFSET	0x10000		/* must match binman u-boot @ */
 #define T41_UBOOT_LOAD_ADDR	0x80100000	/* CONFIG_SYS_TEXT_BASE */
 /*
  * U-Boot proper is a gzip payload wrapped in a 64-byte legacy mkimage

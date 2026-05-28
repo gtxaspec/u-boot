@@ -256,13 +256,19 @@ void board_init_f(ulong dummy)
 	return;
 #else
 	/* SFC NOR cold-boot: SPL loads U-Boot proper from NOR offset
-	 * 0x8000 to DRAM 0x80100000 via a small SFC-direct reader,
-	 * decompresses LZMA, then jumps. This is cheaper than wiring up
-	 * the standard SPL_SPI / SPL_SPI_FLASH stack (which would push
-	 * the SPL well past 64 KiB once it pulls in the full SPI flash
-	 * uclass + DT match table + spl_spi_load_image). DRAM and the
-	 * RAM uclass are already up at this point via the standard SPL
-	 * DM scan that ran above. */
+	 * 0x10000 to DRAM 0x80100000 via a small SFC-direct reader
+	 * (arch/mips/mach-xburst/t41/sfc.c), decompresses LZMA, then
+	 * jumps. DRAM and the RAM uclass are already up at this point
+	 * via the standard SPL DM scan that ran above.
+	 *
+	 * Custom loader instead of standard spl_load_image_spi: the SPI
+	 * flash uclass path requires SPL_SPI + SPL_DM_SPI_FLASH +
+	 * SPL_SERIAL + bootph-all tags on uart/sfc/pinctrl/flash/cgu DT
+	 * nodes, and the SFC driver depends on the clocks property
+	 * surviving fdtgrep (CONFIG_OF_SPL_REMOVE_PROPS strips it by
+	 * default). Vendor and most upstream Ingenic ports keep the
+	 * custom loader. Worth revisiting if upstream review requests
+	 * the standard flow. */
 	t41_spl_puts("T41 SPL: loading U-Boot...\n");
 	t41_spl_load_uboot();
 	for (;;)

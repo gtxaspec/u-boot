@@ -275,28 +275,31 @@ class Entry_ingenic_t31_spl(Entry_blob):
         data[SPL_LENGTH_POSITION:SPL_LENGTH_POSITION + 4] = \
             stored_size.to_bytes(4, 'little')
 
-        # INGE params header. The T-series mask ROMs check for the
-        # INGE block at two distinct offsets depending on the boot
-        # source (per the T40 bootrom decompilation):
+        # INGE params header (emitted only when the board supplies
+        # `ingenic,inge-descriptors`). Per the T40/T41/A1 bootrom
+        # decompilation the mask ROM reads this block at a per-boot-
+        # source offset, and if the 'INGE' magic matches it walks the
+        # descriptor table to program clocks before entering the SPL:
         #
-        #   - SFC NOR boot path (FUN_bfc015e0)  -> param block at 0x40
-        #   - USB/SD/NAND boot paths            -> param block at 0x100
+        #   - SFC NOR boot path (FUN_bfc02070) -> block at 0x100
+        #   - SD/MMC boot path  (FUN_bfc015e0) -> block at 0x40
         #
-        # Bytes [0x00..0x03] of the block hold the 'INGE' magic, bytes
-        # [0x04..0x07] hold the SPL length (rounded up to 512), bytes
-        # [0x08..0x1f] are pll_freq + cpccr + nand_timing (left zero -
-        # the vendor FPGA-mode default; clock setup is done by the
-        # descriptor table below or by the SPL's pll_init), and bytes
-        # [0x20..] are the CPM descriptor table (5 u32 cells per entry,
-        # terminated by (0xffffffff, 0xffffffff, 0, 0, 0)). Emit the
-        # exact same block at both offsets so the binary boots from
-        # either path without needing per-board headers.
+        # (An earlier version of this comment had the two swapped and
+        # mirrored the block to 0x40; NOR is bfc02070 reading 0x100,
+        # bfc015e0 is the SD/MMC path. We emit only at the NOR offset
+        # 0x100 = INGE_OFFSET, matching the vendor T40N SFCNOR layout.)
         #
-        # Layout sanity at 0x40: header 32 bytes + 11 entries * 20 +
-        # terminator 20 = 272 bytes -> ends at 0x150. Our DT supplies
-        # 5 entries (so total = 152 = 0x98, ends at 0xd8 - well before
-        # the 0x100 mirror) and the etype rejects anything that would
-        # overflow the 0x100 block boundary.
+        # Bytes [0x00..0x03] hold the 'INGE' magic, [0x04..0x07] the SPL
+        # length, [0x08..0x1f] pll_freq + cpccr + nand_timing (left zero),
+        # and [0x20..] the CPM descriptor table (5 u32 cells per entry,
+        # terminated by (0xffffffff, 0xffffffff, 0, 0, 0)).
+        #
+        # NOTE: no mainline SoC currently sets descriptors. Our DM-in-SPL
+        # SPLs program their own clocks in board_init_f before any clock-
+        # dependent work, so this bootrom pre-programming is redundant
+        # (HW-verified: T40NN + T41NQ cold-boot identically with and
+        # without INGE, 2026-05-28). Kept as opt-in infrastructure for a
+        # vendor-style SPL that uses UART/timing before its own clk init.
         # INGE_length tracks effective size (file + min_spl_length pad)
         # so the bootrom-side cap matches the stamped SPL_LENGTH.
         # Rounded up to 512 with 0x180 margin per the cap formula.

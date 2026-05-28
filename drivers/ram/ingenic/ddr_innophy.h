@@ -115,6 +115,7 @@ enum ingenic_ddr_type {
 enum ingenic_ddr_family {
 	INGENIC_DDR_FAMILY_T41 = 0,	/* default for existing variants */
 	INGENIC_DDR_FAMILY_T40,
+	INGENIC_DDR_FAMILY_A1,
 };
 
 /* ----- Drive strength / ODT / skew / VREF efuse parameters -----
@@ -189,8 +190,29 @@ struct ingenic_ddr_variant {
 	u32 remap[5];
 
 	/* Drive / ODT / skew / VREF efuse defaults (vendor
-	 * efuse_ddr_get.c init_ddr_par). */
+	 * efuse_ddr_get.c init_ddr_par). T41 family only. */
 	unsigned int par[IDP_NUM];
+
+	/* A1-family Innophy PHY tuning (vendor ddr3_param_t). The A1 PHY
+	 * programs drive/ODT/DQS/DQ through a per-index register layout the
+	 * T41 par[] table does not describe, so the A1 family carries its
+	 * own field group; only ingenic_ddr_a1_phy_init() reads it. cl/cwl
+	 * reuse ddrp_cl/ddrp_cwl, mem_cfg reuses ddrp_memcfg, and the MR1
+	 * kgd ODT/DS patch is pre-baked into mr1 at transcription time.
+	 * Compiled only into A1 builds so the T40/T41 variant tables keep
+	 * their original size. */
+#ifdef CONFIG_SOC_A1
+	struct {
+		u8 odt_pd, odt_pu;
+		u8 drvcmd_pd, drvcmd_pu;
+		u8 drvcmdck_pd, drvcmdck_pu;
+		u8 dq_drv_a_pd, dq_drv_a_pu;
+		u8 dq_drv_b_pd, dq_drv_b_pu;
+		u8 dq_a, dq_b;
+		u8 vref;
+		u8 dqs_a, dqs_b;
+	} a1_phy;
+#endif
 };
 
 struct ingenic_ddr_priv {
@@ -222,6 +244,14 @@ int ingenic_ddr_t40_phy_hw_calibration(struct ingenic_ddr_priv *p);
 void ingenic_ddr_t40_post_phy_fixups(struct ingenic_ddr_priv *p);
 void ingenic_ddr_t40_phy_set_skew(struct ingenic_ddr_priv *p);
 
+/* ----- A1-family PHY paths (ddr_innophy_phy_a1.c, A1 builds only) ----- */
+#ifdef CONFIG_SOC_A1
+void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_variant *v);
+int ingenic_ddr_a1_phy_init(struct ingenic_ddr_priv *p);
+int ingenic_ddr_a1_phy_hw_calibration(struct ingenic_ddr_priv *p);
+void ingenic_ddr_a1_post_phy_fixups(struct ingenic_ddr_priv *p);
+#endif
+
 /* ----- Top-level init (ddr_innophy.c) ----- */
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p);
 
@@ -243,5 +273,13 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
 /* ----- Per-variant configs (T40 family) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40n;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp;
+
+/* ----- Per-variant configs (A1 family, A1 builds only) ----- */
+#ifdef CONFIG_SOC_A1
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1n;
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1nt;
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1x;
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1l;
+#endif
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_INNOPHY_H */

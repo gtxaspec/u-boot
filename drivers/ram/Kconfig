@@ -140,6 +140,7 @@ config K3_MULTI_DDR
 
 source "drivers/ram/aspeed/Kconfig"
 source "drivers/ram/cadence/Kconfig"
+source "drivers/ram/ingenic/Kconfig"
 source "drivers/ram/octeon/Kconfig"
 source "drivers/ram/renesas/Kconfig"
 source "drivers/ram/rockchip/Kconfig"

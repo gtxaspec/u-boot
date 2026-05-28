@@ -29,21 +29,11 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CPEPCR		0x18	/* EPLL */
 #define CPM_CPVPCR		0x1c	/* VPLL */
-#ifdef CONFIG_SOC_T41
-/* T41 CPM map (vendor arch/mips/include/asm/arch-t41/cpm.h) */
-#define CPM_CLKGR0		0x20
-#define CPM_CLKGR1		0x28
-#define CPM_MAC0CDR		0x54	/* MACCDR */
-#define CPM_SFC0CDR		0x60
-#define CPM_SFC1CDR		0x7c
-#define CPM_MAC1CDR		0	/* T41 has a single GMAC */
-#else
 #define CPM_CLKGR0		0x30
 #define CPM_CLKGR1		0x38
 #define CPM_SFC0CDR		0x90
 #define CPM_MAC0CDR		0xc0
 #define CPM_MAC1CDR		0xd0
-#endif
 
 #define EXT_RATE		24000000UL
 #define RTC_RATE		32768UL
@@ -71,34 +61,6 @@ struct a1_clk_desc {
  * gate-only for now - their dividers are added as the consuming
  * drivers (MMC, GMAC) are ported.
  */
-#ifdef CONFIG_SOC_T41
-/*
- * T41 CLKGR bit map (vendor arch/mips/include/asm/arch-t41/cpm.h):
- *   CLKGR0: SFC0=21, MSC0=4, MSC1=5, OTG=3, AIC=11, TCU=30, EFUSE=1,
- *           UART0=14, UART1=15, UART2=16
- *   CLKGR1: GMAC=4, SFC1=12, PDMA(DMAC)=3
- * Sources for GMAC/SFC MUX field [31:30]: 1=MPLL on T41.
- */
-static const struct a1_clk_desc a1_clks[T40_CLK_COUNT] = {
-	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 21, 1 },
-	[T40_CLK_SFC1]  = { CPM_SFC1CDR, 29, 28, 27, CPM_CLKGR1, 12, 1 },
-	[T40_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
-	[T40_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
-	[T40_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
-	[T40_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
-	[T40_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 16 },
-	[T40_CLK_OTG0]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
-	[T40_CLK_OTG1]  = { 0, 0, 0, 0, NO_GATE, 0 },
-	[T40_CLK_OTG2]  = { 0, 0, 0, 0, NO_GATE, 0 },
-	[T40_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
-	[T40_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR1, 11 },
-	[T40_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
-	[T40_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
-	[T40_CLK_GMAC1] = { 0, 0, 0, 0, NO_GATE, 0 },	/* T41: no GMAC1 */
-	[T40_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR0, 22 },	/* PDMA */
-	[T40_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 1 },
-};
-#else
 static const struct a1_clk_desc a1_clks[T40_CLK_COUNT] = {
 	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 24, 1 },
 	[T40_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
@@ -118,7 +80,6 @@ static const struct a1_clk_desc a1_clks[T40_CLK_COUNT] = {
 	[T40_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR1, 3 },
 	[T40_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
 };
-#endif
 
 struct t40_cgu_priv {
 	void __iomem *base;
@@ -137,24 +98,6 @@ static void cpm_w(struct t40_cgu_priv *p, u32 off, u32 v)
 static ulong pll_rate(struct t40_cgu_priv *p, u32 reg)
 {
 	u32 v = cpm_r(p, reg);
-#ifdef CONFIG_SOC_T41
-	/*
-	 * T41 (XBurst2) PLL encoding differs from T40 - PLLM is 9 bits
-	 * not 12, OD0/OD1 swap positions, and a PLLRG[6:4] field is added.
-	 * Vendor arch/mips/cpu/xburst2/t41/clk.c pll_get_rate formula:
-	 *   freq = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1))
-	 * with OD0 at bit 11 (3 bits) and OD1 at bit 7 (4 bits). The
-	 * (M+1)*EXTAL*2 product overflows 32-bit for MPLL=1400 MHz, so
-	 * go through u64.
-	 */
-	u32 m = (v >> 20) & 0x1ff;
-	u32 n = (v >> 14) & 0x3f;
-	u32 od0 = (v >> 11) & 0x7;
-	u32 od1 = (v >> 7) & 0xf;
-	u64 vco = (u64)EXT_RATE * (m + 1) * 2;
-
-	return (ulong)(vco / ((n + 1) * (1u << od0) * (od1 + 1)));
-#else
 	u32 m = (v >> 20) & 0xfff;
 	u32 n = (v >> 14) & 0x3f;
 	u32 od1 = (v >> 11) & 0x7;
@@ -169,7 +112,6 @@ static ulong pll_rate(struct t40_cgu_priv *p, u32 reg)
 		od0 = 1;
 
 	return (ulong)(rate / n / od1 / od0);
-#endif
 }
 
 static ulong a1_parent_rate(struct t40_cgu_priv *p, u32 cdr)
@@ -327,7 +269,6 @@ static int t40_cgu_probe(struct udevice *dev)
 
 static const struct udevice_id t40_cgu_ids[] = {
 	{ .compatible = "ingenic,t40-cgu" },
-	{ .compatible = "ingenic,t41-cgu" },
 	{ }
 };
 

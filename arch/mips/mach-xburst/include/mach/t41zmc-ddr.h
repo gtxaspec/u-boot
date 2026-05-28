@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Ingenic T41NQ DDR3 controller + Innophy PHY register values.
+ * Ingenic T41ZMC DDR3 controller + Innophy PHY register values.
  *
  * Direct output of vendor U-Boot `tools/ingenic-tools/ddr_creator_chip/
  * ddr_params_creator` built from the T41-1.2.6 branch with
- * `isvp_t41nq_sfc_nor` defconfig (CONFIG_T41NQ +
+ * `isvp_t41zmc_sfc_nor` defconfig (CONFIG_T41ZMC +
  * CONFIG_DDR3_W631GU6NG + DDR_700M + APLL_1104M + DW32=0,
  * CS0-only).
  *
@@ -17,8 +17,8 @@
  * refactor that consumes these values).
  */
 
-#ifndef __T41NQ_DDR_H__
-#define __T41NQ_DDR_H__
+#ifndef __T41ZMC_DDR_H__
+#define __T41ZMC_DDR_H__
 
 #define CONFIG_T41_DDR3		1
 
@@ -36,7 +36,7 @@
 #define DDR_MPLL_RATE		1400000000U
 #define DDR_TARGET_RATE		(DDR_MPLL_RATE / 2U)
 
-/* T41NQ PLL MNOD - vendor T41-1.2.6 isvp_t41.h. Bit layout:
+/* T41ZMC PLL MNOD - vendor T41-1.2.6 isvp_t41.h. Bit layout:
  *   PLLEN[0], LOCK[2], PLL_ON[3], PLLRG[6:4],
  *   PLLOD1[10:7], PLLOD0[13:11], PLLN[19:14], PLLM[28:20].
  */
@@ -44,7 +44,7 @@
 #define T41_MPLL_MNOD		((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4))
 #define T41_VPLL_MNOD		((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4))
 
-/* DDRC register values from ddr_params_creator (T41NQ + W631GU6NG + 700 MHz + 16-bit) */
+/* DDRC register values from ddr_params_creator (T41ZMC + W631GU6NG + 700 MHz + 16-bit) */
 #define DDRC_CFG_VALUE		0x02002a35
 #define DDRC_CTRL_VALUE		0x0000b092
 #define DDRC_DLMR_VALUE		0x00000000
@@ -76,4 +76,4 @@
 #define T41_REMMAP_ARRAY	{ 0x030e0d0c, 0x07060504, 0x0b0a0908, \
 			  0x0f020100, 0x13121110 }
 
-#endif /* __T41NQ_DDR_H__ */
+#endif /* __T41ZMC_DDR_H__ */

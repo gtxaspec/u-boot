@@ -13,12 +13,16 @@
  * Copyright (c) 2016 Ingenic Semiconductor Co.,Ltd
  */
 
+#include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/compiler.h>
 #include <linux/delay.h>
+#include <lzma/LzmaTools.h>
 #include <mach/t40.h>
 #include <mach/t31-sfc.h>
 #include <mach/t40-sfc-nand.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 void t40_spl_puts(const char *s);
 void t40_spl_putc(char c);
@@ -500,6 +504,138 @@ int sfc_nand_init(void)
 {
 	sfc_controller_init();
 	return spinand_init();
+}
+
+/*
+ * Custom U-Boot loader for the SPI-NAND cold-boot path. With DM-in-SPL,
+ * DDR is up via UCLASS_RAM and the SPL framework's malloc heap is at
+ * CONFIG_SPL_CUSTOM_SYS_MALLOC_ADDR (4 MiB in DRAM), but mainline
+ * doesn't have a generic SPL SPI-NAND loader that goes through DM.
+ * We open-code a small loader: read the legacy mkimage header from a
+ * fixed NAND offset, LZMA-decompress the payload to its load address,
+ * and jump.
+ *
+ * Flash layout (matches the binman dtsi):
+ *   NAND  offset 0       : SPL (boot header + SPL code)
+ *   NAND  offset T40_NAND_UBOOT_OFFSET (0x80000) : LZMA U-Boot
+ *
+ * Use a NAND-friendly offset that's well past the SPL region with
+ * margin for the bootrom's hardware ECC + bad-block tolerance.
+ */
+#define T40_NAND_UBOOT_OFFSET	0x80000		/* 512 KiB into NAND */
+#define T40_IH_MAGIC		0x27051956
+#define T40_IH_HDR_LEN		64
+#define T40_UBOOT_SCRATCH	0x81000000	/* DRAM compressed scratch */
+#define T40_UBOOT_MAX		0x00800000	/* 8 MiB decompressed bound */
+#define T40_DRAM_BASE		0x80000000
+#define T40_DRAM_MAX		0x10000000	/* 256 MiB T40XP */
+#define T40_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
+#define T40_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
+
+static u32 hdr_be32(const u8 *p)
+{
+	return ((u32)p[0] << 24) | ((u32)p[1] << 16) |
+	       ((u32)p[2] << 8)  | (u32)p[3];
+}
+
+/*
+ * Enter U-Boot proper through KSEG1. The bootrom-locked SPL cache
+ * lines are never touched because U-Boot proper landed in DRAM via
+ * the SFC controller (which doesn't pass through cache).
+ */
+static void __attribute__((noreturn)) t40_jump_to_uboot(unsigned long target)
+{
+	unsigned long kseg1 = (target & 0x1fffffff) | 0xa0000000;
+
+	asm volatile(
+		".set push\n"
+		".set noreorder\n"
+		"jr    %0\n"
+		" nop\n"
+		".set pop\n"
+		: : "r"(kseg1)
+		: "memory");
+	__builtin_unreachable();
+}
+
+void t40_spl_nand_load_uboot(void)
+{
+	u8 *scratch = (u8 *)T40_UBOOT_SCRATCH;
+	u32 ih_magic, ih_size, ih_load;
+	SizeT out_len;
+	int ret;
+
+	/* Bring up the SFC controller + probe the NAND chip. */
+	if (sfc_nand_init() != 0) {
+		t40_spl_puts("SPL: SPI-NAND init failed\n");
+		return;
+	}
+
+	/* Read the 64-byte legacy mkimage header from NAND. */
+	if (sfc_nand_load(T40_NAND_UBOOT_OFFSET, T40_IH_HDR_LEN,
+			  T40_UBOOT_SCRATCH) != 0) {
+		t40_spl_puts("SPL: U-Boot header read failed\n");
+		return;
+	}
+	ih_magic = hdr_be32(scratch + 0);
+	ih_size  = hdr_be32(scratch + 12);
+	ih_load  = hdr_be32(scratch + 16);
+	if (ih_magic != T40_IH_MAGIC) {
+		t40_spl_puts("SPL: bad U-Boot image magic\n");
+		return;
+	}
+	if (ih_size == 0 || ih_size > T40_UBOOT_MAX) {
+		t40_spl_puts("SPL: U-Boot image size out of range\n");
+		return;
+	}
+	if (ih_load < T40_DRAM_BASE ||
+	    ih_load >= T40_DRAM_BASE + T40_DRAM_MAX) {
+		t40_spl_puts("SPL: U-Boot load addr out of range\n");
+		return;
+	}
+
+	/* Read header + LZMA payload into DRAM scratch. */
+	if (sfc_nand_load(T40_NAND_UBOOT_OFFSET, T40_IH_HDR_LEN + ih_size,
+			  T40_UBOOT_SCRATCH) != 0) {
+		t40_spl_puts("SPL: U-Boot payload read failed\n");
+		return;
+	}
+
+	/*
+	 * Re-point malloc at a 2 MiB DRAM heap. The SPL framework's
+	 * full dlmalloc heap (CONFIG_SPL_CUSTOM_SYS_MALLOC_ADDR) is
+	 * activated only by board_init_r(); we never call that because
+	 * we hand off via t40_jump_to_uboot() below. The LZMA decoder
+	 * needs ~170 KB of allocations which won't fit in the SPL F
+	 * malloc area (CONFIG_SPL_SYS_MALLOC_F_LEN, ~16 KB). Switch to
+	 * malloc_simple in a DRAM window so the LZMA single ~32 KB
+	 * probability-table allocation always succeeds.
+	 */
+	gd->malloc_base = T40_SPL_HEAP_BASE;
+	gd->malloc_limit = T40_SPL_HEAP_SIZE;
+	gd->malloc_ptr = 0;
+	gd->flags &= ~GD_FLG_FULL_MALLOC_INIT;
+
+	/*
+	 * Decompress to the KSEG1 alias of the load address. The bootrom
+	 * locks the SPL cache lines; writing through KSEG1 keeps the
+	 * decompressed U-Boot in real DRAM, and t40_jump_to_uboot()
+	 * enters via KSEG1 so we never touch the locked SPL cache.
+	 */
+	out_len = T40_UBOOT_MAX;
+	ret = lzmaBuffToBuffDecompress(
+		(unsigned char *)(uintptr_t)((ih_load & 0x1fffffff) | 0xa0000000),
+		&out_len, scratch + T40_IH_HDR_LEN, (SizeT)ih_size);
+	if (ret) {
+		char m[2] = { (char)('0' + (ret & 7)), 0 };
+
+		t40_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
+		t40_spl_puts(m);
+		t40_spl_puts("\n");
+		return;
+	}
+
+	t40_jump_to_uboot(ih_load);
 }
 
 #ifdef CONFIG_SPL_T40_NAND_PROBE

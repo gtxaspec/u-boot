@@ -203,12 +203,6 @@ void ingenic_ddr_phy_set_vref_skew(struct ingenic_ddr_priv *p);
 /* ----- Top-level init (ddr_innophy.c) ----- */
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p);
 
-/* Non-DM entry point: usable from SPL pre-DM code (T41 board_init_f
- * needs to bring DRAM up before driver model is fully alive). Caller
- * supplies the variant struct + controller base; the function builds
- * a local priv, runs the full init sequence, and returns. */
-int ingenic_ddr_init(const struct ingenic_ddr_variant *cfg, void __iomem *base);
-
 /* ----- Per-variant configs (ddr_innophy_types.c) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41nq;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41a;

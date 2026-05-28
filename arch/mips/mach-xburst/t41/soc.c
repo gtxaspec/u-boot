@@ -13,6 +13,10 @@
  */
 
 #include <config.h>
+#include <dm.h>
+#include <hang.h>
+#include <init.h>
+#include <spl.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -27,7 +31,6 @@ void clk_ungate_uart(unsigned int idx);
 void t41_spl_serial_init(void);
 void t41_spl_puts(const char *s);
 void t41_spl_putc(char c);
-void __weak sdram_init(void) { }
 void t41_spl_load_uboot(void);
 void t41_spl_sfc_clk_init(void);
 int timer_init(void);
@@ -200,7 +203,36 @@ void board_init_f(ulong dummy)
 	}
 
 	timer_init();
-	sdram_init();
+
+	/* Bring driver model up so the UCLASS_RAM driver in
+	 * drivers/ram/ingenic/ can probe off the memory-controller node
+	 * in DT. spl_init() runs dm_init_and_scan() and dm_autoprobe()
+	 * which together find the device, look up the variant struct via
+	 * the compatible string, and call the driver's .probe (which in
+	 * SPL phase runs ingenic_ddr_sdram_init() against the variant). */
+	{
+		int ret = spl_init();
+
+		if (ret) {
+			t41_spl_puts("T41 SPL: spl_init failed\n");
+			hang();
+		}
+	}
+
+	/* The CGU DDR clock divider (CPM_DDRCDR) has to be programmed
+	 * before the RAM driver's PHY PLL setup since the Innophy PHY
+	 * takes the CGU output as its input clock. The driver probe is
+	 * triggered explicitly here so we have a chance to do that just
+	 * beforehand. */
+	{
+		struct udevice *dev;
+		int ret = uclass_first_device_err(UCLASS_RAM, &dev);
+
+		if (ret) {
+			t41_spl_puts("T41 SPL: DDR probe failed\n");
+			hang();
+		}
+	}
 
 	/* KSEG1 (uncached) DRAM probe - confirms PHY HW calibration
 	 * landed and the bootrom DMA path will work for stage 2. */
@@ -214,10 +246,23 @@ void board_init_f(ulong dummy)
 	}
 
 #ifdef CONFIG_SPL_T41_USB_BOOT
+	/* USB-boot dev path: return to mask ROM. The bootrom uploads
+	 * U-Boot proper to 0x80100000 and jumps to it. We intentionally
+	 * skip board_init_r() - SPL framework's board_init_r() never
+	 * returns, but the vendor USB-boot pattern requires the mask ROM
+	 * to take control back after DRAM is up so it can upload U-Boot. */
 	t41_spl_sfc_clk_init();
 	t41_spl_puts("T41 SPL: returning to mask ROM (USB boot)\n");
 	return;
 #else
+	/* SFC NOR cold-boot: SPL loads U-Boot proper from NOR offset
+	 * 0x8000 to DRAM 0x80100000 via a small SFC-direct reader,
+	 * decompresses LZMA, then jumps. This is cheaper than wiring up
+	 * the standard SPL_SPI / SPL_SPI_FLASH stack (which would push
+	 * the SPL well past 64 KiB once it pulls in the full SPI flash
+	 * uclass + DT match table + spl_spi_load_image). DRAM and the
+	 * RAM uclass are already up at this point via the standard SPL
+	 * DM scan that ran above. */
 	t41_spl_puts("T41 SPL: loading U-Boot...\n");
 	t41_spl_load_uboot();
 	for (;;)

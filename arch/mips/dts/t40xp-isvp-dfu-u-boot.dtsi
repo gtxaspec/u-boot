@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Binman image description for the Ingenic ISVP-T40 DFU loader.
+ * Binman image description for the Ingenic ISVP-T40XP DFU loader.
  *
  * The USB-boot path uploads spl/u-boot-spl.bin + u-boot.bin directly
- * via the mask ROM (tools/t31-usbboot.py - the protocol is generic
- * across XBurst1 and XBurst2), so the binman flash images here are
- * not used in the USB-boot flow. They are kept consistent with the
- * production t40-isvp layout (headered SPL at 0, LZMA U-Boot at
- * 0x8000) so a stray 'make' still produces a sensible flash image.
+ * via the mask ROM (tools/t31-usbboot.py); the binman flash image
+ * here is not used. Kept consistent with the SFC-NAND layout
+ * (headered SPL at 0, LZMA U-Boot at 0x80000) so a stray 'make'
+ * still produces a sensible flash image.
  */
 
 / {
@@ -17,11 +16,13 @@
 };
 
 &binman {
-	u-boot-spl-t40 {
-		filename = "u-boot-spl-t40.bin";
+	u-boot-spl-t40xp {
+		filename = "u-boot-spl-t40xp.bin";
 
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
+			ingenic,no-inge;
+			ingenic,min-spl-length = <0x16000>;
 		};
 	};
 
@@ -32,12 +33,12 @@
 		spl {
 			type = "blob";
 			offset = <0x0>;
-			filename = "u-boot-spl-t40.bin";
+			filename = "u-boot-spl-t40xp.bin";
 		};
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x80000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

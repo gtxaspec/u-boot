@@ -120,15 +120,16 @@ void board_init_f(ulong dummy)
 	 * U-Boot proper to 0x80100000 and jumps to it. */
 	return;
 #elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
+	/* SFC NAND cold-boot (T40XP): DDR is up via UCLASS_RAM, the SPL
+	 * framework's malloc heap is in DRAM. Mainline U-Boot has no
+	 * generic DM SPI-NAND SPL loader, so call the custom NAND loader
+	 * in sfc_nand.c which reads the legacy mkimage header from the
+	 * boot NAND, LZMA-decompresses to CONFIG_TEXT_BASE, and jumps. */
 	{
-		extern int sfc_nand_init(void);
-		extern int sfc_nand_load(u32 src, u32 cnt, u32 dst);
-		extern void t40_spl_load_uboot_with(
-			int (*read_fn)(u32 src, u32 cnt, u32 dst));
-		if (sfc_nand_init() < 0)
-			hang();
-		t40_spl_load_uboot_with(sfc_nand_load);
-		for (;;);
+		extern void t40_spl_nand_load_uboot(void);
+
+		t40_spl_nand_load_uboot();
+		hang();
 	}
 #else
 	/* SFC NOR cold-boot: hand off to the standard SPL framework

@@ -371,6 +371,7 @@ static const struct {
 	/* T40 family */
 	{ "t40n",   &ingenic_ddr_variant_t40n   },
 	{ "t40nn",  &ingenic_ddr_variant_t40n   },	/* alias - same silicon */
+	{ "t40xp",  &ingenic_ddr_variant_t40xp  },
 };
 
 static int ingenic_ddr_probe(struct udevice *dev)

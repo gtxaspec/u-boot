@@ -96,16 +96,18 @@ config ARCH_JZ47XX
 	select DM
 
 config ARCH_XBURST
-	bool "Support Ingenic XBurst1 T-series"
+	bool "Support Ingenic XBurst T-Series"
 	select SUPPORT_SPL
 	select HAS_FIXED_TIMER_FREQUENCY
 	select OF_CONTROL
 	select DM
 	select SPL_DM if SPL
 	help
-	  Support for Ingenic XBurst1 T-series SoCs (T10/T20/T21/T23/T30/T31).
-	  These are camera/IoT SoCs with an Innophy DDR PHY and an SFC SPI
-	  flash controller, booting via an on-chip mask ROM.
+	  Support for Ingenic XBurst T-Series SoCs - XBurst1 (T10/T20/T21/
+	  T23/T30/T31/T32/T33) and XBurst2 (A1/T40/T41). Camera/IoT SoCs
+	  with an Innophy DDR PHY (XBurst1 + early XBurst2) or uMCTL2/
+	  Innophy (T32/T33) and an SFC SPI flash controller, booting via
+	  an on-chip mask ROM.
 
 config ARCH_OCTEON
 	bool "Support Marvell Octeon CN7xxx platforms"

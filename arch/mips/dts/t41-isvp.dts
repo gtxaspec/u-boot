@@ -2,6 +2,7 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/ingenic,t41-cgu.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "ingenic,t41";
@@ -82,6 +83,45 @@
 		pins_mac0: mac0 {
 			function = "mac0";
 			groups = "mac0-data";
+		};
+	};
+
+	/*
+	 * AIC (audio interface controller) + on-chip codec. PIO playback
+	 * driven by U-Boot's `sound` command. T41 codec is the "E-block":
+	 * registers were renamed/relaid from T40's D-block (no _XX suffix,
+	 * new CDCFGR/CACR1, DAC analog path on CANACR1/CHR/CHPOUTLGR).
+	 * AIC IP is closer to T31/T32 - no AICCR1/AICCR2 extension that
+	 * T40 has; AICFR uses RMASTER/TMASTER (T32-style) for master sel.
+	 */
+	aic: audio-controller@b0020000 {
+		compatible = "ingenic,t41-aic";
+		reg = <0xb0020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	codec: audio-codec@b0021000 {
+		compatible = "ingenic,t41-codec";
+		reg = <0xb0021000 0x130>;
+		#sound-dai-cells = <0>;
+		/* Speaker-amp enable: vendor codec.c default PB31,
+		 * active-high. Override per board if the amp is on a
+		 * different pin/polarity. */
+		ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	sound: sound {
+		compatible = "ingenic,t41-sound";
+		status = "okay";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
 		};
 	};
 

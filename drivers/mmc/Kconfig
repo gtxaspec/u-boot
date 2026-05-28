@@ -459,7 +459,7 @@ config JZ47XX_MMC
 	depends on ARCH_JZ47XX || ARCH_XBURST
 	help
 	  This selects support for the MSC SD/MMC controller found on
-	  Ingenic JZ47xx and XBurst1 T-series SoCs.
+	  Ingenic JZ47xx and XBurst T-Series SoCs.
 
 config MMC_SDHCI_INGENIC
 	bool "Ingenic SDHCI controller support"

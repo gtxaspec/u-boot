@@ -55,6 +55,24 @@
 		ingenic-t31-spl {
 			filename = "spl/u-boot-spl.bin";
 
+			/*
+			 * Cold-boot SRAM coverage. The bootrom locks cache lines
+			 * as SRAM only for MIN(SPL_LENGTH, _DAT_80000000) bytes
+			 * starting at CONFIG_SPL_TEXT_BASE. With DM-in-SPL the
+			 * SPL file (~60 KB) ends WELL before our SPL_BSS_START_ADDR
+			 * (0x80014000), so BSS accesses miss the cache-locked
+			 * region and fault on uninitialised DRAM. Tell the etype
+			 * to stamp SPL_LENGTH up to BSS_MAX (= 0x16000 from
+			 * SPL_TEXT_BASE, covering BSS_START_ADDR 0x80014000 +
+			 * BSS_MAX_SIZE 0x2000); the bootrom overloads past file-
+			 * EOF into the U-Boot proper region (junk bytes land in
+			 * BSS area which gets zeroed at SPL startup anyway).
+			 * Empirical: cold-boot SFC NOR is silent without this
+			 * stamp, clean to => prompt with it (verified on T40NN
+			 * 2026-05-28).
+			 */
+			ingenic,min-spl-length = <0x16000>;
+
 			ingenic,inge-descriptors = <
 				0xb0000010 0xb0000010 0x03205101 0x00000008 0x00000000
 				0xb0000014 0xb0000014 0x06405101 0x00000008 0x00000000

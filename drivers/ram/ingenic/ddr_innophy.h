@@ -102,6 +102,21 @@ enum ingenic_ddr_type {
 	INGENIC_DDR_TYPE_DDR2,
 };
 
+/*
+ * Per-SoC PHY init family. The DDRC controller side is identical
+ * across XBurst2 SoCs (same register set + offsets), but the Innophy
+ * PHY init / drive-ODT / hardware calibration / per-bit skew paths
+ * are SoC-family specific. T41 has full vendor-style efuse parameter
+ * tables and HW-calibrated DQS; T40 boards use a different per-bit
+ * skew layout, hard-coded drive/ODT, and an earlier DDR2 PHY init
+ * sequence (DLL bypass, baseline TX delay seed, manual de-skew enable
+ * before the PLL programming).
+ */
+enum ingenic_ddr_family {
+	INGENIC_DDR_FAMILY_T41 = 0,	/* default for existing variants */
+	INGENIC_DDR_FAMILY_T40,
+};
+
 /* ----- Drive strength / ODT / skew / VREF efuse parameters -----
  * 19 numeric parameters per variant; vendor uses a flat array indexed
  * by these labels. Ports identically here so the SoC-specific config
@@ -138,6 +153,7 @@ struct ingenic_ddr_variant {
 	const char *name;		/* e.g. "T41NQ" */
 	const char *chip;		/* e.g. "W631GU6NG" */
 	enum ingenic_ddr_type type;
+	enum ingenic_ddr_family family;	/* defaults to T41 (omit field) */
 	unsigned int bus_width;		/* 16 or 32 */
 	u32 chip0_size;
 	u32 chip1_size;
@@ -194,16 +210,22 @@ static inline void ddr_writel(const struct ingenic_ddr_priv *p, u32 val, u32 off
 	writel(val, p->base + off);
 }
 
-/* ----- Driver-internal entry points (ddr_innophy_phy.c) ----- */
+/* ----- Driver-internal entry points (ddr_innophy_phy.c, T41 family) ----- */
 int ingenic_ddr_phy_init(struct ingenic_ddr_priv *p);
 int ingenic_ddr_phy_hw_calibration(struct ingenic_ddr_priv *p);
 void ingenic_ddr_phy_set_drv_odt(struct ingenic_ddr_priv *p);
 void ingenic_ddr_phy_set_vref_skew(struct ingenic_ddr_priv *p);
 
+/* ----- T40-family PHY paths (ddr_innophy_phy_t40.c) ----- */
+int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p);
+int ingenic_ddr_t40_phy_hw_calibration(struct ingenic_ddr_priv *p);
+void ingenic_ddr_t40_post_phy_fixups(struct ingenic_ddr_priv *p);
+void ingenic_ddr_t40_phy_set_skew(struct ingenic_ddr_priv *p);
+
 /* ----- Top-level init (ddr_innophy.c) ----- */
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p);
 
-/* ----- Per-variant configs (ddr_innophy_types.c) ----- */
+/* ----- Per-variant configs (ddr_innophy_types.c, T41 family) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41nq;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41a;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41l;
@@ -217,5 +239,8 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zm;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zmc;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
+
+/* ----- Per-variant configs (T40 family) ----- */
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40n;
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_INNOPHY_H */

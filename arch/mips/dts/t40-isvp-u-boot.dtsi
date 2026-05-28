@@ -4,9 +4,11 @@
  *
  * Mirrors the A1 binman layout - T40 is the XBurst2 sibling of A1 and
  * uses the same vendor `0x03040506 / 0x55aa5502 / 0x000000aa` SFC-NOR
- * boot header at flash offset 0, with LZMA U-Boot at 0x8000 (SPL pad
- * clears 0x6000 with margin). The bootrom's FUN_bfc02070 Port-A SFC
- * path scans for the 0x55aa5502 marker in the first sector.
+ * boot header at flash offset 0, with LZMA U-Boot at 0x10000 (the SPL
+ * grew past the prior 0x8000 ceiling once DM-in-SPL + UCLASS_RAM
+ * landed; 0x10000 = 64 KiB SPL window matches T41 and stays inside
+ * the vendor BIG_SPL 100 KiB load limit). The bootrom's FUN_bfc02070
+ * Port-A SFC path scans for the 0x55aa5502 marker in the first sector.
  *
  * T40 differs from A1: at SPL-entry time the UART clock is not the
  * raw 24 MHz EXTAL - PCLK runs through the bootrom-default CPCCR
@@ -75,7 +77,7 @@
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x10000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

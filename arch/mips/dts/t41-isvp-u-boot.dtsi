@@ -80,7 +80,7 @@
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x10000>;
 			filename = "u-boot-lzma.img";
 		};
 	};

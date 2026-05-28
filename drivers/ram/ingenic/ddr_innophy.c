@@ -248,8 +248,33 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 }
 
 /* ------------------------------------------------------------------
- * UCLASS_RAM driver - probe parses DT, init runs, get_info reports.
+ * Non-DM entry point - SPL board_init_f calls this before driver
+ * model is up. Builds a stack-allocated priv struct and runs the
+ * full init sequence.
  * ------------------------------------------------------------------ */
+int ingenic_ddr_init(const struct ingenic_ddr_variant *cfg, void __iomem *base)
+{
+	struct ingenic_ddr_priv priv = {
+		.cfg = cfg,
+		.base = base,
+	};
+
+	return ingenic_ddr_sdram_init(&priv);
+}
+
+/* ------------------------------------------------------------------
+ * UCLASS_RAM driver (U-Boot proper only).
+ *
+ * SPL never reaches this - the T41 SPL has a custom board_init_f that
+ * doesn't initialize driver model, so SPL drives DRAM bring-up via
+ * the non-DM ingenic_ddr_init() helper above. In U-Boot proper SPL
+ * already initialized DRAM; the probe just records size for
+ * ram_get_info(). Gating the of_match + U_BOOT_DRIVER out of SPL
+ * also lets the linker GC the 12 variant structs the SPL build does
+ * not reference (only the configured CONFIG_T41_VARIANT_* variant is
+ * pulled in via t41_pick_variant() in sdram.c).
+ * ------------------------------------------------------------------ */
+#ifndef CONFIG_XPL_BUILD
 
 static int ingenic_ddr_probe(struct udevice *dev)
 {
@@ -276,10 +301,13 @@ static int ingenic_ddr_probe(struct udevice *dev)
 		size = 0x20000000ULL;
 	p->ram_size = (u32)size;
 
-	/* SPL is where we actually bring DDR up. In U-Boot proper, the
-	 * DRAM is already live - the probe just records size for get_info.
-	 * Drive the init from SPL via the explicit ingenic_ddr_sdram_init()
-	 * helper. */
+	/* DRAM bring-up runs in SPL via the non-DM ingenic_ddr_init()
+	 * helper (T41 SPL has a custom board_init_f that doesn't reach
+	 * the standard board_init_r where DM gets initialized; running
+	 * the init through the UCLASS_RAM probe in SPL would require a
+	 * non-trivial SPL framework refactor). U-Boot proper enters this
+	 * probe with DRAM already live - just record the size for
+	 * ram_get_info() consumers. */
 
 	return 0;
 }
@@ -335,3 +363,5 @@ U_BOOT_DRIVER(ingenic_ddr_innophy) = {
 	.probe		= ingenic_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_ddr_priv),
 };
+
+#endif /* !CONFIG_XPL_BUILD */

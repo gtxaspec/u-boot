@@ -138,4 +138,21 @@ config SPL_T41_USB_BOOT
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
 	  defconfigs (isvp_t41nq_usbboot_defconfig).
 
+config T41_SDRAM_INNOPHY
+	bool "T41 SDRAM: use drivers/ram/ingenic/ddr_innophy"
+	depends on SPL
+	depends on RAM_INGENIC_DDR_INNOPHY
+	help
+	  Use the new vendor-derived UCLASS_RAM driver (drivers/ram/
+	  ingenic/) for T41 SPL DRAM bring-up instead of the legacy
+	  hand-coded cloner sequence in arch/mips/mach-xburst/t41/
+	  sdram.c. Runs at the vendor target DDR rate (700 MHz on
+	  T41NQ) with hardware DQS calibration on.
+
+	  Validated on T41NQ via USB-boot dev loop. Other variants
+	  build cleanly but have not been brought up on real silicon
+	  yet (no T41A/T41L/etc boards in the lab).
+
+	  Leave this n until you are testing the new path.
+
 endif

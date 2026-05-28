@@ -1,15 +1,101 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * T41NQ DDR3 init - matched to cloner SPL sdram_init write sequence.
- * Every write, its value, and its position in the sequence matches
- * the disassembled cloner SPL binary (thingino-cloner firmwares/t41/spl.bin,
- * function at 0x80002a54, 46 MMIO writes total).
+ * T41 SPL DRAM bring-up.
+ *
+ * Two paths, picked at Kconfig time:
+ *
+ *   - CONFIG_T41_SDRAM_INNOPHY=y selects the vendor-derived UCLASS_RAM
+ *     driver in drivers/ram/ingenic/. Runs at the vendor target DDR
+ *     rate with HW DQS calibration on. The chosen T41 variant struct
+ *     (per CONFIG_T41_VARIANT_*) is passed through the non-DM
+ *     ingenic_ddr_init() helper.
+ *
+ *   - CONFIG_T41_SDRAM_INNOPHY=n keeps the legacy hand-coded init
+ *     below, transliterated from the cloner SPL's sdram_init function
+ *     at 0x80002a54 (46 MMIO writes). Runs DDR at MPLL/3 ~= 466 MHz
+ *     (cloner underclocks vs the vendor 700 MHz target). HW-validated
+ *     on lab T41NQ.
  */
 
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t41.h>
 #include <mach/t41-ddr.h>
+
+#ifdef CONFIG_T41_SDRAM_INNOPHY
+
+#include "../../../../drivers/ram/ingenic/ddr_innophy.h"
+
+/* Per-variant struct pointer, selected at compile time by the
+ * CONFIG_T41_VARIANT_* Kconfig choice. SPL uses this to drive the
+ * non-DM ingenic_ddr_init() helper - our T41 SPL has a custom
+ * board_init_f that runs as the SPL "main" and never goes through
+ * board_init_r, so DM is not initialized when sdram_init() fires.
+ * U-Boot proper still uses the UCLASS_RAM driver via DT compatible
+ * match (in ddr_innophy.c). */
+static const struct ingenic_ddr_variant *t41_pick_variant(void)
+{
+#if defined(CONFIG_T41_VARIANT_T41A)
+	return &ingenic_ddr_variant_t41a;
+#elif defined(CONFIG_T41_VARIANT_T41L)
+	return &ingenic_ddr_variant_t41l;
+#elif defined(CONFIG_T41_VARIANT_T41LQ)
+	return &ingenic_ddr_variant_t41lq;
+#elif defined(CONFIG_T41_VARIANT_T41N)
+	return &ingenic_ddr_variant_t41n;
+#elif defined(CONFIG_T41_VARIANT_T41XQ)
+	return &ingenic_ddr_variant_t41xq;
+#elif defined(CONFIG_T41_VARIANT_T41ZG)
+	return &ingenic_ddr_variant_t41zg;
+#elif defined(CONFIG_T41_VARIANT_T41ZGC)
+	return &ingenic_ddr_variant_t41zgc;
+#elif defined(CONFIG_T41_VARIANT_T41ZL)
+	return &ingenic_ddr_variant_t41zl;
+#elif defined(CONFIG_T41_VARIANT_T41ZM)
+	return &ingenic_ddr_variant_t41zm;
+#elif defined(CONFIG_T41_VARIANT_T41ZMC)
+	return &ingenic_ddr_variant_t41zmc;
+#elif defined(CONFIG_T41_VARIANT_T41ZN)
+	return &ingenic_ddr_variant_t41zn;
+#elif defined(CONFIG_T41_VARIANT_T41ZX)
+	return &ingenic_ddr_variant_t41zx;
+#else /* default T41_VARIANT_T41NQ */
+	return &ingenic_ddr_variant_t41nq;
+#endif
+}
+
+void sdram_init(void)
+{
+	const struct ingenic_ddr_variant *cfg = t41_pick_variant();
+	u32 cdr;
+
+	/* DDR CGU: MPLL source + divider so the controller gets clock
+	 * at the variant's ddr_hz. Matches vendor clk_set_rate(DDR,
+	 * ddrfreq): cdr = mpll/ddr - 1. The Innophy PHY then has its
+	 * own PLL programmed by ddr_phy_init() that takes this CGU
+	 * output as input. */
+	cdr = (cfg->mpll_hz / cfg->ddr_hz) - 1;
+
+	{
+		u32 r = readl((void __iomem *)(CPM_BASE + CPM_DDRCDR));
+		r &= ~(3u << 30);
+		r |= (2u << 30);		/* source = MPLL */
+		writel(r, (void __iomem *)(CPM_BASE + CPM_DDRCDR));
+		r = readl((void __iomem *)(CPM_BASE + CPM_DDRCDR));
+		r &= ~(0xf | (0x3fu << 24));
+		r |= (1u << 29) | (cdr & 0xf);	/* CE | divider */
+		writel(r, (void __iomem *)(CPM_BASE + CPM_DDRCDR));
+		while (readl((void __iomem *)(CPM_BASE + CPM_DDRCDR)) & (1u << 28))
+			;
+	}
+
+	ingenic_ddr_init(cfg, (void __iomem *)0xb34f0000);
+	/* SPL has no real error path. The serial helper in soc.c prints
+	 * 'DDR verify FAILED' or 'DDR OK' after we return based on a
+	 * stack-allocated DRAM verify. */
+}
+
+#else /* legacy hand-coded cloner sequence */
 
 #define W(a, v) do { *(volatile u32*)(a) = (v); asm volatile("sync":::"memory"); } while(0)
 #define R(a) ({ asm volatile("sync":::"memory"); *(volatile u32*)(a); })
@@ -156,3 +242,5 @@ void sdram_init(void)
 	W(0xb34f0028, 0x00000000);				/* #46 AUTOSR_EN */
 
 }
+
+#endif /* CONFIG_T41_SDRAM_INNOPHY */

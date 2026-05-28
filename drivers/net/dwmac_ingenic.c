@@ -48,6 +48,7 @@
 
 /* CPM (0xb0000000): GMAC gate in CLKGR1, MAC clock divider MACCDR. */
 #define T31_CPM_BASE			0xb0000000
+#define T31_CPM_CPMPCR			0x14		/* MPLL config */
 #define T31_CPM_CLKGR1			0x28
 #define T31_CPM_CLKGR1_GMAC		BIT(4)
 #define T31_CPM_MACCDR			0x54
@@ -56,6 +57,8 @@
 #define MACCDR_BUSY			BIT(28)
 #define MACCDR_STOP_SHIFT		27
 #define MACCDR_DIV_MASK			0xffu
+
+#define EXTAL_HZ			24000000u
 
 /*
  * Undocumented CPM word the vendor OMNI path writes before enabling
@@ -127,9 +130,34 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 	return designware_eth_of_to_plat(dev);
 }
 
+/*
+ * Read live MPLL rate from CPM_CPMPCR. T31/T40/T41 all use the same
+ * bit positions for the integer PLL params (vendor pll_get_rate):
+ *   PLLM at bit 20 (9 bits), PLLN at bit 14 (6 bits),
+ *   PLLOD0 at bit 11 (3 bits), PLLOD1 at bit 7 (4 bits).
+ * Frequency = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
+ * Reading at runtime avoids per-SoC tables when MPLL varies (T40 1000,
+ * T41 1400) under the same DT compatible.
+ */
+static unsigned long read_mpll_hz(void __iomem *cpm)
+{
+	u32 cpmpcr = readl(cpm + T31_CPM_CPMPCR);
+	unsigned int m = (cpmpcr >> 20) & 0x1ff;
+	unsigned int n = (cpmpcr >> 14) & 0x3f;
+	unsigned int od0 = (cpmpcr >> 11) & 0x7;
+	unsigned int od1 = (cpmpcr >> 7) & 0xf;
+	u64 vco;
+
+	/* EXTAL * (M+1) * 2 can exceed 2^32 (e.g. T41NQ 24M*350*2 = 16.8G);
+	 * compute in u64 then divide back into 32-bit range. */
+	vco = (u64)EXTAL_HZ * (m + 1) * 2;
+	return (unsigned long)(vco / ((n + 1) * (1u << od0) * (od1 + 1)));
+}
+
 static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 {
 	void __iomem *cpm = (void __iomem *)T31_CPM_BASE;
+	unsigned long mpll_hz;
 	u32 div, v;
 
 	/* Ungate the GMAC functional clock. */
@@ -138,14 +166,17 @@ static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 	/*
 	 * MAC-PHY clock from MPLL. Vendor clk_set_rate (non-MSC):
 	 * cdr = pll/rate - 1. External RMII wants 50 MHz; the T21
-	 * inner ePHY wants 25 MHz. MPLL rate is per-SoC (T31 1200,
-	 * T21 900). Same CE/BUSY dance as the MSC clock; leave CE set.
+	 * inner ePHY wants 25 MHz. Same CE/BUSY dance as the MSC clock;
+	 * leave CE set.
 	 *
 	 * The poll is bounded: on a board where the MAC-PHY clock can't
 	 * lock, an unbounded wait would hang U-Boot forever at "Net:".
 	 * Time out instead so the boot continues without ethernet.
 	 */
-	div = (pdata->socdata->mpll_hz / pdata->macphy_rate) - 1;
+	mpll_hz = pdata->socdata->mpll_hz;
+	if (!mpll_hz)
+		mpll_hz = read_mpll_hz(cpm);
+	div = (mpll_hz / pdata->macphy_rate) - 1;
 	v = readl(cpm + T31_CPM_MACCDR);
 	v &= ~((3u << 30) | (3u << MACCDR_STOP_SHIFT) | MACCDR_DIV_MASK);
 	v |= MACCDR_SRC_MPLL | MACCDR_CE | (div & MACCDR_DIV_MASK);
@@ -392,7 +423,7 @@ static const struct dwmac_ingenic_data t21_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t40_gmac_data = {
-	.mpll_hz = 1000000000u,		/* T40 MPLL (t40/pll.c) */
+	.mpll_hz = 0,			/* read MPLL from CPM at runtime */
 	.inner_phy = false,		/* external RMII PHY */
 };
 

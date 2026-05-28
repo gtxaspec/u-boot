@@ -10,6 +10,7 @@
 #include <config.h>
 #include <dm.h>
 #include <hang.h>
+#include <init.h>
 #include <spl.h>
 #include <stdio.h>
 #include <asm/global_data.h>
@@ -26,7 +27,6 @@ void clk_ungate_uart(unsigned int idx);
 void a1_spl_serial_init(void);
 void a1_spl_puts(const char *s);
 void a1_spl_putc(char c);
-void a1_spl_load_uboot(void);
 void a1_spl_sfc_clk_init(void);
 
 #ifdef CONFIG_XPL_BUILD
@@ -163,25 +163,39 @@ void board_init_f(ulong dummy)
 	/* Switch printf to the DM console for the rest of SPL. */
 	preloader_console_init();
 
-#ifdef CONFIG_SPL_A1_USB_BOOT
 	/*
-	 * USB-boot stage1: clocks and DDR are up. Also bring up the SFC0
-	 * clock so U-Boot proper (uploaded into DRAM next) can probe the
-	 * SPI-NOR - the NOR-boot SPL gets this via sfc_nor_load(). Then
-	 * return into the mask ROM: start.S keeps the bootrom sp for this
-	 * build, so the SPL ran as a normal nested call and a plain
-	 * return (jr ra) resumes the bootrom USB loop, which uploads
-	 * U-Boot proper.
+	 * Bring up the SFC0 clock for the SPI driver: needed by the NOR
+	 * cold-boot SPL_SPI load below, and (USB-boot) by U-Boot proper's
+	 * NOR probe after the mask ROM jumps to it.
 	 */
 	a1_spl_sfc_clk_init();
+
+#ifdef CONFIG_SPL_A1_USB_BOOT
+	/*
+	 * USB-boot stage1: clocks and DDR are up. Return into the mask ROM:
+	 * start.S keeps the bootrom sp for this build, so the SPL ran as a
+	 * normal nested call and a plain return (jr ra) resumes the bootrom
+	 * USB loop, which uploads U-Boot proper to DRAM and jumps.
+	 */
 	a1_spl_puts("A1 SPL: returning to mask ROM (USB boot)\n");
 	return;
 #else
+	/*
+	 * SFC NOR cold-boot: hand off to the standard SPL framework
+	 * board_init_r(), which loads u-boot-lzma.img from
+	 * CONFIG_SYS_SPI_U_BOOT_OFFS via the SPI flash uclass
+	 * (spl_boot_device() == BOOT_DEVICE_SPI), LZMA-decompresses it and
+	 * jumps. Does not return.
+	 */
 	a1_spl_puts("A1 SPL: loading U-Boot...\n");
-	a1_spl_load_uboot();
-	for (;;)
-		;
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
+}
+
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */
 

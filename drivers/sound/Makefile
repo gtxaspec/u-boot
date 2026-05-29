@@ -11,6 +11,7 @@ obj-$(CONFIG_SOUND_DA7219)	+= da7219.o
 obj-$(CONFIG_I2S_SAMSUNG)	+= samsung-i2s.o
 obj-$(CONFIG_SOUND_SANDBOX)	+= sandbox.o
 obj-$(CONFIG_I2S_INGENIC)	+= ingenic_i2s.o ingenic_sound.o
+obj-$(CONFIG_I2S_INGENIC)	+= t41_audio.o
 obj-$(CONFIG_SOUND_JZ_T10_CODEC)	+= jz_t10_codec.o
 obj-$(CONFIG_SOUND_T32_CODEC)		+= t32_codec.o
 obj-$(CONFIG_I2S_ROCKCHIP)	+= rockchip_i2s.o rockchip_sound.o

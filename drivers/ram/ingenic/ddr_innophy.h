@@ -163,6 +163,15 @@ struct ingenic_ddr_variant {
 	unsigned int mpll_hz;		/* expected MPLL freq, for clk_set_rate */
 	unsigned int ddr_hz;		/* DDR clock target (= MPLL/2) */
 
+	/*
+	 * SPL PLL setpoints: M/N/OD register encodings for CPAPCR /
+	 * CPMPCR / CPVPCR, consumed by the per-SoC pll.c in SPL (before
+	 * the RAM driver probes) via ingenic_ddr_pll_setpoints().
+	 */
+	u32 apll_mnod;
+	u32 mpll_mnod;
+	u32 vpll_mnod;
+
 	/* DDR controller values from ddr_params_creator */
 	u32 ddrc_cfg;
 	u32 ddrc_ctrl;
@@ -269,6 +278,16 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zm;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zmc;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
+
+/*
+ * Read ingenic,variant from the DT node matching `compatible`, look it
+ * up in the variant table, and return that SKU's SPL PLL setpoints.
+ * For the per-SoC pll.c, which runs in SPL before driver model is up
+ * (it calls fdtdec_setup() first to make gd->fdt_blob available).
+ * Returns 0 on success, negative on error.
+ */
+int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
+			      u32 *mpll_mnod, u32 *vpll_mnod);
 
 /* ----- Per-variant configs (T40 family) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40a;

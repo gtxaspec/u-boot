@@ -14,6 +14,7 @@
 
 #include <config.h>
 #include <dm.h>
+#include <fdtdec.h>
 #include <hang.h>
 #include <init.h>
 #include <spl.h>
@@ -104,6 +105,14 @@ void board_init_f(ulong dummy)
 			writel(r, (void __iomem *)(CPM_BASE + cgus[c]));
 		}
 	}
+
+	/*
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
+	 * so pll_init() can read ingenic,variant from the DDR node and pick
+	 * the per-SKU PLL setpoints before driver model comes up.
+	 */
+	if (fdtdec_setup())
+		hang();
 
 	pll_init();
 

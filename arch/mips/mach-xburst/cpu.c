@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic XBurst1 T-series common CPU routines
+ * Ingenic XBurst common CPU routines (XBurst1 + XBurst2)
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
+#include <cpu_func.h>
 #include <init.h>
 #include <asm/global_data.h>
 
@@ -53,3 +54,45 @@ int print_cpuinfo(void)
 	printf("CPU:   Ingenic %s (%s)\n", soc, core);
 	return 0;
 }
+
+#if !defined(CONFIG_XPL_BUILD) && \
+    (defined(CONFIG_SOC_A1) || defined(CONFIG_SOC_T40) || defined(CONFIG_SOC_T41))
+/*
+ * XBurst2 cache flush. The generic MIPS flush_cache() is a no-op on
+ * XBurst2: mips_cache_probe() reads CP0 Config1 and its IL/DL fields
+ * read 0, so icache_line_size()/dcache_line_size() are 0 and cache_loop
+ * never iterates. XBurst1 reports real line sizes and keeps the generic
+ * path, so this override is gated to the XBurst2 SoCs.
+ *
+ * XBurst2 L1: 8-way x 128 sets x 32 B = 32 KiB I-cache + 32 KiB D-cache.
+ *
+ * Flow (matches the vendor flush_dcache_range): Hit_Writeback_Inv_D,
+ * sync, then a read from KSEG1 to drain the write buffer (D-cache writes
+ * pass through a write buffer that must be forced out before a read of
+ * the same address sees updated DRAM), then Hit_Invalidate_I so later
+ * fetches of the flushed region miss I-cache and refill from DRAM.
+ */
+#define XB2_LINE_SIZE	32
+void flush_cache(ulong start_addr, ulong size)
+{
+	unsigned long a;
+	unsigned long end;
+	volatile unsigned int writebuffer;
+
+	if (!size)
+		return;
+
+	end = (start_addr + size + XB2_LINE_SIZE - 1) & ~(XB2_LINE_SIZE - 1);
+	start_addr &= ~(XB2_LINE_SIZE - 1);
+
+	for (a = start_addr; a < end; a += XB2_LINE_SIZE)
+		__asm__ volatile("cache 0x15, 0(%0)" : : "r"(a));	/* Hit_Writeback_Inv_D */
+	__asm__ volatile("sync");
+	writebuffer = *(volatile unsigned int *)0xa0000000;
+	(void)writebuffer;
+
+	for (a = start_addr; a < end; a += XB2_LINE_SIZE)
+		__asm__ volatile("cache 0x10, 0(%0)" : : "r"(a));	/* Hit_Invalidate_I */
+	__asm__ volatile("sync");
+}
+#endif

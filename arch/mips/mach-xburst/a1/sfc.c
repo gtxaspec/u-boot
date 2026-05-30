@@ -20,7 +20,8 @@
 
 /*
  * SSI cgu entry from the vendor cgu_clk_sel[] table (clk.c): SFC0CDR,
- * source-mux at bits 31:30 (MPLL = 2), ce = bit 29, busy = bit 28,
+ * source-mux at bits 31:30. The vendor source list is
+ * {APLL, MPLL, VPLL, EPLL}, so MPLL = 1. ce = bit 29, busy = bit 28,
  * stop = bit 27. These bits differ from the DDR entry; do not guess.
  */
 #define CPM_SFC0CDR	0x90
@@ -45,7 +46,7 @@ static void jz_sfc_writel(unsigned int value, unsigned int offset)
 
 /*
  * Bring up the SFC0 clock + controller. pll_init() re-rated MPLL to
- * 1608 MHz, so SFC0CDR is re-derived: source = MPLL (bits 31:30 = 2),
+ * 1608 MHz, so SFC0CDR is re-derived: source = MPLL (bits 31:30 = 1),
  * div 80 -> ~20 MHz, comfortably within the controller + NOR spec for
  * the bring-up read. The controller GLB threshold / DEV_CONF delays /
  * clock-gate are then set to the vendor defaults. Called from
@@ -65,9 +66,10 @@ void a1_spl_sfc_clk_init(void)
 		u32 reg = cpm_readl(CPM_SFC0CDR);
 
 		reg &= ~((3u << 30) | (3 << SFC_CGU_STOP) | 0xff);
-		reg |= (2u << 30) | (1 << SFC_CGU_CE) | 80;
+		reg |= (1u << 30) | (1 << SFC_CGU_CE) | 80;
 		cpm_writel(reg, CPM_SFC0CDR);
-		{ volatile int d = 10000; while (d--); }
+		while (cpm_readl(CPM_SFC0CDR) & (1 << SFC_CGU_BUSY))
+			;
 	}
 
 	tmp = THRESHOLD << THRESHOLD_OFFSET;

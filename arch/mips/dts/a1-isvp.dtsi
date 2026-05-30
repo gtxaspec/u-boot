@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-A1, DFU/USB-boot loader variant.
- *
- * Identical to a1-isvp.dts except OTG0 is dr_mode = "peripheral" so
- * the dwc2_udc_otg gadget binds to it (dwc2_udc_otg_bind rejects
- * "host"). OTG0 is the mask-ROM USB-boot port, so the DFU gadget
- * comes up on the same connector the loader is USB-booted over.
- * Used only by isvp_a1_usbboot_defconfig - the dev/flash loader that
- * USB-boots and auto-enters DFU. Production NOR uses a1-isvp.dts
- * (all three OTGs dr_mode="host").
+ * Ingenic ISVP-A1 board body, shared by every A1 SKU. The per-SKU
+ * leaf .dts (a1n-isvp.dts, ...) includes this file and sets
+ * ingenic,variant on &ddr. A1 is SFC-NOR only today; if a NAND A1
+ * board appears, split the flash node into boot-media fragments like
+ * T40.
  */
-
-/dts-v1/;
 
 #include <dt-bindings/clock/ingenic,a1-cgu.h>
 
@@ -36,7 +30,7 @@
 	ddr: memory-controller@b34f0000 {
 		compatible = "ingenic,a1-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
-		ingenic,variant = "a1n";
+		/* ingenic,variant is set by the per-SKU leaf .dts. */
 		bootph-all;
 	};
 
@@ -123,6 +117,40 @@
 		bootph-all;
 	};
 
+	/*
+	 * AIC (audio interface controller) + on-chip codec. PIO/DMA playback
+	 * driven by U-Boot's `sound` command, handled by the self-contained
+	 * drivers/sound/a1_audio.c (the A1 codec is its own register block at
+	 * 0xb0022000, distinct from T41's; the AIC is T41-like). Addresses
+	 * confirmed against the A1-1.7.0 kernel soc/base.h.
+	 */
+	aic: audio-controller@b0020000 {
+		compatible = "ingenic,a1-aic";
+		reg = <0xb0020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	codec: audio-codec@b0022000 {
+		compatible = "ingenic,a1-codec";
+		reg = <0xb0022000 0x140>;
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound: sound {
+		compatible = "ingenic,a1-sound";
+		status = "okay";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
+	};
+
 	sfc: spi@b3440000 {
 		compatible = "ingenic,a1-sfc";
 		reg = <0xb3440000 0x10000>;
@@ -169,7 +197,7 @@
 		compatible = "snps,dwc2";
 		reg = <0xb3600000 0x40000>;
 		clocks = <&cgu A1_CLK_OTG0>;
-		dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
+		dr_mode = "host";
 		status = "okay";
 	};
 

@@ -16,15 +16,6 @@
 #include <mach/t40.h>
 #include <mach/t31-sfc.h>
 
-/* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
-#define T40_SFC_RATE		70000000U
-/*
- * MPLL rate for this profile (1000 MHz at the T40NN setpoint; same MPLL
- * the DDR clock uses, see pll.c T40_MPLL_MHZ). Vendor cgu_clk_sel[SSI]
- * selects MPLL as the SSI source (non-CONFIG_BURNER path).
- */
-#define T40_MPLL_RATE		1000000000U
-
 /*
  * SFC CGU entry: T40 CPM_SFCCDR is at offset 0x60. ce/busy/stop are
  * at bits 29/28/27 (XBurst2 CGU convention shared with T41/A1).

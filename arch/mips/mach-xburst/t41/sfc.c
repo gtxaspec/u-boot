@@ -16,15 +16,6 @@
 #include <mach/t41.h>
 #include <mach/t31-sfc.h>
 
-/* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
-#define T41_SFC_RATE		70000000U
-/*
- * MPLL rate for this profile (1200 MHz; same MPLL the DDR clock uses,
- * see pll.c T40_MPLL_MHZ). Vendor cgu_clk_sel[SSI] selects MPLL as the
- * SSI source (non-CONFIG_BURNER path).
- */
-#define T41_MPLL_RATE		1000000000U
-
 /*
  * SFC CGU entry: T40 CPM_SFCCDR is at offset 0x60 (from mach/t40.h).
  * ce/busy/stop are at bits 29/28/27 (matching the XBurst2 CGU
@@ -62,7 +53,9 @@ static void sfc_init(void)
 	 * Re-program CPM_SFCCDR. The vendor CGU source mux for SFC is
 	 * sel=0:APLL, sel=1:MPLL, sel=2:VPLL (per t40 clk.c
 	 * cgu_clk_sel[SFC]). MPLL therefore lives at bits 31:30 = 01,
-	 * NOT 10. div=80 with MPLL=1000 gives SFC ~12 MHz.
+	 * NOT 10. The divider is a fixed 80; MPLL is 1200-1600 MHz across
+	 * the T41 SKUs, so SFC lands at ~15-20 MHz - conservative and well
+	 * within the NOR's rated clock.
 	 *
 	 * Poll BUSY rather than spinning for a fixed cycle count: the CGU
 	 * does not finalize the clock change until BUSY clears, and a

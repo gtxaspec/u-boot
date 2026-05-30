@@ -87,18 +87,3 @@ void a1_spl_serial_init(void)
 
 	u_wb(FCR_UUE | FCR_FE | FCR_TFLS | FCR_RFLS, U_FCR);
 }
-
-void a1_spl_putc(char c)
-{
-	if (c == '\n')
-		a1_spl_putc('\r');
-	u_wb((u8)c, U_THR_DLL);
-	while ((u_rb(U_LSR) & (LSR_TDRQ | LSR_TEMT)) != (LSR_TDRQ | LSR_TEMT))
-		;
-}
-
-void a1_spl_puts(const char *s)
-{
-	while (*s)
-		a1_spl_putc(*s++);
-}

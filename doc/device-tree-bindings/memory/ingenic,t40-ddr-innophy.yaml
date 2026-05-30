@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/ingenic,t40-ddr-innophy.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Ingenic T40 DDR controller + Innophy DDR PHY
+
+maintainers:
+  - Alfonso Gamboa <gtxent@gmail.com>
+
+description: |
+  The Ingenic T40 XBurst2 SoC family integrates an Ingenic-internal
+  DDR controller paired with the on-die Innophy DDR PHY - the same
+  controller IP used by the A1 and T41 (see
+  ingenic,a1-ddr-innophy.yaml and ingenic,t41-ddr-innophy.yaml). A
+  single controller services both DDR2 and DDR3 chips; the per-chip
+  controller / PHY / mode-register values come from the vendor
+  `tools/ingenic-tools/ddr_creator_chip/ddr_params_creator` host tool
+  for each (SoC variant, chip, frequency, bus-width) tuple.
+
+  The T40 ships in distinct factory SKUs that differ in attached chip,
+  clocked frequency and memory type: T40A (W634GU6Q8, DDR3, dual-rank,
+  1 GiB), T40N (M14D5121632A, DDR2, 128 MiB) and T40XP
+  (M15T1G1664A_2C, DDR3, 256 MiB). T40NN is a silkscreen alias of T40N
+  (identical silicon). The SKU is selected by the `ingenic,variant`
+  property; the driver looks up the matching register table at probe.
+
+  The controller MMIO base lives at 0xb34f0000. The Innophy PHY
+  (offset -0x4df000) and the DDRC APB peripheral region
+  (offset -0x4de000) are addressed at fixed offsets relative to the
+  controller base.
+
+properties:
+  compatible:
+    const: ingenic,t40-ddr-innophy
+
+  reg:
+    maxItems: 1
+    description: |
+      Base address and span covering the controller MMIO + PHY +
+      APB peripheral regions. Typical value is
+      <0xb34f0000 0x3000>.
+
+  ingenic,variant:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: |
+      Selects the per-SKU controller / PHY / mode-register table. Must
+      match the silicon-shipped product code (case-sensitive,
+      lowercase). t40nn is an alias of t40n.
+    enum:
+      - t40a
+      - t40n
+      - t40nn
+      - t40xp
+
+required:
+  - compatible
+  - reg
+  - ingenic,variant
+
+additionalProperties: false
+
+examples:
+  - |
+    memory-controller@b34f0000 {
+            compatible = "ingenic,t40-ddr-innophy";
+            reg = <0xb34f0000 0x3000>;
+            ingenic,variant = "t40n";
+            bootph-all;
+    };

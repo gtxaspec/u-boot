@@ -9,9 +9,10 @@
  * registers and provides get_rate / set_rate / enable / disable.
  *
  * Same M/N/OD1/OD0 PLL encoding as the XBurst1 T-series; the CGU
- * register map differs (A1 CLKGR0=0x30/CLKGR1=0x38, dedicated SFC0
- * divider at 0x90). Bit positions are taken from the A1 SPL loader
- * (arch/mips/mach-xburst/a1/sfc.c) and the vendor cgu_clk_sel[] table.
+ * register map differs (CLKGR0=0x30/CLKGR1=0x38, dedicated SFC0 divider
+ * at 0x90) and matches A1's - the bit positions were taken from the A1
+ * SPL loader (arch/mips/mach-xburst/a1/sfc.c) and the vendor
+ * cgu_clk_sel[] table.
  */
 
 #include <clk-uclass.h>
@@ -23,7 +24,7 @@
 #define T40_CLK_COUNT		(T40_CLK_OTG2 + 1)
 
 /* CPM at physical 0x10000000, reached through the uncached KSEG1 window. */
-#define A1_CPM_BASE		0xb0000000
+#define T40_CPM_BASE		0xb0000000
 
 #define CPM_CPAPCR		0x10	/* APLL */
 #define CPM_CPMPCR		0x14	/* MPLL */
@@ -43,7 +44,7 @@
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
 #define CDR_DIV_MASK		0xffu
 
-struct a1_clk_desc {
+struct t40_clk_desc {
 	u16 cdr;	/* CPM CDR register offset, 0 = no divider */
 	u8 ce;		/* clock-change-enable bit in cdr */
 	u8 busy;	/* divider-busy bit in cdr */
@@ -61,7 +62,7 @@ struct a1_clk_desc {
  * gate-only for now - their dividers are added as the consuming
  * drivers (MMC, GMAC) are ported.
  */
-static const struct a1_clk_desc a1_clks[T40_CLK_COUNT] = {
+static const struct t40_clk_desc t40_clks[T40_CLK_COUNT] = {
 	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 24, 1 },
 	[T40_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
 	[T40_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
@@ -114,7 +115,7 @@ static ulong pll_rate(struct t40_cgu_priv *p, u32 reg)
 	return (ulong)(rate / n / od1 / od0);
 }
 
-static ulong a1_parent_rate(struct t40_cgu_priv *p, u32 cdr)
+static ulong t40_parent_rate(struct t40_cgu_priv *p, u32 cdr)
 {
 	switch ((cpm_r(p, cdr) & CDR_SRC_MASK) >> CDR_SRC_SHIFT) {
 	case 1:
@@ -128,10 +129,10 @@ static ulong a1_parent_rate(struct t40_cgu_priv *p, u32 cdr)
 	}
 }
 
-static ulong a1_clk_get_rate(struct clk *clk)
+static ulong t40_clk_get_rate(struct clk *clk)
 {
 	struct t40_cgu_priv *p = dev_get_priv(clk->dev);
-	const struct a1_clk_desc *d;
+	const struct t40_clk_desc *d;
 
 	switch (clk->id) {
 	case T40_CLK_EXCLK:
@@ -155,25 +156,25 @@ static ulong a1_clk_get_rate(struct clk *clk)
 	if (clk->id >= T40_CLK_COUNT)
 		return -EINVAL;
 
-	d = &a1_clks[clk->id];
+	d = &t40_clks[clk->id];
 	if (!d->cdr)
 		return EXT_RATE;
 
-	return a1_parent_rate(p, d->cdr) /
+	return t40_parent_rate(p, d->cdr) /
 	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1);
 }
 
-static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
+static ulong t40_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct t40_cgu_priv *p = dev_get_priv(clk->dev);
-	const struct a1_clk_desc *d;
+	const struct t40_clk_desc *d;
 	ulong parent;
 	u32 div, v;
 
 	if (clk->id >= T40_CLK_COUNT)
 		return -EINVAL;
 
-	d = &a1_clks[clk->id];
+	d = &t40_clks[clk->id];
 	if (!d->cdr || !rate)
 		return -ENOSYS;
 
@@ -210,15 +211,15 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 	return parent / div;
 }
 
-static int a1_clk_gate(struct clk *clk, bool enable)
+static int t40_clk_gate(struct clk *clk, bool enable)
 {
 	struct t40_cgu_priv *p = dev_get_priv(clk->dev);
-	const struct a1_clk_desc *d;
+	const struct t40_clk_desc *d;
 
 	if (clk->id >= T40_CLK_COUNT)
 		return -EINVAL;
 
-	d = &a1_clks[clk->id];
+	d = &t40_clks[clk->id];
 	if (d->gate_reg == NO_GATE || !d->gate_reg)
 		return 0;
 
@@ -231,17 +232,17 @@ static int a1_clk_gate(struct clk *clk, bool enable)
 	return 0;
 }
 
-static int a1_clk_enable(struct clk *clk)
+static int t40_clk_enable(struct clk *clk)
 {
-	return a1_clk_gate(clk, true);
+	return t40_clk_gate(clk, true);
 }
 
-static int a1_clk_disable(struct clk *clk)
+static int t40_clk_disable(struct clk *clk)
 {
-	return a1_clk_gate(clk, false);
+	return t40_clk_gate(clk, false);
 }
 
-static int a1_clk_of_xlate(struct clk *clk,
+static int t40_clk_of_xlate(struct clk *clk,
 			   struct ofnode_phandle_args *args)
 {
 	if (args->args_count != 1)
@@ -251,19 +252,19 @@ static int a1_clk_of_xlate(struct clk *clk,
 	return 0;
 }
 
-static const struct clk_ops a1_clk_ops = {
-	.of_xlate = a1_clk_of_xlate,
-	.get_rate = a1_clk_get_rate,
-	.set_rate = a1_clk_set_rate,
-	.enable	  = a1_clk_enable,
-	.disable  = a1_clk_disable,
+static const struct clk_ops t40_clk_ops = {
+	.of_xlate = t40_clk_of_xlate,
+	.get_rate = t40_clk_get_rate,
+	.set_rate = t40_clk_set_rate,
+	.enable	  = t40_clk_enable,
+	.disable  = t40_clk_disable,
 };
 
 static int t40_cgu_probe(struct udevice *dev)
 {
 	struct t40_cgu_priv *p = dev_get_priv(dev);
 
-	p->base = (void __iomem *)A1_CPM_BASE;
+	p->base = (void __iomem *)T40_CPM_BASE;
 	return 0;
 }
 
@@ -278,6 +279,6 @@ U_BOOT_DRIVER(ingenic_t40_cgu) = {
 	.of_match	= t40_cgu_ids,
 	.probe		= t40_cgu_probe,
 	.priv_auto	= sizeof(struct t40_cgu_priv),
-	.ops		= &a1_clk_ops,
+	.ops		= &t40_clk_ops,
 	.flags		= DM_FLAG_PRE_RELOC,
 };

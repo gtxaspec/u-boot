@@ -224,26 +224,16 @@ _start:
 #endif
 
 	/*
-	 * Stack setup. XBurst1 (T10..T33) and the A1 USB-boot SPL keep
-	 * the bootrom-provided sp: the SPL runs as a normal nested call,
-	 * and a plain board_init_f return (jr ra) resumes the mask ROM
-	 * cleanly. The A1 NOR-boot SPL switches to its own larger stack -
-	 * the bootrom sp has too little headroom for the LZMA decompress.
-	 */
-#if defined(CONFIG_SOC_A1) && !defined(CONFIG_SPL_A1_USB_BOOT)
-	lui	sp, 0x8000
-	ori	sp, sp, 0x8000
-#endif
-	/*
-	 * XBurst2 (A1) requires explicit sp init for NOR boot - the bootrom
-	 * does not leave a usable stack pointer like XBurst1 does. Stack
-	 * top = top of the 32 KB cache-as-SRAM region; BSS + stack must
-	 * fit below this in SRAM (per the A1 stage-1 bring-up commit).
-	 *
-	 * T40 vendor SPL does NOT touch SP at entry - it keeps the
-	 * bootrom-provided stack pointer. Match vendor behaviour: do not
-	 * overwrite SP on T40 SFC NOR boot. (USB-boot SPL also keeps
-	 * bootrom SP, and was already not overwriting it.)
+	 * No stack setup: keep the sp the mask ROM left. Every XBurst1 and
+	 * XBurst2 bootrom (verified on the A1/T40/T41 ROM dumps) sets
+	 * sp = 0x80001000 - the SPL load address - so the SPL runs with its
+	 * code above sp and the ROM's scratch below it, and a plain
+	 * board_init_f return (jr ra) resumes the mask ROM cleanly (needed by
+	 * the USB-boot SPL). An earlier A1 NOR-boot path overrode sp to its
+	 * own region; that override landed inside the grown DM-in-SPL .text
+	 * and the downward stack corrupted it (layout-dependent cold-NOR
+	 * wedge). The bootrom sp is sufficient - T40/T41 already run the same
+	 * DM-in-SPL + LZMA path on it - so do not touch sp.
 	 */
 
 	b	board_init_f

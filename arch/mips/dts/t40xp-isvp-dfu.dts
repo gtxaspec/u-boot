@@ -1,188 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0+
 /dts-v1/;
+#include "t40-isvp-dfu.dtsi"
 
-#include <dt-bindings/clock/ingenic,t40-cgu.h>
+/* T40XP: DDR3, 256 MiB. DFU loader, SFC-NAND target. */
+&ddr {
+	ingenic,variant = "t40xp";
+};
 
-/ {
-	compatible = "ingenic,t40";
-	#address-cells = <1>;
-	#size-cells = <1>;
+/* NAND SPL (mach-xburst/t40/sfc_nand.c) reads the flash in SPL, so the
+ * SFC pins must be configured there. */
+&pins_sfc {
+	bootph-all;
+};
 
-	aliases {
-		serial1 = &uart1;
-	};
-
-	chosen {
-		stdout-path = "serial1:115200n8";
-	};
-
-	memory@0 {
-		device_type = "memory";
-		reg = <0x0 0x10000000>;
-	};
-
-	/*
-	 * DDR controller + Innophy PHY for T40XP (DDR3 32-bit 256 MiB).
-	 */
-	ddr: memory-controller@b34f0000 {
-		compatible = "ingenic,t40-ddr-innophy";
-		reg = <0xb34f0000 0x3000>;
-		ingenic,variant = "t40xp";
-		bootph-all;
-	};
-
-	cgu: clock-controller@b0000000 {
-		compatible = "ingenic,t40-cgu";
-		reg = <0xb0000000 0x1000>;
-		#clock-cells = <1>;
-		bootph-all;
-	};
-
-	pinctrl: pinctrl@b0010000 {
-		compatible = "ingenic,t40-pinctrl";
-		reg = <0xb0010000 0x8000>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-		bootph-all;
-
-		gpa: gpio@0 {
-			compatible = "ingenic,t40-gpio";
-			reg = <0>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			bootph-all;
-		};
-
-		gpb: gpio@1 {
-			compatible = "ingenic,t40-gpio";
-			reg = <1>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			bootph-all;
-		};
-
-		gpc: gpio@2 {
-			compatible = "ingenic,t40-gpio";
-			reg = <2>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			bootph-all;
-		};
-
-		gpd: gpio@3 {
-			compatible = "ingenic,t40-gpio";
-			reg = <3>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			bootph-all;
-		};
-
-		gpe: gpio@4 {
-			compatible = "ingenic,t40-gpio";
-			reg = <4>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			bootph-all;
-		};
-
-		pins_uart1: uart1 {
-			function = "uart1";
-			groups = "uart1-data";
-			bootph-all;
-		};
-
-		pins_sfc: sfc {
-			function = "sfc";
-			groups = "sfc-data";
-			bootph-all;
-		};
-
-		pins_mac0: mac0 {
-			function = "mac0";
-			groups = "mac0-data";
-		};
-	};
-
-	uart1: serial@b0031000 {
-		compatible = "ingenic,jz4780-uart", "ns16550a";
-		reg = <0xb0031000 0x100>;
-		reg-shift = <2>;
-		clock-frequency = <24000000>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_uart1>;
-		bootph-all;
-		status = "okay";
-	};
-
-	/*
-	 * TCU (timer/counter unit) container mirroring T31's binding. U-Boot
-	 * only needs the watchdog child for sysreset; the WDT self-clocks
-	 * from the 32 kHz RTC so the TCU clock provider is not required.
-	 */
-	tcu: timer@b0002000 {
-		compatible = "ingenic,t40-tcu", "ingenic,jz4760-tcu",
-			     "simple-mfd";
-		reg = <0xb0002000 0x1000>;
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <0x0 0xb0002000 0x1000>;
-
-		watchdog: watchdog@0 {
-			compatible = "ingenic,t40-watchdog",
-				     "ingenic,jz4780-watchdog";
-			reg = <0x0 0x10>;
-		};
-	};
-
-	sfc: spi@b3440000 {
-		compatible = "ingenic,t40-sfc";
-		reg = <0xb3440000 0x10000>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-		clocks = <&cgu T40_CLK_SFC>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_sfc>;
+&sfc {
+	flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
 		spi-max-frequency = <50000000>;
-		status = "okay";
-
-		flash@0 {
-			compatible = "spi-nand";
-			reg = <0>;
-			spi-max-frequency = <50000000>;
-		};
-	};
-
-	gmac0: ethernet@b34b0000 {
-		compatible = "ingenic,t40-gmac";
-		reg = <0xb34b0000 0x2000>;
-		clocks = <&cgu T40_CLK_GMAC0>;
-		phy-mode = "rmii";
-		phy-handle = <&gmac0_phy>;
-		ingenic,mode-reg = <0xb00000e8>;
-		max-speed = <100>;
-		macphy-rate = <50000000>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pins_mac0>;
-		status = "okay";
-
-		mdio {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			gmac0_phy: ethernet-phy@0 {
-				reg = <0>;
-			};
-		};
-	};
-
-	/*
-	 * T40 has a single DWC2 USB OTG at 0x13500000 (A1 has three).
-	 */
-	otg0: usb@b3500000 {
-		compatible = "snps,dwc2";
-		reg = <0xb3500000 0x40000>;
-		clocks = <&cgu T40_CLK_OTG0>;
-		dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
-		status = "okay";
 	};
 };

@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0+
-/dts-v1/;
+/*
+ * Ingenic ISVP-T40 board body, shared by every T40 SKU and boot mode.
+ * A per-SKU leaf .dts (t40n-isvp.dts, t40xp-isvp.dts, ...) includes
+ * this file, one boot-media fragment (t40-isvp-nor.dtsi /
+ * t40-isvp-nand.dtsi) for the flash node, and sets ingenic,variant on
+ * &ddr.
+ */
 
 #include <dt-bindings/clock/ingenic,t40-cgu.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "ingenic,t40";
@@ -22,14 +29,14 @@
 	};
 
 	/*
-	 * DDR controller + Innophy PHY. Same compatible / variant
-	 * selection as the SFC NOR DT - the SPL probes UCLASS_RAM to
-	 * bring DRAM up before handing off to U-Boot proper.
+	 * DDR controller + Innophy PHY. ddr_innophy.c picks the per-SKU
+	 * timing/type table from the ingenic,variant string (set by the
+	 * leaf .dts).
 	 */
 	ddr: memory-controller@b34f0000 {
 		compatible = "ingenic,t40-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
-		ingenic,variant = "t40n";
+		/* ingenic,variant is set by the per-SKU leaf .dts. */
 		bootph-all;
 	};
 
@@ -96,6 +103,7 @@
 		pins_sfc: sfc {
 			function = "sfc";
 			groups = "sfc-data";
+			bootph-all;
 		};
 
 		pins_mac0: mac0 {
@@ -113,6 +121,40 @@
 		pinctrl-0 = <&pins_uart1>;
 		bootph-all;
 		status = "okay";
+	};
+
+	/*
+	 * AIC (audio interface controller) + on-chip codec. PIO playback
+	 * driven by U-Boot's `sound` command. T40 has the same B-block
+	 * codec layout as T31 (extended with extra CHR/CMR/CTR regs for
+	 * the 2nd ADC channel; for tone playback we touch only the
+	 * T31-shared subset).
+	 */
+	aic: audio-controller@b0020000 {
+		compatible = "ingenic,t40-aic";
+		reg = <0xb0020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	codec: audio-codec@b0021000 {
+		compatible = "ingenic,t40-codec";
+		reg = <0xb0021000 0x170>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
+	};
+
+	sound: sound {
+		compatible = "ingenic,t40-sound";
+		status = "disabled";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
 	};
 
 	/*
@@ -144,13 +186,20 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_sfc>;
 		spi-max-frequency = <50000000>;
+		bootph-all;
 		status = "okay";
 
-		flash@0 {
-			compatible = "jedec,spi-nor";
-			reg = <0>;
-			spi-max-frequency = <50000000>;
-		};
+		/* flash@0 comes from the boot-media fragment (nor/nand). */
+	};
+
+	msc0: mmc@b3060000 {
+		compatible = "ingenic,t40-mmc";
+		reg = <0xb3060000 0x10000>;
+		clocks = <&cgu T40_CLK_MSC0>;
+		clock-names = "mmc";
+		bus-width = <4>;
+		broken-cd;
+		status = "okay";
 	};
 
 	gmac0: ethernet@b34b0000 {
@@ -183,7 +232,29 @@
 		compatible = "snps,dwc2";
 		reg = <0xb3500000 0x40000>;
 		clocks = <&cgu T40_CLK_OTG0>;
-		dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
+		dr_mode = "host";
+		/* The T40 DWC2 OTG port comes up with CONIDSTS = 1
+		 * (B-device) even when wired to an A-receptacle, so the
+		 * dwc2 host driver never enables port power and `usb
+		 * start` only enumerates the root hub. hnp-srp-disable
+		 * tells the driver to set GUSBCFG.FORCEHOSTMODE,
+		 * bypassing the ID-pin check. Safe on a host-only port. */
+		hnp-srp-disable;
 		status = "okay";
 	};
+};
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	/* Speaker-amp enable: SDK default PB31, active-high. Override
+	 * here per board if the amp is on a different pin/polarity. */
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+};
+
+&sound {
+	status = "okay";
 };

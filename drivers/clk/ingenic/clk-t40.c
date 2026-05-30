@@ -8,11 +8,10 @@
  * drivers actually consume: it recalculates the PLL rates from the CPM
  * registers and provides get_rate / set_rate / enable / disable.
  *
- * Same M/N/OD1/OD0 PLL encoding as the XBurst1 T-series; the CGU
- * register map differs (CLKGR0=0x30/CLKGR1=0x38, dedicated SFC0 divider
- * at 0x90) and matches A1's - the bit positions were taken from the A1
- * SPL loader (arch/mips/mach-xburst/a1/sfc.c) and the vendor
- * cgu_clk_sel[] table.
+ * Same M/N/OD1/OD0 PLL encoding as A1 (12-bit M); the CGU register map
+ * matches T41 - CLKGR0=0x20/CLKGR1=0x28, SFC0 divider at 0x60, gate
+ * bits per mach/t40.h. T40 and T41 share the CPM layout (distinct from
+ * both XBurst1 and A1); only the PLL rate decode differs.
  */
 
 #include <clk-uclass.h>
@@ -30,11 +29,10 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CPEPCR		0x18	/* EPLL */
 #define CPM_CPVPCR		0x1c	/* VPLL */
-#define CPM_CLKGR0		0x30
-#define CPM_CLKGR1		0x38
-#define CPM_SFC0CDR		0x90
-#define CPM_MAC0CDR		0xc0
-#define CPM_MAC1CDR		0xd0
+#define CPM_CLKGR0		0x20
+#define CPM_CLKGR1		0x28
+#define CPM_MAC0CDR		0x54	/* MACCDR */
+#define CPM_SFC0CDR		0x60
 
 #define EXT_RATE		24000000UL
 #define RTC_RATE		32768UL
@@ -51,7 +49,7 @@ struct t40_clk_desc {
 	u8 stop;	/* clock-stop bit in cdr */
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
-	u8 src;		/* CDR source select [31:30]: 1=MPLL, 3=EPLL */
+	u8 src;		/* CDR source select [31:30]: 1=MPLL */
 };
 
 #define NO_GATE 0xffff
@@ -63,23 +61,23 @@ struct t40_clk_desc {
  * drivers (MMC, GMAC) are ported.
  */
 static const struct t40_clk_desc t40_clks[T40_CLK_COUNT] = {
-	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 24, 1 },
-	[T40_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
-	[T40_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
-	[T40_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
-	[T40_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 8 },
-	[T40_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 9 },
-	[T40_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 10 },
-	[T40_CLK_OTG0]  = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
-	[T40_CLK_OTG1]  = { 0, 0, 0, 0, CPM_CLKGR0, 12 },
-	[T40_CLK_OTG2]  = { 0, 0, 0, 0, CPM_CLKGR0, 13 },
-	[T40_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
-	[T40_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR0, 6 },
-	[T40_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
-	[T40_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 8, 3 },
-	[T40_CLK_GMAC1] = { CPM_MAC1CDR, 29, 28, 27, CPM_CLKGR1, 10, 3 },
-	[T40_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR1, 3 },
-	[T40_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
+	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 21, 1 },
+	[T40_CLK_SFC1]  = { 0, 0, 0, 0, NO_GATE, 0 },	/* T40 has one SFC */
+	[T40_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
+	[T40_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
+	[T40_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
+	[T40_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
+	[T40_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 16 },
+	[T40_CLK_OTG0]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
+	[T40_CLK_OTG1]  = { 0, 0, 0, 0, NO_GATE, 0 },	/* T40 has one OTG */
+	[T40_CLK_OTG2]  = { 0, 0, 0, 0, NO_GATE, 0 },
+	[T40_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
+	[T40_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR1, 11 },
+	[T40_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
+	[T40_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
+	[T40_CLK_GMAC1] = { 0, 0, 0, 0, NO_GATE, 0 },	/* T40 has one GMAC */
+	[T40_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR0, 22 },	/* PDMA */
+	[T40_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 1 },
 };
 
 struct t40_cgu_priv {
@@ -150,7 +148,7 @@ static ulong t40_clk_get_rate(struct clk *clk)
 	case T40_CLK_UART0:
 	case T40_CLK_UART1:
 	case T40_CLK_UART2:
-		return EXT_RATE;	/* A1 UART is clocked from EXT */
+		return EXT_RATE;	/* T40 UART is clocked from EXTAL */
 	}
 
 	if (clk->id >= T40_CLK_COUNT)

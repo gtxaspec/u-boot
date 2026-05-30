@@ -2,9 +2,9 @@
 /*
  * This header provides clock numbers for the ingenic,t41-cgu DT binding.
  *
- * IDs match the T40 binding numerically since both SoCs share the same
- * clk-t40.c driver (the driver branches on CONFIG_SOC_T41 for the bits
- * that diverge).
+ * IDs match the T40 binding numerically; T41 has its own clk-t41.c
+ * driver (the CGU register map is shared with T40, but the PLL rate
+ * decode differs).
  *
  * Ordered as: external clocks, PLLs, then peripheral leaf clocks.
  */

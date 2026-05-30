@@ -2,11 +2,13 @@
 /*
  * Ingenic XBurst2 DDR Innophy - per-variant register/PHY/efuse tables.
  *
- * Generated from arch/mips/mach-xburst/include/mach/t41<variant>-ddr.h
- * (vendor T41-1.2.6 ddr_params_creator output) and vendor efuse_ddr_get.c
- * init_ddr_par[] defaults. One struct per SKU, matched by DT compatible
- * string at driver probe time. Do not edit by hand; regenerate from the
- * header set if upstream vendor values change.
+ * Vendor ddr_params_creator output (T41-1.2.6 / T40-1.3.1), the
+ * efuse_ddr_get.c init_ddr_par[] defaults, and the per-SKU PLL
+ * setpoints (apll/mpll/vpll_mnod). One struct per SKU, matched by the
+ * DT ingenic,variant string at driver probe (and by
+ * ingenic_ddr_pll_setpoints() in SPL). This is the single source for
+ * the per-variant values; the former mach/<soc><variant>-ddr.h header
+ * set was folded in here and removed.
  */
 
 #include <linux/types.h>
@@ -23,6 +25,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41a = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1600000000u,
 	.ddr_hz		= 800000000u,
+	.apll_mnod	= ((0x144 << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.mpll_mnod	= ((0xc7  << 20) | (2 << 14) | (1 << 11) | (0 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -59,6 +64,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41l = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1200000000u,
 	.ddr_hz		= 600000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x63  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x00002825,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -134,6 +142,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41n = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1500000000u,
 	.ddr_hz		= 750000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x176 << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -209,6 +220,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41xq = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02004a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -245,6 +259,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zg = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1000000000u,
 	.ddr_hz		= 500000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x7c  << 20) | (0 << 14) | (1 << 11) | (2 << 7) | (3 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02004a2d,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -281,6 +298,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zgc = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02004a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -317,6 +337,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zl = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1200000000u,
 	.ddr_hz		= 600000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x63  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x00002825,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -353,6 +376,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zm = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02002a2d,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000006,
@@ -389,6 +415,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zmc = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -425,6 +454,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1500000000u,
 	.ddr_hz		= 750000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x176 << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -461,6 +493,9 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((0x5b  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
+	.mpll_mnod	= ((0x15d << 20) | (2 << 14) | (1 << 11) | (1 << 7) | (1 << 4)),
+	.vpll_mnod	= ((0x59  << 20) | (0 << 14) | (1 << 11) | (1 << 7) | (3 << 4)),
 	.ddrc_cfg	= 0x02004a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000000,
@@ -518,6 +553,8 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40n = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1000000000u,
 	.ddr_hz		= 500000000u,
+	.apll_mnod	= ((76 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
+	.mpll_mnod	= ((125 << 20) | (1 << 14) | (3 << 11) | (1 << 8)),
 	.ddrc_cfg	= 0x28002825,
 	.ddrc_ctrl	= 0x00008092,
 	.ddrc_dlmr	= 0x00000000,
@@ -561,6 +598,8 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1200000000u,
 	.ddr_hz		= 600000000u,
+	.apll_mnod	= ((84 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
+	.mpll_mnod	= ((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
 	.ddrc_cfg	= 0x2a002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000002,	/* DDR3-specific */
@@ -602,6 +641,8 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40a = {
 	.chip1_size	= 0,
 	.mpll_hz	= 1400000000u,
 	.ddr_hz		= 700000000u,
+	.apll_mnod	= ((84  << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
+	.mpll_mnod	= ((350 << 20) | (2 << 14) | (3 << 11) | (1 << 8)),
 	.ddrc_cfg	= 0x6a006a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000004,

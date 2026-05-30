@@ -17,7 +17,6 @@
 #include <fdtdec.h>
 #include <hang.h>
 #include <init.h>
-#include <ram.h>
 #include <spl.h>
 #include <stdio.h>
 #include <asm/global_data.h>

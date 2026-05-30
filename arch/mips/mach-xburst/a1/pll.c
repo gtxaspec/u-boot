@@ -46,6 +46,22 @@ static u32 cpm_readl(unsigned int off)
 
 static void pll_set(unsigned int reg, u32 mnod)
 {
+	u32 cur;
+
+	/*
+	 * If the bootrom left this PLL enabled at a different setpoint,
+	 * disable it before writing the new M/N/OD - relocking a live PLL
+	 * to a new rate can be unclean. Skip the disable when the PLL is
+	 * off or already on target (the compare ignores the low byte, where
+	 * PLLEN/PLLON live). Safe to gate the PLL here: pll_init() has
+	 * already parked the CPU and bus clocks on EXTAL.
+	 */
+	cur = cpm_readl(reg);
+	if ((cur & PLL_PLLEN) && ((cur & ~0xff) != (mnod & ~0xff))) {
+		volatile int d;
+		cpm_writel(cur & ~PLL_PLLEN, reg);
+		for (d = 0; d < 1000; d++);	/* ~1us busy-wait (no timer yet) */
+	}
 	cpm_writel(mnod | PLL_PLLEN, reg);
 	while (!(cpm_readl(reg) & PLL_PLLON))
 		;

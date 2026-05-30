@@ -2,76 +2,10 @@
 
 if SOC_A1
 
-choice
-	prompt "A1 SoC variant"
-	default A1_VARIANT_A1N
-	help
-	  A1 SKU. DDR parameters are transcribed verbatim from the
-	  vendor U-Boot (ddr_reg_values_a1{n,nt,l,x}.c + ddr_innophy.c).
-	  Only A1N is validated on real silicon; the others are
-	  build-only transcriptions.
-
-config A1_VARIANT_A1N
-	bool "A1N (DDR3-800 16-bit, 256 MB)"
-	help
-	  A1N: EFUSE chipid 0x1111. DDR3 @ 804 MHz, 16-bit bus,
-	  256 MB. APLL 1104 MHz, MPLL 1608 MHz.
-
-config A1_VARIANT_A1NT
-	bool "A1NT (DDR3-700 32-bit, 256 MB)"
-	help
-	  A1NT: EFUSE chipid 0x5555. DDR3 @ 700 MHz, 32-bit bus,
-	  256 MB. APLL 1104 MHz, MPLL 1400 MHz.
-
-config A1_VARIANT_A1X
-	bool "A1X (DDR3-700 32-bit, 512 MB)"
-	help
-	  A1X: EFUSE chipid 0x2222. DDR3 @ 700 MHz, 32-bit bus,
-	  512 MB. APLL 1104 MHz, MPLL 1400 MHz.
-
-config A1_VARIANT_A1L
-	bool "A1L (DDR3-800 16-bit, 128 MB)"
-	help
-	  A1L: EFUSE chipid 0x3333. DDR3 @ 804 MHz, 16-bit bus,
-	  128 MB. APLL 1104 MHz, MPLL 1608 MHz.
-
-config A1_VARIANT_A1A
-	bool "A1A (external DDR, up to 2 GB)"
-	help
-	  A1A: EFUSE chipid 0x4444. The A1A SoC takes external DDR up
-	  to 2 GB; APLL 1200 MHz. Until A1A hardware is validated it
-	  reuses the A1X DDR profile (512 MB DDR3-700, MPLL 1400 MHz).
-
-endchoice
-
-config A1_APLL_MHZ
-	int
-	default 1200 if A1_VARIANT_A1A
-	default 1104
-
-config A1_MPLL_MHZ
-	int
-	default 1400 if A1_VARIANT_A1NT
-	default 1400 if A1_VARIANT_A1X
-	default 1400 if A1_VARIANT_A1A
-	default 1608
-
-# Raw CPMPCR register word (M/N/OD1/OD0), from the vendor
-# config_sys_mpll_mnod - 1608 MHz = M134/N1, 1400 MHz = M350/N3.
-config A1_MPLL_MNOD
-	hex
-	default 0x15e0d100 if A1_VARIANT_A1NT
-	default 0x15e0d100 if A1_VARIANT_A1X
-	default 0x15e0d100 if A1_VARIANT_A1A
-	default 0x08605100
-
-config A1_DRAM_SIZE_MB
-	int
-	default 256 if A1_VARIANT_A1N
-	default 256 if A1_VARIANT_A1NT
-	default 512 if A1_VARIANT_A1X
-	default 128 if A1_VARIANT_A1L
-	default 512 if A1_VARIANT_A1A
+# A1 SoC variant, DDR parameters, DRAM size and PLL setpoints are all
+# selected at runtime from the device tree (the per-SKU <sku>-isvp.dts sets
+# ingenic,variant on the memory-controller node; the UCLASS_RAM driver and
+# pll_init() read it). No compile-time variant Kconfig is needed.
 
 config SPL_A1_USB_BOOT
 	bool "A1 SPL: return to mask ROM for USB boot (dev loop)"

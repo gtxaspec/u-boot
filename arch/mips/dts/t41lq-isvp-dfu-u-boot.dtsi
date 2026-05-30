@@ -1,0 +1,3 @@
+// SPDX-License-Identifier: GPL-2.0+
+/* Shared DFU-loader binman image - identical for every T41 SKU. */
+#include "t41-isvp-dfu-u-boot.dtsi"

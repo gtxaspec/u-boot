@@ -45,11 +45,14 @@ static void pll_set(unsigned int reg, u32 mnod)
 {
 	u32 cur;
 
-	/* Vendor T41 pll_set: disable PLL first, wait 1us, then
-	 * program new MNOD + enable. Required for clean PLL relock
-	 * when the bootrom left the PLL running at a different freq.
-	 * Only disable if the PLL is currently enabled and the MNOD
-	 * differs (avoids disrupting a PLL that's already correct). */
+	/*
+	 * If the bootrom left this PLL enabled at a different setpoint,
+	 * disable it before writing the new M/N/OD - relocking a live PLL
+	 * to a new rate can be unclean. Skip the disable when the PLL is
+	 * off or already on target (the compare ignores the low byte, where
+	 * PLLEN/PLLON live). Safe to gate the PLL here: pll_init() has
+	 * already parked the CPU and bus clocks on EXTAL.
+	 */
 	cur = cpm_readl(reg);
 	if ((cur & PLL_PLLEN) && ((cur & ~0xff) != (mnod & ~0xff))) {
 		volatile int d;

@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+#include "t40-isvp.dtsi"
+#include "t40-isvp-nor.dtsi"
+
+/* T40N (lab silkscreen T40NN): DDR2 M14D5121632A, 128 MiB, SFC-NOR. */
+&ddr {
+	ingenic,variant = "t40n";
+};

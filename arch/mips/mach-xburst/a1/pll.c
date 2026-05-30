@@ -102,9 +102,13 @@ static void cpccr_init(void)
 	while (cpm_readl(CPM_CPCSR) & 0xf)
 		;
 
-	/* Program clock source selects (high 8 bits) */
+	/*
+	 * Clock source selects (high 8 bits). Clear the divider
+	 * change-enable strobe (bits 22:20) too: the dividers were latched
+	 * and settled above, so this write must not re-apply them.
+	 */
 	cpccr = (A1_CPCCR_CFG & (0xff << 24)) |
-		(cpm_readl(CPM_CPCCR) & ~(0xff << 24));
+		(cpm_readl(CPM_CPCCR) & ~((0xff << 24) | (7 << 20)));
 	cpm_writel(cpccr, CPM_CPCCR);
 
 	/* AHB1CDR source select */

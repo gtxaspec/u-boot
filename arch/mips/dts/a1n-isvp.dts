@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+#include "a1-isvp.dtsi"
+
+/* A1N: DDR3 W632GU6NG, 256 MiB, SFC-NOR. */
+&ddr {
+	ingenic,variant = "a1n";
+};

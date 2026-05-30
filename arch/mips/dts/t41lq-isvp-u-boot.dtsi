@@ -1,0 +1,3 @@
+// SPDX-License-Identifier: GPL-2.0+
+/* Shared SFC-NOR binman image - identical for every T41 SKU. */
+#include "t41-isvp-u-boot.dtsi"

@@ -13,7 +13,6 @@
 #include <hang.h>
 #include <init.h>
 #include <spl.h>
-#include <stdio.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <asm/sections.h>
@@ -132,42 +131,3 @@ u32 spl_boot_device(void)
 	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */
-
-#ifndef CONFIG_XPL_BUILD
-/*
- * SoC reset - overrides the weak _machine_restart() in
- * arch/mips/cpu/cpu.c (reached via do_reset -> reset_cpu).
- *
- * Arms the TCU watchdog one-shot; the timeout expiry resets the whole
- * SoC. Quirks, all confirmed on real A1 silicon:
- *  - the WDT counter accepts only the 32 kHz RTC clock (the PCLK and
- *    EXTAL TCSR source-select bits are rejected by the hardware);
- *  - the timeout (TDR) must not be tiny, or the counter overshoots the
- *    compare value before the comparator engages and then has to wrap
- *    the full 16 bits (~128 s) before it fires;
- *  - TDR/TCSR must settle into the slow RTC clock domain before the
- *    counter is enabled. udelay() hangs on the reset path here, so the
- *    settle is a plain spin loop with no timer dependency.
- */
-void _machine_restart(void)
-{
-	void __iomem *tcu = (void __iomem *)TCU_BASE;
-	volatile int i;
-
-	puts("resetting...\n");
-
-	writel(1 << 16, tcu + 0x3c);		/* TSCR: start the WDT clock */
-	writel(0, tcu + 0x08);			/* TCNT = 0 */
-	writel(0x100, tcu + 0x00);		/* TDR: ~0.5 s at RTC 32k/64 */
-	writel((3 << 3) | (1 << 1), tcu + 0x0c);/* TCSR: /64 prescale, RTC */
-
-	for (i = 0; i < 100000; i++)		/* settle into the RTC domain */
-		;
-
-	writel(0, tcu + 0x04);			/* TCER: counter off */
-	writel(1 << 0, tcu + 0x04);		/* TCER: counter on -> fires */
-
-	for (;;)
-		;
-}
-#endif /* !CONFIG_XPL_BUILD */

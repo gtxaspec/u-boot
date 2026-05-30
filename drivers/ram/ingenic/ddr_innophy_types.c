@@ -580,6 +580,47 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp = {
 	.remap		= { 0x030f0e0d, 0x07060504, 0x0b0a0908, 0x0201000c, 0x13121110 },
 };
 
+/* ----- T40A (W634GU6Q8, DDR3 @ 700 MHz, 32-bit, 1 GiB dual-rank) -----
+ * Transcribed from arch/mips/mach-xburst/include/mach/t40a-ddr.h (vendor
+ * T40-1.3.1 ddr_params_creator: CONFIG_T40A + DDR_700M + APLL_1008M +
+ * CONFIG_DDR3_W634GU6Q8 + DW32, CS0-only). Build-only: no T40A board in
+ * the lab, so the values are vendor-faithful but unvalidated on silicon.
+ */
+const struct ingenic_ddr_variant ingenic_ddr_variant_t40a = {
+	.name		= "T40A",
+	.chip		= "W634GU6Q8",
+	.type		= INGENIC_DDR_TYPE_DDR3,
+	.family		= INGENIC_DDR_FAMILY_T40,
+	.bus_width	= 32,
+	.chip0_size	= 0x40000000,
+	.chip1_size	= 0,
+	.mpll_hz	= 1400000000u,
+	.ddr_hz		= 700000000u,
+	.ddrc_cfg	= 0x6a006a35,
+	.ddrc_ctrl	= 0x0000b092,
+	.ddrc_dlmr	= 0x00000004,
+	.ddrc_mmap0	= 0x00000080,
+	.ddrc_mmap1	= 0x0000ff00,
+	.ddrc_refcnt	= 0x5caa0083,
+	.ddrc_timing	= { 0x05110c06, 0x04060607, 0x030b050b, 0x1a241a05, 0x80048054 },
+	.ddrc_autosr_cnt= 0x5b001556,
+	.ddrc_autosr_en	= 0x00000000,
+	.ddrc_hregpro	= 0x00000001,
+	.ddrc_pregpro	= 0x00000001,
+	.ddrc_cguc0	= 0x11111111,
+	.ddrc_cguc1	= 0x00000113,
+	.ddrp_memcfg	= 0x00000010,
+	.ddrp_cl	= 0x00000007,
+	.ddrp_cwl	= 0x00000005,
+	.mr0		= 0x00001d30,
+	.mr1		= 0x00010040,
+	.mr2		= 0x00020008,
+	.mr3		= 0x00030000,
+	.mr10		= 0,
+	.mr63		= 0,
+	.remap		= { 0x0311100f, 0x07060504, 0x0b0a0908, 0x000e0d0c, 0x13120201 },
+};
+
 #ifdef CONFIG_SOC_A1
 /*
  * ----- A1 family -----

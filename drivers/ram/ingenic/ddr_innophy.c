@@ -424,6 +424,7 @@ static const struct {
 	{ "t41zn",  &ingenic_ddr_variant_t41zn  },
 	{ "t41zx",  &ingenic_ddr_variant_t41zx  },
 	/* T40 family */
+	{ "t40a",   &ingenic_ddr_variant_t40a   },
 	{ "t40n",   &ingenic_ddr_variant_t40n   },
 	{ "t40nn",  &ingenic_ddr_variant_t40n   },	/* alias - same silicon */
 	{ "t40xp",  &ingenic_ddr_variant_t40xp  },

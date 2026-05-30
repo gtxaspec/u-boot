@@ -271,6 +271,7 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
 
 /* ----- Per-variant configs (T40 family) ----- */
+extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40a;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40n;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp;
 

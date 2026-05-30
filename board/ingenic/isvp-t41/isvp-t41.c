@@ -8,7 +8,9 @@
  * PHY init is simpler.
  */
 
+#include <dm.h>
 #include <init.h>
+#include <ram.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -16,7 +18,6 @@
 #include <cpu_func.h>
 #include <linux/delay.h>
 #include <mach/t41.h>
-#include <mach/t41-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -61,7 +62,20 @@ void flush_cache(ulong start_addr, ulong size)
 
 int dram_init(void)
 {
-	gd->ram_size = T41_DDR_SIZE;
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 

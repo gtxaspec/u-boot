@@ -2,9 +2,9 @@
 /*
  * Ingenic A1 SoC SPL bring-up (XBurst2)
  *
- * The SPL runs from ~34 KB of on-chip SRAM with no driver model. It
- * brings up a minimal console, configures the PLLs, inits DDR and then
- * loads U-Boot proper into DRAM. Full U-Boot uses driver model.
+ * Running from on-chip SRAM, the SPL sets up the early UART, configures
+ * the PLLs, then brings up driver model (DM-in-SPL) to init DDR via the
+ * UCLASS_RAM driver and load U-Boot proper from SPI-NOR.
  */
 
 #include <config.h>
@@ -26,75 +26,7 @@ void pll_init(void);
 int timer_init(void);
 void clk_ungate_uart(unsigned int idx);
 void a1_spl_serial_init(void);
-void a1_spl_puts(const char *s);
-void a1_spl_putc(char c);
 void a1_spl_sfc_clk_init(void);
-
-#ifdef CONFIG_XPL_BUILD
-static void spl_put_hex(u32 v)
-{
-	static const char hex[] = "0123456789abcdef";
-	int i;
-
-	a1_spl_puts("0x");
-	for (i = 28; i >= 0; i -= 4)
-		a1_spl_putc(hex[(v >> i) & 0xf]);
-}
-
-#define A1_DRAM_SIZE	0x10000000u	/* 256 MB */
-
-static int dram_verify(void)
-{
-	static const u32 pat[] = {
-		0xdeadbeef, 0x12345678, 0xa5a5a5a5, 0x5a5a5a5a,
-		0xffffffff, 0x00000000,
-	};
-	volatile u32 *a;
-	u32 off;
-	int p;
-
-	/* Pattern test at the base word (uncached - direct to DRAM). */
-	a = (volatile u32 *)0xa0000000;
-	for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-		*a = pat[p];
-		u32 rd = *a;
-		if (rd != pat[p]) {
-			a1_spl_puts("FAIL pat @");
-			spl_put_hex((u32)(uintptr_t)a);
-			a1_spl_puts(" w=");
-			spl_put_hex(pat[p]);
-			a1_spl_puts(" r=");
-			spl_put_hex(rd);
-			a1_spl_putc('\n');
-			return -1;
-		}
-	}
-
-	/*
-	 * Address-in-data sweep across all 256 MB, one word per 1 MB.
-	 * The whole range is written before any of it is read back, so
-	 * this also catches address aliasing - a marginally trained
-	 * DRAM can pass a single-location test yet still alias.
-	 */
-	for (off = 0; off < A1_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		*a = 0xa0000000u + off;
-	}
-	for (off = 0; off < A1_DRAM_SIZE; off += 0x100000) {
-		a = (volatile u32 *)(uintptr_t)(0xa0000000u + off);
-		if (*a != 0xa0000000u + off) {
-			a1_spl_puts("FAIL sweep @");
-			spl_put_hex((u32)(uintptr_t)a);
-			a1_spl_puts(" r=");
-			spl_put_hex(*a);
-			a1_spl_putc('\n');
-			return -1;
-		}
-	}
-
-	return 0;
-}
-#endif
 
 #ifdef CONFIG_XPL_BUILD
 gd_t gdata __section(".bss");
@@ -130,7 +62,6 @@ void board_init_f(ulong dummy)
 
 	clk_ungate_uart(A1_CONSOLE_UART);
 	a1_spl_serial_init();
-	a1_spl_puts("\nA1 SPL: alive (pre-PLL)\n");
 
 	/*
 	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
@@ -141,7 +72,6 @@ void board_init_f(ulong dummy)
 		hang();
 
 	pll_init();
-	a1_spl_puts("A1 SPL: PLL configured\n");
 
 	/*
 	 * Start the Global OST timebase before DM/DDR: the UCLASS_RAM DDR
@@ -166,9 +96,6 @@ void board_init_f(ulong dummy)
 			hang();
 	}
 
-	if (dram_verify() == 0)
-		a1_spl_puts("A1 SPL: DDR OK\n");
-
 	/* Switch printf to the DM console for the rest of SPL. */
 	preloader_console_init();
 
@@ -186,7 +113,6 @@ void board_init_f(ulong dummy)
 	 * normal nested call and a plain return (jr ra) resumes the bootrom
 	 * USB loop, which uploads U-Boot proper to DRAM and jumps.
 	 */
-	a1_spl_puts("A1 SPL: returning to mask ROM (USB boot)\n");
 	return;
 #else
 	/*
@@ -196,7 +122,6 @@ void board_init_f(ulong dummy)
 	 * (spl_boot_device() == BOOT_DEVICE_SPI), LZMA-decompresses it and
 	 * jumps. Does not return.
 	 */
-	a1_spl_puts("A1 SPL: loading U-Boot...\n");
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 #endif

@@ -24,7 +24,38 @@
 	ddr: memory-controller@b34f0000 {
 		compatible = "ingenic,t41-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
+		/*
+		 * DDR variant string consumed by ddr_innophy.c to pick the
+		 * per-SKU timing/type table. Track the Kconfig variant so one
+		 * board DT serves every T41 SKU (DDR2 vs DDR3 differ per part).
+		 */
+#if defined(CONFIG_T41_VARIANT_T41A)
+		ingenic,variant = "t41a";
+#elif defined(CONFIG_T41_VARIANT_T41L)
+		ingenic,variant = "t41l";
+#elif defined(CONFIG_T41_VARIANT_T41LQ)
+		ingenic,variant = "t41lq";
+#elif defined(CONFIG_T41_VARIANT_T41N)
+		ingenic,variant = "t41n";
+#elif defined(CONFIG_T41_VARIANT_T41XQ)
+		ingenic,variant = "t41xq";
+#elif defined(CONFIG_T41_VARIANT_T41ZG)
+		ingenic,variant = "t41zg";
+#elif defined(CONFIG_T41_VARIANT_T41ZGC)
+		ingenic,variant = "t41zgc";
+#elif defined(CONFIG_T41_VARIANT_T41ZL)
+		ingenic,variant = "t41zl";
+#elif defined(CONFIG_T41_VARIANT_T41ZM)
+		ingenic,variant = "t41zm";
+#elif defined(CONFIG_T41_VARIANT_T41ZMC)
+		ingenic,variant = "t41zmc";
+#elif defined(CONFIG_T41_VARIANT_T41ZN)
+		ingenic,variant = "t41zn";
+#elif defined(CONFIG_T41_VARIANT_T41ZX)
+		ingenic,variant = "t41zx";
+#else
 		ingenic,variant = "t41nq";
+#endif
 		bootph-all;
 	};
 

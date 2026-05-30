@@ -15,50 +15,10 @@
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
-#include <cpu_func.h>
 #include <linux/delay.h>
 #include <mach/t41.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-/*
- * XBurst2 cache flush. The U-Boot generic MIPS flush_cache is a no-op
- * here because mips_cache_probe() reads CP0 Config1, and on XBurst2
- * Config1.IL/DL come back 0, so icache_line_size()/dcache_line_size()
- * return 0 and the cache_loop never iterates.
- *
- * XBurst2 L1: 8-way x 128 sets x 32B = 32KB I-cache + 32KB D-cache.
- *
- * Vendor flow (matches arch/mips/cpu/xburst/cpu.c flush_dcache_range):
- * Hit_Writeback_Inv_D, sync, then read from KSEG1 to drain the write
- * buffer (writes from D-cache go through a write buffer that must be
- * forced out before reads of the same address see updated DRAM). Then
- * Hit_Invalidate_I so subsequent fetches of the relocated code miss
- * I-cache and refill from DRAM.
- */
-#define XB2_LINE_SIZE	32
-void flush_cache(ulong start_addr, ulong size)
-{
-	unsigned long a;
-	unsigned long end;
-	volatile unsigned int writebuffer;
-
-	if (!size)
-		return;
-
-	end = (start_addr + size + XB2_LINE_SIZE - 1) & ~(XB2_LINE_SIZE - 1);
-	start_addr &= ~(XB2_LINE_SIZE - 1);
-
-	for (a = start_addr; a < end; a += XB2_LINE_SIZE)
-		__asm__ volatile("cache 0x15, 0(%0)" : : "r"(a));	/* Hit_Writeback_Inv_D */
-	__asm__ volatile("sync");
-	writebuffer = *(volatile unsigned int *)0xa0000000;
-	(void)writebuffer;
-
-	for (a = start_addr; a < end; a += XB2_LINE_SIZE)
-		__asm__ volatile("cache 0x10, 0(%0)" : : "r"(a));	/* Hit_Invalidate_I */
-	__asm__ volatile("sync");
-}
 
 int dram_init(void)
 {

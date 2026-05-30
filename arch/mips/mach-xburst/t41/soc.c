@@ -2,14 +2,12 @@
 /*
  * Ingenic T41 SoC SPL bring-up (XBurst2)
  *
- * The SPL runs from on-chip SRAM with no driver model. It brings up
- * a minimal console, configures the PLLs, inits DDR and then loads
- * U-Boot proper into DRAM. Full U-Boot uses driver model.
+ * Running from on-chip SRAM, the SPL sets up the early UART, configures
+ * the PLLs, then brings up driver model (DM-in-SPL) to init DDR via the
+ * UCLASS_RAM driver and load U-Boot proper from SPI-NOR.
  *
- * T40 is the XBurst2 sibling of A1: same SPL skeleton, different
- * register reshuffle (single OTG, Synopsys GMAC, 4 UARTs, T40-
- * specific CPM offsets). Forward-ported from the vendor U-Boot
- * 2013 T40-1.3.1 branch.
+ * T41 is the XBurst2 sibling of A1/T40: same SPL skeleton, T41-specific
+ * register map (single OTG, Synopsys GMAC, T41 CPM offsets).
  */
 
 #include <config.h>

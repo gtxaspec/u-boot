@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+#include "t41-isvp-dfu.dtsi"
+
+/* T41NQ: DDR3 W631GU6NG, 128 MiB. */
+&ddr {
+	ingenic,variant = "t41nq";
+};

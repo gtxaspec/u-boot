@@ -11,29 +11,28 @@
  *
  * PLL encoding: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8)
  * Pllout = 24MHz * M / (N * OD0 * OD1)
- * All A1 variants use N=1, OD0=1, OD1=2 -> Pllout = 12MHz * M
+ * APLL uses N=1, OD1=2 (Pllout = 12MHz * M); MPLL 1400 uses N=3.
  */
 
+#include <hang.h>
 #include <asm/io.h>
-#include <linux/build_bug.h>
 #include <mach/a1.h>
 
-#define A1_APLL_M	(CONFIG_A1_APLL_MHZ / 12)
-#define A1_APLL_MNOD	((A1_APLL_M << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 /*
- * MPLL: the (M = MHz/12, N = 1) encoding only covers rates that are a
- * multiple of 12 MHz. A1NT/A1X run MPLL 1400 MHz (M = 350, N = 3), so
- * the raw CPMPCR register word is carried per-variant in the Kconfig
- * (transcribed from the vendor config_sys_mpll_mnod).
+ * Per-SKU APLL/MPLL setpoints live in the DDR variant struct
+ * (drivers/ram/ingenic/ddr_innophy_types.c) and are selected at runtime
+ * from the DT ingenic,variant property - the same string the RAM driver
+ * matches. board_init_f() calls fdtdec_setup() before pll_init() so the
+ * FDT blob is available here, before driver model is up.
+ *
+ * VPLL (1200 MHz) and EPLL (1500 MHz) are SoC-fixed on every A1 SKU, so
+ * they stay as constants rather than in the per-SKU variant table.
  */
-#define A1_MPLL_MNOD	CONFIG_A1_MPLL_MNOD
+int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
+			      u32 *mpll_mnod, u32 *vpll_mnod);
+
 #define A1_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define A1_EPLL_MNOD	((125 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-
-static_assert(CONFIG_A1_APLL_MHZ % 12 == 0,
-	      "A1_APLL_MHZ must be a multiple of 12");
-static_assert(A1_APLL_M >= 16 && A1_APLL_M <= 2500,
-	      "A1 APLL M out of range");
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -100,12 +99,19 @@ static void cpccr_init(void)
 
 void pll_init(void)
 {
+	u32 apll, mpll, vpll;
+
+	if (ingenic_ddr_pll_setpoints("ingenic,a1-ddr-innophy",
+				      &apll, &mpll, &vpll))
+		hang();
+	(void)vpll;	/* A1 VPLL is SoC-fixed (A1_VPLL_MNOD), not per-SKU */
+
 	/* Set bus select to EXTAL before reprogramming PLLs */
 	cpm_writel((cpm_readl(CPM_CPCCR) & ~(0xff << 24)) | (0x55 << 24),
 		   CPM_CPCCR);
 
-	pll_set(CPM_CPAPCR, A1_APLL_MNOD);
-	pll_set(CPM_CPMPCR, A1_MPLL_MNOD);
+	pll_set(CPM_CPAPCR, apll);
+	pll_set(CPM_CPMPCR, mpll);
 	pll_set(CPM_CPVPCR, A1_VPLL_MNOD);
 	pll_set(CPM_CPEPCR, A1_EPLL_MNOD);
 	cpccr_init();

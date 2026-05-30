@@ -118,6 +118,27 @@
 	};
 
 	/*
+	 * TCU (timer/counter unit) container mirroring T31/T41's binding.
+	 * U-Boot only needs the watchdog child for sysreset; the WDT
+	 * self-clocks from the 32 kHz RTC so no TCU clock provider is
+	 * required. Replaces the hand-rolled a1/soc.c _machine_restart().
+	 */
+	tcu: timer@b0002000 {
+		compatible = "ingenic,a1-tcu", "ingenic,jz4760-tcu",
+			     "simple-mfd";
+		reg = <0xb0002000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0xb0002000 0x1000>;
+
+		watchdog: watchdog@0 {
+			compatible = "ingenic,a1-watchdog",
+				     "ingenic,jz4780-watchdog";
+			reg = <0x0 0x10>;
+		};
+	};
+
+	/*
 	 * AIC (audio interface controller) + on-chip codec. PIO/DMA playback
 	 * driven by U-Boot's `sound` command, handled by the self-contained
 	 * drivers/sound/a1_audio.c (the A1 codec is its own register block at

@@ -118,6 +118,7 @@ static int jz4740_wdt_probe(struct udevice *dev)
 }
 
 static const struct udevice_id jz4740_wdt_ids[] = {
+	{ .compatible = "ingenic,a1-watchdog" },
 	{ .compatible = "ingenic,t31-watchdog" },
 	{ .compatible = "ingenic,t40-watchdog" },
 	{ .compatible = "ingenic,t41-watchdog" },

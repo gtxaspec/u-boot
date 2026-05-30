@@ -3,7 +3,9 @@
  * Ingenic ISVP-A1 board (DDR3, SFC NOR)
  */
 
+#include <dm.h>
 #include <init.h>
+#include <ram.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -136,7 +138,20 @@ void otg_phy_init(struct dwc2_udc *dev)
 
 int dram_init(void)
 {
-	gd->ram_size = (ulong)CONFIG_A1_DRAM_SIZE_MB << 20;
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 

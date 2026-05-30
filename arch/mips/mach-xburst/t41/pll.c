@@ -16,20 +16,20 @@
  * the only target.
  */
 
+#include <hang.h>
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t41.h>
-#include <mach/t41-ddr.h>		/* T41_APLL_MNOD / T41_MPLL_MNOD */
 
 /*
- * APLL and MPLL M/N/OD values come from the per-variant header
- * (<mach/t41n-ddr.h> or <mach/t41nq-ddr.h>) - vendor isvp_t40.h
- * has different operating points for T40N (APLL=912/MPLL=1000) and
- * T40XP (APLL=1008/MPLL=1200). Bootrom INGE descriptors program
- * APLL=600/MPLL=1200 for the initial UART clock; pll_init()
- * reprograms to the per-variant production operating point before
- * sdram_init.
+ * The per-SKU APLL/MPLL/VPLL setpoints live in the DDR variant struct
+ * (drivers/ram/ingenic/ddr_innophy_types.c) and are selected at runtime
+ * from the DT ingenic,variant property - the same string the RAM driver
+ * uses. board_init_f() calls fdtdec_setup() before pll_init() so the
+ * FDT blob is available here, before driver model is up.
  */
+int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
+			      u32 *mpll_mnod, u32 *vpll_mnod);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -88,12 +88,18 @@ static void cpccr_init(void)
 
 void pll_init(void)
 {
+	u32 apll, mpll, vpll;
+
+	if (ingenic_ddr_pll_setpoints("ingenic,t41-ddr-innophy",
+				      &apll, &mpll, &vpll))
+		hang();
+
 	cpm_writel((cpm_readl(CPM_CPCCR) & ~(0xff << 24)) | (0x55 << 24),
 		   CPM_CPCCR);
 
-	pll_set(CPM_CPAPCR, T41_APLL_MNOD);
-	pll_set(CPM_CPMPCR, T41_MPLL_MNOD);
-	pll_set(CPM_CPVPCR, T41_VPLL_MNOD);
+	pll_set(CPM_CPAPCR, apll);
+	pll_set(CPM_CPMPCR, mpll);
+	pll_set(CPM_CPVPCR, vpll);
 	cpccr_init();
 }
 

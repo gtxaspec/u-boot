@@ -29,14 +29,18 @@
 #include <hang.h>
 #include <log.h>
 #include <ram.h>
+#include <asm/global_data.h>
 #include <asm/io.h>
 #include <dm/device-internal.h>
 #include <dm/device_compat.h>
 #include <dm/lists.h>
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/libfdt.h>
 
 #include "ddr_innophy.h"
+
+DECLARE_GLOBAL_DATA_PTR;
 
 /* ------------------------------------------------------------------
  * Vendor sdram_init helpers (transcribed from xburst2/ddr_innophy.c).
@@ -437,6 +441,38 @@ static const struct {
 	{ "a1l",    &ingenic_ddr_variant_a1l    },
 #endif
 };
+
+/*
+ * SPL helper for the per-SoC pll.c: read ingenic,variant from the DT
+ * node matching `compatible` and return that SKU's PLL setpoints. Runs
+ * before driver model, so it reads the FDT blob directly (the caller
+ * must have set gd->fdt_blob, e.g. via fdtdec_setup()).
+ */
+int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
+			      u32 *mpll_mnod, u32 *vpll_mnod)
+{
+	const void *blob = gd->fdt_blob;
+	const char *name;
+	int node, i;
+
+	if (!blob)
+		return -ENODEV;
+	node = fdt_node_offset_by_compatible(blob, -1, compatible);
+	if (node < 0)
+		return -ENODEV;
+	name = fdt_getprop(blob, node, "ingenic,variant", NULL);
+	if (!name)
+		return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(ingenic_ddr_variants); i++) {
+		if (!strcmp(name, ingenic_ddr_variants[i].name)) {
+			*apll_mnod = ingenic_ddr_variants[i].cfg->apll_mnod;
+			*mpll_mnod = ingenic_ddr_variants[i].cfg->mpll_mnod;
+			*vpll_mnod = ingenic_ddr_variants[i].cfg->vpll_mnod;
+			return 0;
+		}
+	}
+	return -ENODEV;
+}
 
 static int ingenic_ddr_probe(struct udevice *dev)
 {

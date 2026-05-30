@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0+
-/dts-v1/;
+/*
+ * Ingenic ISVP-T41 USB-boot DFU-loader board body, shared by every
+ * T41 SKU. Trimmed sibling of t41-isvp.dtsi (no audio; OTG in gadget
+ * mode for DFU/g_dnl). The per-SKU leaf .dts sets ingenic,variant on
+ * &ddr.
+ */
 
 #include <dt-bindings/clock/ingenic,t41-cgu.h>
-#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "ingenic,t41";
@@ -22,47 +26,10 @@
 		reg = <0x0 0x10000000>;
 	};
 
-	/*
-	 * DDR controller + Innophy PHY. The compatible string selects
-	 * the per-variant timing table from drivers/ram/ingenic/
-	 * ddr_innophy_types.c. SPL probes this off DT and runs
-	 * sdram_init() with hardware DQS calibration enabled.
-	 */
 	ddr: memory-controller@b34f0000 {
 		compatible = "ingenic,t41-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
-		/*
-		 * DDR variant string consumed by ddr_innophy.c to pick the
-		 * per-SKU timing/type table. Track the Kconfig variant so one
-		 * board DT serves every T41 SKU (DDR2 vs DDR3 differ per part).
-		 */
-#if defined(CONFIG_T41_VARIANT_T41A)
-		ingenic,variant = "t41a";
-#elif defined(CONFIG_T41_VARIANT_T41L)
-		ingenic,variant = "t41l";
-#elif defined(CONFIG_T41_VARIANT_T41LQ)
-		ingenic,variant = "t41lq";
-#elif defined(CONFIG_T41_VARIANT_T41N)
-		ingenic,variant = "t41n";
-#elif defined(CONFIG_T41_VARIANT_T41XQ)
-		ingenic,variant = "t41xq";
-#elif defined(CONFIG_T41_VARIANT_T41ZG)
-		ingenic,variant = "t41zg";
-#elif defined(CONFIG_T41_VARIANT_T41ZGC)
-		ingenic,variant = "t41zgc";
-#elif defined(CONFIG_T41_VARIANT_T41ZL)
-		ingenic,variant = "t41zl";
-#elif defined(CONFIG_T41_VARIANT_T41ZM)
-		ingenic,variant = "t41zm";
-#elif defined(CONFIG_T41_VARIANT_T41ZMC)
-		ingenic,variant = "t41zmc";
-#elif defined(CONFIG_T41_VARIANT_T41ZN)
-		ingenic,variant = "t41zn";
-#elif defined(CONFIG_T41_VARIANT_T41ZX)
-		ingenic,variant = "t41zx";
-#else
-		ingenic,variant = "t41nq";
-#endif
+		/* ingenic,variant is set by the per-SKU leaf .dts. */
 		bootph-all;
 	};
 
@@ -78,14 +45,12 @@
 		reg = <0xb0010000 0x8000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		bootph-all;
 
 		gpa: gpio@0 {
 			compatible = "ingenic,t41-gpio";
 			reg = <0>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpb: gpio@1 {
@@ -93,7 +58,6 @@
 			reg = <1>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpc: gpio@2 {
@@ -101,7 +65,6 @@
 			reg = <2>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpd: gpio@3 {
@@ -109,7 +72,6 @@
 			reg = <3>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpe: gpio@4 {
@@ -117,63 +79,21 @@
 			reg = <4>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		pins_uart1: uart1 {
 			function = "uart1";
 			groups = "uart1-data";
-			bootph-all;
 		};
 
 		pins_sfc: sfc {
 			function = "sfc";
 			groups = "sfc-data";
-			bootph-all;
 		};
 
 		pins_mac0: mac0 {
 			function = "mac0";
 			groups = "mac0-data";
-		};
-	};
-
-	/*
-	 * AIC (audio interface controller) + on-chip codec. PIO playback
-	 * driven by U-Boot's `sound` command. T41 codec is the "E-block":
-	 * registers were renamed/relaid from T40's D-block (no _XX suffix,
-	 * new CDCFGR/CACR1, DAC analog path on CANACR1/CHR/CHPOUTLGR).
-	 * AIC IP is closer to T31/T32 - no AICCR1/AICCR2 extension that
-	 * T40 has; AICFR uses RMASTER/TMASTER (T32-style) for master sel.
-	 */
-	aic: audio-controller@b0020000 {
-		compatible = "ingenic,t41-aic";
-		reg = <0xb0020000 0x100>;
-		#sound-dai-cells = <0>;
-		status = "okay";
-	};
-
-	codec: audio-codec@b0021000 {
-		compatible = "ingenic,t41-codec";
-		reg = <0xb0021000 0x130>;
-		#sound-dai-cells = <0>;
-		/* Speaker-amp enable: vendor codec.c default PB31,
-		 * active-high. Override per board if the amp is on a
-		 * different pin/polarity. */
-		ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
-		status = "okay";
-	};
-
-	sound: sound {
-		compatible = "ingenic,t41-sound";
-		status = "okay";
-
-		cpu {
-			sound-dai = <&aic>;
-		};
-
-		codec {
-			sound-dai = <&codec>;
 		};
 	};
 
@@ -184,7 +104,6 @@
 		clock-frequency = <24000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_uart1>;
-		bootph-all;
 		status = "okay";
 	};
 
@@ -217,14 +136,12 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_sfc>;
 		spi-max-frequency = <50000000>;
-		bootph-all;
 		status = "okay";
 
 		flash@0 {
 			compatible = "jedec,spi-nor";
 			reg = <0>;
 			spi-max-frequency = <50000000>;
-			bootph-all;
 		};
 	};
 
@@ -262,20 +179,13 @@
 	};
 
 	/*
-	 * T41 has a single DWC2 USB OTG at 0xb3500000 (XBurst2 layout shared
-	 * with T40 / A1). NOR-boot DT runs the port as a USB host so the
-	 * board can enumerate ASIX-style USB ethernet without DFU.
+	 * T41 has a single DWC2 USB OTG at 0xb3500000 (A1 has three).
 	 */
 	otg0: usb@b3500000 {
 		compatible = "snps,dwc2";
 		reg = <0xb3500000 0x40000>;
 		clocks = <&cgu T41_CLK_OTG0>;
-		dr_mode = "host";
-		/* Same CONIDSTS=1 quirk as T40: the OTG port enumerates as a
-		 * B-device even on A-receptacle wiring, so the dwc2 host
-		 * driver never powers the port. hnp-srp-disable forces
-		 * GUSBCFG.FORCEHOSTMODE, bypassing the ID-pin check. */
-		hnp-srp-disable;
+		dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
 		status = "okay";
 	};
 };

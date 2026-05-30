@@ -2,23 +2,15 @@
 /*
  * Ingenic T41 PLL and clock setup (SPL)
  *
- * T40 (XBurst2) has four PLLs: APLL (CPU), MPLL (DDR/peripheral),
- * EPLL, and VPLL. CPM_CPCCR selects clock sources and the core
- * dividers.
- *
- * Default T40: APLL 1404 MHz / MPLL 1000 MHz (DDR 500). PLL encoding
- * matches A1: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8).
- *
- * TODO: this is a faithful transliteration of the vendor SPL clk path
- * boiled down to the bring-up minimum. Real-silicon validation will
- * surface deltas (the vendor SPL has a switch-table indexed by EFUSE
- * subsoctype to pick the variant clock plan); for now T40-DDR2-500 is
- * the only target.
+ * T41 (XBurst2) has four PLLs: APLL (CPU), MPLL (DDR/peripheral),
+ * EPLL and VPLL. CPM_CPCCR selects the clock sources and the core
+ * dividers. PLL encoding matches A1: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8).
+ * The per-SKU APLL/MPLL/VPLL setpoints come from the DDR variant struct,
+ * read here after fdtdec_setup() (see the helper below).
  */
 
 #include <hang.h>
 #include <asm/io.h>
-#include <linux/delay.h>
 #include <mach/t41.h>
 
 /*

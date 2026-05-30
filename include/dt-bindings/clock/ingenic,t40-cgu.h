@@ -5,8 +5,8 @@
  * Ordered as: external clocks, PLLs, then peripheral leaf clocks.
  */
 
-#ifndef __DT_BINDINGS_CLOCK_A1_CGU_H__
-#define __DT_BINDINGS_CLOCK_A1_CGU_H__
+#ifndef __DT_BINDINGS_CLOCK_T40_CGU_H__
+#define __DT_BINDINGS_CLOCK_T40_CGU_H__
 
 #define T40_CLK_EXCLK		0
 #define T40_CLK_RTCLK		1
@@ -33,4 +33,4 @@
 #define T40_CLK_OTG1		22
 #define T40_CLK_OTG2		23
 
-#endif /* __DT_BINDINGS_CLOCK_A1_CGU_H__ */
+#endif /* __DT_BINDINGS_CLOCK_T40_CGU_H__ */

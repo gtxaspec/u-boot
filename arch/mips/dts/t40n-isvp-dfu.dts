@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+#include "t40-isvp-dfu.dtsi"
+
+/* T40N (T40NN): DDR2, 128 MiB. DFU loader, SFC-NOR target. */
+&ddr {
+	ingenic,variant = "t40n";
+};
+
+&sfc {
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};

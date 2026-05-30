@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T40 SFC-NOR boot-media fragment: the SPI-NOR flash node
+ * on the SFC controller. Included by NOR-boot leaf .dts files.
+ */
+
+&sfc {
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+		bootph-all;
+	};
+};

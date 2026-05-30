@@ -111,6 +111,40 @@
 		bootph-all;
 	};
 
+	/*
+	 * AIC (audio interface controller) + on-chip codec. PIO/DMA playback
+	 * driven by U-Boot's `sound` command, handled by the self-contained
+	 * drivers/sound/a1_audio.c (the A1 codec is its own register block at
+	 * 0xb0022000, distinct from T41's; the AIC is T41-like). Addresses
+	 * confirmed against the A1-1.7.0 kernel soc/base.h.
+	 */
+	aic: audio-controller@b0020000 {
+		compatible = "ingenic,a1-aic";
+		reg = <0xb0020000 0x100>;
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	codec: audio-codec@b0022000 {
+		compatible = "ingenic,a1-codec";
+		reg = <0xb0022000 0x140>;
+		#sound-dai-cells = <0>;
+		status = "okay";
+	};
+
+	sound: sound {
+		compatible = "ingenic,a1-sound";
+		status = "okay";
+
+		cpu {
+			sound-dai = <&aic>;
+		};
+
+		codec {
+			sound-dai = <&codec>;
+		};
+	};
+
 	sfc: spi@b3440000 {
 		compatible = "ingenic,a1-sfc";
 		reg = <0xb3440000 0x10000>;

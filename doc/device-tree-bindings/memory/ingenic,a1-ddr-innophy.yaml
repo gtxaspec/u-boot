@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/ingenic,a1-ddr-innophy.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Ingenic A1 DDR controller + Innophy DDR PHY
+
+maintainers:
+  - Alfonso Gamboa <gtxent@gmail.com>
+
+description: |
+  The Ingenic A1 XBurst2 SoC family integrates an Ingenic-internal
+  DDR controller paired with the on-die Innophy DDR PHY - the same
+  controller IP used by the T40 and T41 (see
+  ingenic,t40-ddr-innophy.yaml and ingenic,t41-ddr-innophy.yaml). On
+  the A1 the attached parts are all DDR3; the per-chip controller /
+  PHY / mode-register values come from the vendor
+  `tools/ingenic-tools/ddr_creator_chip/ddr_params_creator` host tool
+  for each (SoC variant, chip, frequency, bus-width) tuple.
+
+  The A1 ships in distinct factory SKUs that differ in attached chip,
+  density and drive/ODT trim: A1N (W632GU6NG, 256 MiB), A1NT
+  (M15T1G1664A, 256 MiB), A1X (W632GU6NG, 512 MiB) and A1L
+  (W631GU6NG, 128 MiB), all DDR3. A1A reuses the A1X register table
+  (no distinct A1A silicon yet). The SKU is selected by the
+  `ingenic,variant` property; the driver looks up the matching register
+  table at probe.
+
+  The controller MMIO base lives at 0xb34f0000. The Innophy PHY
+  (offset -0x4df000) and the DDRC APB peripheral region
+  (offset -0x4de000) are addressed at fixed offsets relative to the
+  controller base.
+
+properties:
+  compatible:
+    const: ingenic,a1-ddr-innophy
+
+  reg:
+    maxItems: 1
+    description: |
+      Base address and span covering the controller MMIO + PHY +
+      APB peripheral regions. Typical value is
+      <0xb34f0000 0x3000>.
+
+  ingenic,variant:
+    $ref: /schemas/types.yaml#/definitions/string
+    description: |
+      Selects the per-SKU controller / PHY / mode-register table. Must
+      match the silicon-shipped product code (case-sensitive,
+      lowercase). a1a is an alias of a1x.
+    enum:
+      - a1n
+      - a1nt
+      - a1x
+      - a1a
+      - a1l
+
+required:
+  - compatible
+  - reg
+  - ingenic,variant
+
+additionalProperties: false
+
+examples:
+  - |
+    memory-controller@b34f0000 {
+            compatible = "ingenic,a1-ddr-innophy";
+            reg = <0xb34f0000 0x3000>;
+            ingenic,variant = "a1n";
+            bootph-all;
+    };

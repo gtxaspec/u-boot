@@ -45,12 +45,14 @@
 		reg = <0xb0010000 0x8000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		bootph-all;
 
 		gpa: gpio@0 {
 			compatible = "ingenic,t41-gpio";
 			reg = <0>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			bootph-all;
 		};
 
 		gpb: gpio@1 {
@@ -58,6 +60,7 @@
 			reg = <1>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			bootph-all;
 		};
 
 		gpc: gpio@2 {
@@ -65,6 +68,7 @@
 			reg = <2>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			bootph-all;
 		};
 
 		gpd: gpio@3 {
@@ -72,6 +76,7 @@
 			reg = <3>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			bootph-all;
 		};
 
 		gpe: gpio@4 {
@@ -79,11 +84,13 @@
 			reg = <4>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			bootph-all;
 		};
 
 		pins_uart1: uart1 {
 			function = "uart1";
 			groups = "uart1-data";
+			bootph-all;
 		};
 
 		pins_sfc: sfc {
@@ -104,6 +111,7 @@
 		clock-frequency = <24000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_uart1>;
+		bootph-all;
 		status = "okay";
 	};
 

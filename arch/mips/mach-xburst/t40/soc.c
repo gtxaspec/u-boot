@@ -117,13 +117,6 @@ void board_init_f(ulong dummy)
 	t40_spl_sfc_clk_init();
 
 #ifdef CONFIG_SPL_T40_USB_BOOT
-#ifdef CONFIG_SPL_T40_NAND_PROBE
-	{
-		extern void sfc_nand_probe_dump(void);
-		printf("T40 SPL: probing SPI-NAND...\n");
-		sfc_nand_probe_dump();
-	}
-#endif
 	/* USB-boot dev path: return to mask ROM. The bootrom uploads
 	 * U-Boot proper to 0x80100000 and jumps to it. */
 	return;

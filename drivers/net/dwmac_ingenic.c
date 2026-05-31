@@ -95,6 +95,7 @@
 struct dwmac_ingenic_data {
 	u32 mpll_hz;		/* MACCDR parent (MPLL) rate for this SoC */
 	bool inner_phy;		/* T21 embedded ePHY (no ext PHY/reset) */
+	bool t40_pll;		/* T40 CPMPCR layout (vs T41/A1) for the runtime read */
 };
 
 struct dwmac_ingenic_plat {
@@ -131,27 +132,46 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 }
 
 /*
- * Read live MPLL rate from CPM_CPMPCR. T31/T40/T41 all use the same
- * bit positions for the integer PLL params (vendor pll_get_rate):
- *   PLLM at bit 20 (9 bits), PLLN at bit 14 (6 bits),
- *   PLLOD0 at bit 11 (3 bits), PLLOD1 at bit 7 (4 bits).
- * Frequency = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
- * Reading at runtime avoids per-SoC tables when MPLL varies (T40 1000,
- * T41 1400) under the same DT compatible.
+ * Read live MPLL rate from CPM_CPMPCR. The XBurst2 PLL register has two
+ * INCOMPATIBLE layouts - the integer params live in different bit fields
+ * and combine with different formulas:
+ *
+ *  - T41 / A1: PLLM@20(9b), PLLN@14(6b), PLLOD0@11(3b), PLLOD1@7(4b);
+ *    rate = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
+ *    (T41NQ M=0x15d,N=2,OD0=1,OD1=1 -> 24M*350*2/(3*2*2) = 1400 MHz.)
+ *
+ *  - T40: PLLM@20(9b), PLLN@14(6b), PLLOD1@11(3b), PLLOD0@8(3b);
+ *    rate = EXTAL * M / (N * OD1 * OD0)  - raw dividers, no +1, no 2x.
+ *    (T40N M=125,N=1,OD1=3,OD0=1 -> 24M*125/(1*3*1) = 1000 MHz;
+ *     T40XP M=100,N=1,OD1=2,OD0=1 -> 1200 MHz.)
+ *
+ * Running the T40 register through the T41 formula yields 126 MHz, which
+ * mis-sizes the MACCDR divider so the RMII reference clock comes out ~10x
+ * too fast and the PHY never completes auto-negotiation. Pick the layout
+ * per SoC. Reading at runtime (vs a static mpll_hz) lets the many SKUs
+ * that share one DT compatible (T40N 1000 / T40XP 1200 / T40A 1400; the
+ * T41 matrix 1400/1500/...) all resolve their own MPLL.
  */
-static unsigned long read_mpll_hz(void __iomem *cpm)
+static unsigned long read_mpll_hz(void __iomem *cpm, bool t40_pll)
 {
 	u32 cpmpcr = readl(cpm + T31_CPM_CPMPCR);
 	unsigned int m = (cpmpcr >> 20) & 0x1ff;
 	unsigned int n = (cpmpcr >> 14) & 0x3f;
-	unsigned int od0 = (cpmpcr >> 11) & 0x7;
-	unsigned int od1 = (cpmpcr >> 7) & 0xf;
-	u64 vco;
 
-	/* EXTAL * (M+1) * 2 can exceed 2^32 (e.g. T41NQ 24M*350*2 = 16.8G);
-	 * compute in u64 then divide back into 32-bit range. */
-	vco = (u64)EXTAL_HZ * (m + 1) * 2;
-	return (unsigned long)(vco / ((n + 1) * (1u << od0) * (od1 + 1)));
+	if (t40_pll) {
+		unsigned int od1 = (cpmpcr >> 11) & 0x7;
+		unsigned int od0 = (cpmpcr >> 8) & 0x7;
+
+		return (unsigned long)((u64)EXTAL_HZ * m / (n * od1 * od0));
+	} else {
+		unsigned int od0 = (cpmpcr >> 11) & 0x7;
+		unsigned int od1 = (cpmpcr >> 7) & 0xf;
+		/* EXTAL*(M+1)*2 can exceed 2^32 (T41NQ 24M*350*2 = 16.8G);
+		 * compute in u64 then divide back into 32-bit range. */
+		u64 vco = (u64)EXTAL_HZ * (m + 1) * 2;
+
+		return (unsigned long)(vco / ((n + 1) * (1u << od0) * (od1 + 1)));
+	}
 }
 
 static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
@@ -175,7 +195,7 @@ static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 	 */
 	mpll_hz = pdata->socdata->mpll_hz;
 	if (!mpll_hz)
-		mpll_hz = read_mpll_hz(cpm);
+		mpll_hz = read_mpll_hz(cpm, pdata->socdata->t40_pll);
 	div = (mpll_hz / pdata->macphy_rate) - 1;
 	v = readl(cpm + T31_CPM_MACCDR);
 	v &= ~((3u << 30) | (3u << MACCDR_STOP_SHIFT) | MACCDR_DIV_MASK);
@@ -425,14 +445,20 @@ static const struct dwmac_ingenic_data t21_gmac_data = {
 static const struct dwmac_ingenic_data t40_gmac_data = {
 	.mpll_hz = 0,			/* read MPLL from CPM at runtime */
 	.inner_phy = false,		/* external RMII PHY */
+	.t40_pll = true,		/* T40 CPMPCR layout */
+};
+
+static const struct dwmac_ingenic_data t41_gmac_data = {
+	.mpll_hz = 0,			/* read MPLL from CPM at runtime */
+	.inner_phy = false,		/* external RMII PHY */
+	.t40_pll = false,		/* T41/A1 CPMPCR layout */
 };
 
 static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
 	{ .compatible = "ingenic,t40-gmac", .data = (ulong)&t40_gmac_data },
-	/* T41 reuses the T40 data: MPLL is read from CPM at runtime. */
-	{ .compatible = "ingenic,t41-gmac", .data = (ulong)&t40_gmac_data },
+	{ .compatible = "ingenic,t41-gmac", .data = (ulong)&t41_gmac_data },
 	{ }
 };
 

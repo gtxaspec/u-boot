@@ -597,14 +597,21 @@ const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp = {
 	.chip0_size	= 0x10000000,
 	.chip1_size	= 0,
 	.mpll_hz	= 1200000000u,
-	.ddr_hz		= 600000000u,
+	.ddr_hz		= 600000000u,	/* this board is clean at 600M; DQ20 is marginal at the vendor's generic 700M */
 	.apll_mnod	= ((84 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
-	.mpll_mnod	= ((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),
+	.mpll_mnod	= ((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8)),	/* 24*100/1/2 = 1200 MHz */
 	.ddrc_cfg	= 0x2a002a35,
 	.ddrc_ctrl	= 0x0000b092,
 	.ddrc_dlmr	= 0x00000002,	/* DDR3-specific */
 	.ddrc_mmap0	= 0x000020f0,
 	.ddrc_mmap1	= 0x00003000,
+	/*
+	 * The DDRC timing words, MR0 write-recovery, and refresh count below
+	 * are tied to ddr_hz (600 MHz): they are the vendor ddr_params_creator
+	 * output for this chip at this clock (cycle counts derived from the
+	 * JEDEC ns timings / tCK). They are NOT recomputed from ddr_hz - retune
+	 * the DDR clock and you MUST regenerate these or they silently mismatch.
+	 */
 	.ddrc_refcnt	= 0x62910083,
 	.ddrc_timing	= { 0x07110a08, 0x0809050b, 0x03090409, 0x1c201705, 0x80057054 },
 	.ddrc_autosr_cnt= 0x21001249,

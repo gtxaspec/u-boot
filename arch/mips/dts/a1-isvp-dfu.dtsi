@@ -98,7 +98,6 @@
 		pins_sfc: sfc {
 			function = "sfc";
 			groups = "sfc-data";
-			bootph-all;
 		};
 
 		pins_mac0: mac0 {
@@ -128,13 +127,11 @@
 		pinctrl-0 = <&pins_sfc>;
 		spi-max-frequency = <50000000>;
 		status = "okay";
-		bootph-all;
 
 		flash@0 {
 			compatible = "jedec,spi-nor";
 			reg = <0>;
 			spi-max-frequency = <50000000>;
-			bootph-all;
 		};
 	};
 

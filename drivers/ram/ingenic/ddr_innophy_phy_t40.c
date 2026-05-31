@@ -53,9 +53,19 @@
 #define DDRP_T40_PLL_FBDIV	(DDR_PHY_OFFSET + 0x80)
 #define DDRP_T40_PLL_CTRL	(DDR_PHY_OFFSET + 0x84)
 #define DDRP_T40_PLL_PDIV	(DDR_PHY_OFFSET + 0x88)
-#define DDRP_T40_PLL_LOCK	(DDR_PHY_OFFSET + 0xc8)
-#define DDRP_T40_CALIB_DONE	(DDR_PHY_OFFSET + 0xcc)
-#define DDRP_T40_INIT_COMP	(DDR_PHY_OFFSET + 0xd0)
+/*
+ * Innophy status registers. These were WRONG (shifted -0x40): the port had
+ * PLL_LOCK/CALIB_DONE/INIT_COMP at 0xc8/0xcc/0xd0, but the vendor
+ * (arch/mips/cpu/xburst2/ddr_innophy.c, asm/ddr_innophy.h) has them at
+ * 0x108/0x10c/0x110. 0xc8 is in the calibration-result region, not the PLL
+ * lock word, so the lock poll was reading the wrong register and we
+ * proceeded before the PHY PLL had actually locked -> DQS gating trained
+ * against an unsettled clock -> intermittent cold-boot aliasing.
+ */
+#define DDRP_T40_PLL_LOCK	(DDR_PHY_OFFSET + 0x108)
+#define DDRP_T40_CALIB_DONE	(DDR_PHY_OFFSET + 0x10c)
+#define DDRP_T40_INIT_COMP	(DDR_PHY_OFFSET + 0x110)
+
 
 /* PHY raw register at byte offset off-from-DDRC_BASE. */
 static inline u32 phy_readl(struct ingenic_ddr_priv *p, u32 off)
@@ -118,6 +128,45 @@ static void t40n_phy_driver_odt(struct ingenic_ddr_priv *p)
 }
 
 /*
+ * Vendor T40XP DDR3 drive-strength + ODT (ddr_phy_cfg_driver_odt T40XP
+ * branch; values from t40_ddr3_param). DDR3 drives CMD/CK/DQ much harder
+ * (0xf / 0x11 / 0x11) and uses lighter ODT (0x3) than the DDR2/T40N profile
+ * above (0x4 / 0x9 / 0x3, ODT 0x5). Applying the DDR2 profile to DDR3 leaves
+ * the DQ lines badly underdriven (0x3 vs 0x11): signal integrity is marginal
+ * and the DQS read lanes settle to a random phase on a fraction of cold
+ * boots (auto-gating lands at an aliased ~0x6a instead of ~0x16), which no
+ * gating sweep can recover. Driving DDR3 with its own profile aligns them.
+ */
+static void t40_ddr3_phy_driver_odt(struct ingenic_ddr_priv *p)
+{
+	const u32 drvcmd = 0xf, drvck = 0x11, odt = 0x3, drvdq = 0x11;
+
+	/* cmd / ck drive strength */
+	phy_set_range(p, 0xb0, 0, 5, drvcmd);
+	phy_set_range(p, 0xb1, 0, 5, drvcmd);
+	phy_set_range(p, 0xb2, 0, 5, drvck);
+	phy_set_range(p, 0xb3, 0, 5, drvck);
+	/* DQ ODT, channel A + B */
+	phy_set_range(p, 0xc0, 0, 5, odt);
+	phy_set_range(p, 0xc1, 0, 5, odt);
+	phy_set_range(p, 0xd0, 0, 5, odt);
+	phy_set_range(p, 0xd1, 0, 5, odt);
+	phy_set_range(p, 0xe0, 0, 5, odt);
+	phy_set_range(p, 0xe1, 0, 5, odt);
+	phy_set_range(p, 0xf0, 0, 5, odt);
+	phy_set_range(p, 0xf1, 0, 5, odt);
+	/* DQ driver strength, channel A + B */
+	phy_set_range(p, 0xc2, 0, 5, drvdq);
+	phy_set_range(p, 0xc3, 0, 5, drvdq);
+	phy_set_range(p, 0xd2, 0, 5, drvdq);
+	phy_set_range(p, 0xd3, 0, 5, drvdq);
+	phy_set_range(p, 0xe2, 0, 5, drvdq);
+	phy_set_range(p, 0xe3, 0, 5, drvdq);
+	phy_set_range(p, 0xf2, 0, 5, drvdq);
+	phy_set_range(p, 0xf3, 0, 5, drvdq);
+}
+
+/*
  * DDR2 baseline TX delay seed (vendor ddr_phy_init DDR2 branch). The
  * per-bit auto-calibration the PHY runs at training time starts from
  * these regs; without an explicit seed they come up with random values
@@ -158,6 +207,39 @@ static void t40_ddr2_baseline_seed(struct ingenic_ddr_priv *p)
 }
 
 /*
+ * Vendor T40XP DDR3 write-leveling TX-delay seed + per-bit de-skew enable
+ * (ddr_phy_init DDR3/T40XP branch). CMD and DQ TX delays start at 8 (vs the
+ * DDR2 seed's 5); DQS TX is left at its default, and PHY REG-02 bit 3 opens
+ * manual per-bit de-skew. Without this seed the DDR3 lanes intermittently
+ * come up unaligned on a cold boot - the per-lane DQS lands at wildly
+ * different phases (e.g. 0x16 vs 0x53 vs 0x6a) so no single per-channel
+ * gating delay can recover them and DRAM stays dead even after the gating
+ * sweep. Mirrors the DDR2 baseline seed but with the vendor's DDR3 values.
+ */
+static void t40_ddr3_baseline_seed(struct ingenic_ddr_priv *p)
+{
+	const u32 chA = 0x120, chB = 0x1a0;
+	int i;
+
+	/* cmd TX delay 0x100..0x11e */
+	for (i = 0; i <= 0x1e; i++)
+		phy_writel(p, 8, (0x100 + i) * 4);
+	/* DQ TX delay, low half [0..8] both channels */
+	for (i = 0; i <= 0x8; i++) {
+		phy_writel(p, 8, (chA + i) * 4);
+		phy_writel(p, 8, (chB + i) * 4);
+	}
+	/* DQ TX delay, high half [0xb..0x13] both channels */
+	for (i = 0xb; i <= 0x13; i++) {
+		phy_writel(p, 8, (chA + i) * 4);
+		phy_writel(p, 8, (chB + i) * 4);
+	}
+
+	/* PHY REG-02 bit 3 = "open manual per-bit de-skew" enable */
+	phy_writel(p, phy_readl(p, 0x02 * 4) | 0x8, 0x02 * 4);
+}
+
+/*
  * Vendor ddrp_pll_init: RMW writes (mask low byte, OR in value) to
  * preserve any upper bits the bootrom / EFUSE set. Order is fixed -
  * PHY_RST is asserted AGAIN inside this function AFTER DQ_WIDTH +
@@ -184,9 +266,14 @@ int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
 	val |= 0x0d;
 	phy_writel(p, val, DDRP_T40_PHY_RST);
 
-	t40n_phy_driver_odt(p);
+	if (v->type == INGENIC_DDR_TYPE_DDR3)
+		t40_ddr3_phy_driver_odt(p);
+	else
+		t40n_phy_driver_odt(p);
 
-	/* T40N DLL bypass values */
+	/* DLL bypass values - vendor order: cmd/ck DLL first, then byte DLLs */
+	phy_writel(p, 0xc, 0x15 * 4);	/* cmd dll */
+	phy_writel(p, 0x1, 0x16 * 4);	/* ck dll */
 	phy_writel(p, 0xc, 0x54 * 4);	/* byte0 dq dll */
 	phy_writel(p, 0xc, 0x64 * 4);	/* byte1 dq dll */
 	phy_writel(p, 0xc, 0x84 * 4);	/* byte2 dq dll */
@@ -195,11 +282,11 @@ int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
 	phy_writel(p, 0x1, 0x65 * 4);	/* byte1 dqs dll */
 	phy_writel(p, 0x1, 0x85 * 4);	/* byte2 dqs dll */
 	phy_writel(p, 0x1, 0x95 * 4);	/* byte3 dqs dll */
-	phy_writel(p, 0xc, 0x15 * 4);	/* cmd dll */
-	phy_writel(p, 0x1, 0x16 * 4);	/* ck dll */
 
 	if (v->type == INGENIC_DDR_TYPE_DDR2)
 		t40_ddr2_baseline_seed(p);
+	else if (v->type == INGENIC_DDR_TYPE_DDR3)
+		t40_ddr3_baseline_seed(p);
 
 	/*
 	 * PLL programming (RMW low byte) - vendor uses RMW writes to
@@ -241,14 +328,18 @@ int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
 	val = phy_readl(p, DDRP_T40_CL); val &= ~0xf; val |= (v->ddrp_cl & 0xf);
 	phy_writel(p, val, DDRP_T40_CL);
 
-	val = phy_readl(p, DDRP_T40_AL); val &= ~0xf;
+	val = phy_readl(p, DDRP_T40_AL); val &= ~0xf; val = 0x0;	/* vendor writes AL = 0 */
 	phy_writel(p, val, DDRP_T40_AL);
 
-	/* T40 PLL lock is bit 3 of PHY+0xc8 (NOT T41's +0x180). */
-	while (!(phy_readl(p, DDRP_T40_PLL_LOCK) & (1u << 3)))
-		;
+	/* Wait for the PHY PLL to lock - bit 3 of PLL_LOCK (@ +0x108). The
+	 * vendor bounds this with a ~1M-iteration timeout and falls through
+	 * rather than spinning forever. (vendor ddrp_pll_init ends here.) */
+	{
+		unsigned int timeout = 1000000;
 
-	phy_writel(p, 0x0, DDRP_T40_TRAINING_CTRL);
+		while (!(phy_readl(p, DDRP_T40_PLL_LOCK) & (1u << 3)) && --timeout)
+			;
+	}
 
 	return 0;
 }

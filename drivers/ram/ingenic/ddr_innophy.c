@@ -109,12 +109,14 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 			;
 	}
 
+	/* Vendor settles 50 us after dfi_init_complete before deasserting
+	 * dfi_reset_n (T40 ddrc_dfi_init does this; A1 too). */
+	if (v->family == INGENIC_DDR_FAMILY_T40
 #ifdef CONFIG_SOC_A1
-	/* A1 vendor settles 50 us after dfi_init_complete before deasserting
-	 * dfi_reset_n; T40/T41 go straight on. */
-	if (v->family == INGENIC_DDR_FAMILY_A1)
-		udelay(50);
+	    || v->family == INGENIC_DDR_FAMILY_A1
 #endif
+	   )
+		udelay(50);
 
 	ddr_writel(p, 0, DDRC_CTRL);			/* dfi_reset_n high */
 	udelay(5);
@@ -375,6 +377,17 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 		ret = ingenic_ddr_phy_hw_calibration(p);
 	if (ret)
 		return ret;
+
+	/*
+	 * NOTE: the vendor T40 path runs hardware DQS calibration only
+	 * (CONFIG_DDR_SOFT_TRAINING is #if 0). The software gating sweep was a
+	 * workaround for intermittent gate aliasing whose real cause was the
+	 * wrong PLL-lock register offset (fixed in ddr_innophy_phy_t40.c) - we
+	 * trained DQS before the PHY PLL had locked. With the lock poll
+	 * corrected the HW gate trains cleanly, and the manual sweep override
+	 * actually leaves a small data-margin error at 700 MHz, so drop it to
+	 * match the vendor's HW-cal-only path.
+	 */
 
 	ddrc_post_init(p);
 	ddrc_autosr_setup(p);

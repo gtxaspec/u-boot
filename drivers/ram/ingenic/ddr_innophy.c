@@ -299,17 +299,18 @@ static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
 #endif
 
 	/*
-	 * Source-mux select: T41's vendor cgu_clk_sel[DDR] sets MPLL at
-	 * bits 31:30 = 0b10; T40 vendor leaves the source bits alone and
-	 * relies on the bootrom-left value, so on the T40 family we skip
-	 * the source write and only re-program CE + divider.
+	 * Source-mux select: vendor cgu_clk_sel[DDR] = MPLL (bits 31:30 =
+	 * 0b10) on the whole XBurst2 family. The earlier assumption that T40
+	 * "leaves the source alone" was wrong: a reliable vendor T40N U-Boot
+	 * reads back DDRCDR = 0xa0000001 (source 2 = MPLL), while the bootrom
+	 * leaves source = 1 (a different mux). Skipping this write on T40 left
+	 * the DDR clocked from the wrong source - the cause of the intermittent
+	 * first-DRAM-write stall. Always program source = MPLL.
 	 */
-	if (v->family != INGENIC_DDR_FAMILY_T40) {
-		r = readl(ddrcdr);
-		r &= ~(3u << 30);
-		r |= (2u << 30);		/* source = MPLL */
-		writel(r, ddrcdr);
-	}
+	r = readl(ddrcdr);
+	r &= ~(3u << 30);
+	r |= (2u << 30);			/* source = MPLL */
+	writel(r, ddrcdr);
 
 	r = readl(ddrcdr);
 	r &= ~(0xf | (0x3fu << 24));

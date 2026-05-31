@@ -86,15 +86,4 @@ config SPL_T40_SFC_NAND_BOOT
 	  (isvp_t40xp_sfcnand_defconfig). The driver lives in
 	  arch/mips/mach-xburst/t40/sfc_nand.c.
 
-config SPL_T40_NAND_PROBE
-	bool "T40 SPL: probe SPI-NAND and print chip ID (USB-boot debug)"
-	depends on SPL && SPL_T40_USB_BOOT
-	help
-	  Diagnostic: link the SFC SPI-NAND probe into the USB-boot SPL
-	  and call sfc_nand_init() just before returning to mask ROM.
-	  Lets us validate the NAND read path on real silicon without
-	  having to commit a flash layout for U-Boot in NAND first. The
-	  SPL still returns to mask ROM after the probe, so U-Boot is
-	  uploaded over USB exactly as in the plain USB-boot defconfig.
-
 endif

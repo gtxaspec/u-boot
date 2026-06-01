@@ -273,6 +273,25 @@ static void boot_jump_linux(struct bootm_headers *images)
 	if (CONFIG_IS_ENABLED(RESTORE_EXCEPTION_VECTOR_BASE))
 		trap_restore();
 
+#if defined(CONFIG_SOC_T40) || defined(CONFIG_SOC_T41) || \
+	defined(CONFIG_SOC_A1)
+	/*
+	 * Reset CP0 EBASE to 0x80000000 before entering Linux. The kernel
+	 * computes ebase = CAC_BASE + (read_c0_ebase() & 0x3ffff000) from
+	 * whatever EBASE the bootloader left, but on XBurst2 (no veic/vint) it
+	 * never writes EBASE on the secondary core - so CPU1 keeps its reset
+	 * EBASE=0x80000000. If U-Boot leaves a relocated EBASE, CPU0's vectors
+	 * land at the offset base (works) while CPU1 vectors to 0x80000200
+	 * (unwritten) and dies. Leaving EBASE=0x80000000 makes both cores agree.
+	 */
+	{
+		register unsigned long v = 0x80000000;
+		__asm__ volatile(".set push\n\t.set mips32r2\n\t"
+				 "mtc0 %0, $15, 1\n\tehb\n\t.set pop\n\t"
+				 : : "r"(v));
+	}
+#endif
+
 	if (images->ft_len)
 		kernel(-2, (ulong)images->ft_addr, 0, 0);
 	else

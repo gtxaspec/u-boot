@@ -421,12 +421,33 @@ static int dwmac_ingenic_probe(struct udevice *dev)
 		if (ret)
 			return ret;
 	} else {
+		int i, v;
+
 		ret = t31_gmac_rmii_init(dev);
 		if (ret)
 			return ret;
 		ret = t31_gmac_setphy(dev);
 		if (ret)
 			return ret;
+
+		/*
+		 * MDIO soft-reset the external PHY (BMCR reg0 bit15, self-
+		 * clearing) so it starts auto-negotiation from a known state.
+		 * Boards without a wired PHY reset GPIO otherwise get an
+		 * intermittent RMII link - the PHY can come out of a prior
+		 * boot in a state where auto-neg never completes ("Could not
+		 * initialize PHY ... TIMEOUT"). PHY is at MDIO addr 0 (DT
+		 * ethernet-phy@0). MDIO works here: macphy clk + MAC domain
+		 * are up from t31_gmac_rmii_init.
+		 */
+		t21_mdio_write(pdata->mac_base, 0, 0x00, 0x8000);
+		for (i = 0; i < 1000; i++) {
+			v = t21_mdio_read(pdata->mac_base, 0, 0x00);
+			if (v < 0 || !(v & 0x8000))
+				break;
+			udelay(1000);
+		}
+		mdelay(10);
 	}
 
 	return designware_eth_probe(dev);

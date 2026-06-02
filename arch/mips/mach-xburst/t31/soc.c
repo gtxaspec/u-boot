@@ -2,14 +2,22 @@
 /*
  * Ingenic T31 SoC SPL bring-up
  *
- * The SPL runs from ~32 KB of on-chip SRAM with no driver model. It
- * brings up a minimal console, configures the PLLs, inits DDR and then
- * loads U-Boot proper into DRAM. Full U-Boot uses driver model.
+ * The SPL runs from on-chip SRAM (TCSM, measured >=128 KB via the
+ * bootrom dense read/write probe). It brings up a minimal console,
+ * configures the PLLs and inits DDR (hand-rolled XBurst1 sdram_init),
+ * then brings driver model up and hands U-Boot loading to the standard
+ * SPL_SPI framework: board_init_r() reads U-Boot proper from SPI-NOR
+ * via the DM SFC driver, LZMA-decompresses it and jumps. Full U-Boot
+ * uses driver model.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <config.h>
+#include <dm.h>
+#include <hang.h>
+#include <init.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
 #include <linux/string.h>
@@ -22,7 +30,7 @@ void clk_ungate_uart(unsigned int idx);
 void t31_spl_serial_init(void);
 void t31_spl_puts(const char *s);
 void t31_spl_putc(char c);
-void t31_spl_load_uboot(void);
+void t31_spl_sfc_clk_init(void);
 void __weak sdram_init(void) { }
 
 #ifdef CONFIG_XPL_BUILD
@@ -82,15 +90,21 @@ static int dram_verify(void)
 	}
 	return 0;
 }
-#endif
 
-#ifdef CONFIG_XPL_BUILD
 gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
+	char *p;
+
+	/*
+	 * Zero BSS - start.S jumps straight here without clearing it.
+	 * DM-in-SPL needs a clean gd / BSS before spl_init() brings
+	 * driver model up.
+	 */
+	for (p = __bss_start; p < __bss_end; p++)
+		*p = 0;
 	gd = &gdata;
-	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
 
 	/*
 	 * The mask ROM leaves a usable EXTAL-based clock, so the console
@@ -110,21 +124,42 @@ void board_init_f(ulong dummy)
 
 #ifdef CONFIG_SPL_T31_USB_BOOT
 	/*
-	 * USB-boot stage1: clocks and DDR are up. Return to the mask ROM
-	 * (start.S enters with a plain branch, so $ra still holds the
-	 * bootrom's return address and this function's epilogue jr's back
-	 * into the bootrom USB loop). The host then uploads U-Boot proper
-	 * straight into DRAM and issues VR_PROGRAM_START2 - no NOR write.
+	 * USB-boot stage1: clocks and DDR are up. Set up the SFC clock so
+	 * U-Boot proper (uploaded to DRAM by the mask ROM) can probe NOR,
+	 * then return into the mask ROM USB loop (start.S kept the bootrom
+	 * sp, so a plain jr ra resumes it).
 	 */
+	t31_spl_sfc_clk_init();
 	t31_spl_puts("T31 SPL: DDR up; returning to mask ROM (USB boot)\n");
 	return;
 #else
-	/* Load U-Boot proper from SPI-NOR into DRAM and jump (no return). */
-	t31_spl_puts("T31 SPL: loading U-Boot...\n");
-	t31_spl_load_uboot();
-	/* no return */
-	for (;;)
-		;
+	/*
+	 * NOR cold-boot: bring driver model up, then hand off to the
+	 * standard SPL framework board_init_r(), which loads
+	 * u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS via the SPI
+	 * flash uclass (spl_boot_device() == BOOT_DEVICE_SPI),
+	 * LZMA-decompresses it and jumps. Does not return.
+	 */
+	/*
+	 * DDR is up, so hand off to the standard SPL framework
+	 * board_init_r(). It sets up the DRAM malloc heap, brings driver
+	 * model up (spl_init) and loads u-boot-lzma.img from
+	 * CONFIG_SYS_SPI_U_BOOT_OFFS via the DM SFC driver
+	 * (spl_boot_device() == BOOT_DEVICE_SPI), LZMA-decompresses it and
+	 * jumps. Driver model is deferred to board_init_r (not called here)
+	 * so the DM scan / autoprobe runs against the full DRAM malloc, not
+	 * the tiny SPL-f heap - T31 needs no DM in board_init_f because DDR
+	 * is hand-rolled.
+	 */
+	t31_spl_sfc_clk_init();
+	t31_spl_puts("T31 SPL: handing off to board_init_r (SPL_SPI NOR)\n");
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
+}
+
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */

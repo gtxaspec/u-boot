@@ -5,5 +5,5 @@
 
 /* T40XP: DDR3 M15T1G1664A_2C, 256 MiB, SFC-NAND. */
 &ddr {
-	ingenic,variant = "t40xp";
+	compatible = "ingenic,t40xp-ddr-innophy";
 };

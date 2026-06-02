@@ -4,7 +4,7 @@
 
 /* T40N (T40NN): DDR2, 128 MiB. DFU loader, SFC-NOR target. */
 &ddr {
-	ingenic,variant = "t40n";
+	compatible = "ingenic,t40n-ddr-innophy";
 };
 
 &sfc {

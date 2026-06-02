@@ -28,8 +28,8 @@
  * VPLL (1200 MHz) and EPLL (1500 MHz) are SoC-fixed on every A1 SKU, so
  * they stay as constants rather than in the per-SKU variant table.
  */
-int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
-			      u32 *mpll_mnod, u32 *vpll_mnod);
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod,
+			      u32 *vpll_mnod);
 
 #define A1_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
 #define A1_EPLL_MNOD	((125 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
@@ -121,8 +121,7 @@ void pll_init(void)
 {
 	u32 apll, mpll, vpll;
 
-	if (ingenic_ddr_pll_setpoints("ingenic,a1-ddr-innophy",
-				      &apll, &mpll, &vpll))
+	if (ingenic_ddr_pll_setpoints(&apll, &mpll, &vpll))
 		hang();
 	(void)vpll;	/* A1 VPLL is SoC-fixed (A1_VPLL_MNOD), not per-SKU */
 

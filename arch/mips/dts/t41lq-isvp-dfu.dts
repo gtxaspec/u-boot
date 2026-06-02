@@ -4,5 +4,5 @@
 
 /* T41LQ: DDR2 M14D5121632A, 64 MiB. */
 &ddr {
-	ingenic,variant = "t41lq";
+	compatible = "ingenic,t41lq-ddr-innophy";
 };

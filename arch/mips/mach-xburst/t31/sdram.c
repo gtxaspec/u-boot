@@ -22,6 +22,10 @@
 #include <linux/delay.h>
 #include <mach/t31.h>
 #include <mach/t31-ddr.h>
+#if CONFIG_IS_ENABLED(RAM)
+#include <dm.h>
+#include <ram.h>
+#endif
 
 
 #define ddr_writel(v, reg)	writel((v), (void __iomem *)(DDRC_BASE + (reg)))
@@ -57,7 +61,9 @@ static void reset_dll(void)
  * cdr = (pll_rate / rate - 1) & 0xff = 1. From vendor
  * cgu_clk_sel[DDR] = {en, CPM_DDRCDR, sel_bit=30, MPLL, sel[],
  * ce=29, busy=28, stop=27}: change-enable is bit 29, the busy bit
- * to poll is bit 28 (bit 30 is the PLL-select bit and stays set).
+ * to poll is bit 28. The clock source is the 2-bit field at bits
+ * 31:30 - we program it to MPLL explicitly below, not trusting the
+ * bootrom (see the comment there).
  */
 static void ddr_clk_set_rate(void)
 {
@@ -77,6 +83,17 @@ static void ddr_clk_set_rate(void)
 
 	/* DDR path: clear divider (low 4 bits) and the 0x3f<<24 field */
 	regval &= ~(0xf | (0x3f << 24));
+	/*
+	 * Force the DDR clock source to MPLL. The source is the 2-bit field at
+	 * bits 31:30 (vendor cgu_clk_sel[DDR] sel = {0, APLL, MPLL, -1}, so
+	 * MPLL = 2; get_ddr_rate() decodes case 2 = MPLL). The vendor programs
+	 * this explicitly - trusting the bootrom to have left it on MPLL is
+	 * unsafe: if it is left on APLL (1392 MHz) the cdr=1 divider yields
+	 * 696 MHz, overclocking the 600 MHz DDR2 and randomly corrupting memory
+	 * (intermittent LZMA-decompress failures, wandering kernel crashes).
+	 */
+	regval &= ~(0x3 << 30);
+	regval |= (0x2 << 30);
 	regval |= ((1 << 29) | cdr);		/* ce = bit 29 */
 	cpm_writel(regval, CPM_DDRCDR);
 	while (cpm_readl(CPM_DDRCDR) & (1 << 28))	/* busy = bit 28 */
@@ -330,3 +347,49 @@ void sdram_init(void)
 	ddr_writel(ddr_readl(DDRC_STATUS) & ~DDRC_DSTATUS_MISS, DDRC_STATUS);
 	ddr_writel(0, DDRC_DLP);
 }
+
+#if CONFIG_IS_ENABLED(RAM)
+/*
+ * UCLASS_RAM wrapper, so DDR comes up via driver model off the DT like
+ * the XBurst2 ddr_innophy driver. The SPL probe runs the actual
+ * sdram_init() bring-up exactly once per cold boot; the U-Boot-proper
+ * probe is a no-op (DRAM is already alive) and only ram_get_info()
+ * reports the size to dram_init().
+ */
+#if defined(CONFIG_T31_DRAM_128M)
+#define T31_RAM_SIZE	0x08000000u	/* 128 MB */
+#else
+#define T31_RAM_SIZE	0x04000000u	/* 64 MB */
+#endif
+
+static int t31_ddr_probe(struct udevice *dev)
+{
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
+		sdram_init();
+	return 0;
+}
+
+static int t31_ddr_get_info(struct udevice *dev, struct ram_info *info)
+{
+	info->base = 0x80000000;
+	info->size = T31_RAM_SIZE;
+	return 0;
+}
+
+static struct ram_ops t31_ddr_ops = {
+	.get_info = t31_ddr_get_info,
+};
+
+static const struct udevice_id t31_ddr_ids[] = {
+	{ .compatible = "ingenic,t31-ddr" },
+	{ }
+};
+
+U_BOOT_DRIVER(t31_ddr) = {
+	.name		= "t31_ddr",
+	.id		= UCLASS_RAM,
+	.of_match	= t31_ddr_ids,
+	.probe		= t31_ddr_probe,
+	.ops		= &t31_ddr_ops,
+};
+#endif /* RAM */

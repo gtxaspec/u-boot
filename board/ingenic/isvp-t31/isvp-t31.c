@@ -6,6 +6,8 @@
  */
 
 #include <init.h>
+#include <dm.h>
+#include <ram.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -196,9 +198,20 @@ void otg_phy_init(struct dwc2_udc *dev)
 
 int dram_init(void)
 {
-	/* T31X/T31AL 128 MB M14D1G1664A; T31N/L/LC/C100 64 MB */
-	gd->ram_size = IS_ENABLED(CONFIG_T31_DRAM_128M) ?
-		       (128 << 20) : (64 << 20);
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 

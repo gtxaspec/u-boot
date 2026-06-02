@@ -5,5 +5,5 @@
 
 /* T40N (lab silkscreen T40NN): DDR2 M14D5121632A, 128 MiB, SFC-NOR. */
 &ddr {
-	ingenic,variant = "t40n";
+	compatible = "ingenic,t40n-ddr-innophy";
 };

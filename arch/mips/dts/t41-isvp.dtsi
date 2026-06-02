@@ -34,9 +34,8 @@
 	 * hardware DQS calibration enabled.
 	 */
 	ddr: memory-controller@b34f0000 {
-		compatible = "ingenic,t41-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
-		/* ingenic,variant is set by the per-SKU leaf .dts. */
+		/* compatible is set by the per-SKU leaf .dts. */
 		bootph-all;
 	};
 

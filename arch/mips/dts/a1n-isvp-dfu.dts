@@ -4,5 +4,5 @@
 
 /* A1N: DDR3 W632GU6NG, 256 MiB. DFU loader, SFC-NOR target. */
 &ddr {
-	ingenic,variant = "a1n";
+	compatible = "ingenic,a1n-ddr-innophy";
 };

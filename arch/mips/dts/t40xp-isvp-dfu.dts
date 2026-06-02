@@ -4,7 +4,7 @@
 
 /* T40XP: DDR3, 256 MiB. DFU loader, SFC-NAND target. */
 &ddr {
-	ingenic,variant = "t40xp";
+	compatible = "ingenic,t40xp-ddr-innophy";
 };
 
 /* NAND SPL (mach-xburst/t40/sfc_nand.c) reads the flash in SPL, so the

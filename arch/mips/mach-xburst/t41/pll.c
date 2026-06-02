@@ -20,8 +20,8 @@
  * uses. board_init_f() calls fdtdec_setup() before pll_init() so the
  * FDT blob is available here, before driver model is up.
  */
-int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
-			      u32 *mpll_mnod, u32 *vpll_mnod);
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod,
+			      u32 *vpll_mnod);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -90,8 +90,7 @@ void pll_init(void)
 {
 	u32 apll, mpll, vpll;
 
-	if (ingenic_ddr_pll_setpoints("ingenic,t41-ddr-innophy",
-				      &apll, &mpll, &vpll))
+	if (ingenic_ddr_pll_setpoints(&apll, &mpll, &vpll))
 		hang();
 
 	cpm_writel((cpm_readl(CPM_CPCCR) & ~(0xff << 24)) | (0x55 << 24),

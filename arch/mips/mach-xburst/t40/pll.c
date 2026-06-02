@@ -28,8 +28,8 @@
  * FDT blob is available here, before driver model is up. (The T40 PLL
  * plan uses only APLL + MPLL; VPLL is unused.)
  */
-int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
-			      u32 *mpll_mnod, u32 *vpll_mnod);
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod,
+			      u32 *vpll_mnod);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -99,8 +99,7 @@ void pll_init(void)
 {
 	u32 apll, mpll, vpll;
 
-	if (ingenic_ddr_pll_setpoints("ingenic,t40-ddr-innophy",
-				      &apll, &mpll, &vpll))
+	if (ingenic_ddr_pll_setpoints(&apll, &mpll, &vpll))
 		hang();
 	(void)vpll;	/* T40 PLL plan: APLL + MPLL only */
 

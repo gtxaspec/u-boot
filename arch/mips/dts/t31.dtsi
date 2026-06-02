@@ -54,8 +54,14 @@
 		u-boot,dm-pre-reloc;
 	};
 
+	/*
+	 * DDR2/DDR3 controller + Innophy PHY. The per-SKU compatible
+	 * (ingenic,t31<sku>-ddr-innophy) is set by the leaf .dts and
+	 * selects the variant table in drivers/ram/ingenic/ddr_t31.c
+	 * (of_match .data). bootph-all is added by the leaf's shared
+	 * U-Boot overlay so the node survives into the SPL devicetree.
+	 */
 	ddr: memory-controller@134f0000 {
-		compatible = "ingenic,t31-ddr";
 		reg = <0x134f0000 0x1000>;
 	};
 

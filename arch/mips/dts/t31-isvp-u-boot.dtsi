@@ -10,8 +10,8 @@
  *                              header (CRC7 + image length), bootable
  *                              standalone (equiv. to tools/mkt31spl.c).
  *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
- *                              at 0x8000 (the SPL loader's
- *                              T31_UBOOT_OFFSET in t31/sfc.c), trimmed
+ *                              at 0x14000 (CONFIG_SYS_SPI_U_BOOT_OFFS,
+ *                              read by SPL_SPI_LOAD), trimmed
  *                              (no 0xff padding) - flash at offset 0;
  *                              erased flash already reads 0xff.
  */
@@ -37,8 +37,8 @@
 
 	/*
 	 * Combined SFC-NOR flash image: headered SPL at offset 0, LZMA
-	 * U-Boot at 0x8000 (SPL ~17 KB / MAX_SIZE 0x5800; 32 KB clears
-	 * it with margin - no 0x10000 gap). Trimmed to the end of the
+	 * U-Boot at 0x14000 = CONFIG_SYS_SPI_U_BOOT_OFFS (DM SPL ~48 KB /
+	 * MAX_SIZE 0x13000; 0x14000 clears it with margin). Trimmed to the end of the
 	 * last entry; erased flash reads 0xff so the rest of the chip
 	 * is fine to leave alone after flashing at offset 0.
 	 */
@@ -54,8 +54,32 @@
 
 		u-boot {
 			type = "blob";
-			offset = <0x8000>;
+			offset = <0x14000>;
 			filename = "u-boot-lzma.img";
 		};
+	};
+};
+
+/*
+ * Tag the nodes the SPL needs - fixed clocks, CGU, pinctrl + gpio banks,
+ * the SFC pin group, the console UART and the SFC + its flash - for all
+ * boot phases, so fdtgrep keeps only these in the SPL device tree.
+ * Without this the SPL DT pulls in every node and dm_autoprobe()
+ * exhausts the early SPL malloc (spl_init() -> -ENOMEM).
+ */
+&exclk { bootph-all; };
+&rtclk { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&pins_sfc { bootph-all; };
+&uart1 { bootph-all; };
+&sfc {
+	bootph-all;
+	flash@0 {
+		bootph-all;
 	};
 };

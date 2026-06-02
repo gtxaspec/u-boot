@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T31A DFU/USB-boot loader (DDR3 128 MB, CPU 1512 MHz).
+ */
+
+/dts-v1/;
+
+#include "t31-isvp-dfu.dtsi"
+
+&ddr {
+	compatible = "ingenic,t31a-ddr-innophy";
+};

@@ -274,15 +274,18 @@ static void boot_jump_linux(struct bootm_headers *images)
 		trap_restore();
 
 #if defined(CONFIG_SOC_T40) || defined(CONFIG_SOC_T41) || \
-	defined(CONFIG_SOC_A1)
+	defined(CONFIG_SOC_A1) || defined(CONFIG_SOC_T31)
 	/*
-	 * Reset CP0 EBASE to 0x80000000 before entering Linux. The kernel
-	 * computes ebase = CAC_BASE + (read_c0_ebase() & 0x3ffff000) from
-	 * whatever EBASE the bootloader left, but on XBurst2 (no veic/vint) it
-	 * never writes EBASE on the secondary core - so CPU1 keeps its reset
-	 * EBASE=0x80000000. If U-Boot leaves a relocated EBASE, CPU0's vectors
-	 * land at the offset base (works) while CPU1 vectors to 0x80000200
-	 * (unwritten) and dies. Leaving EBASE=0x80000000 makes both cores agree.
+	 * Reset CP0 EBASE to 0x80000000 before entering Linux. U-Boot relocates
+	 * the exception base to its own handlers; if it is left relocated, an
+	 * exception the kernel takes before it installs its own vectors lands in
+	 * U-Boot's "### ERROR ### Please RESET" handler instead of the kernel's.
+	 * On XBurst2 this breaks SMP: the kernel computes ebase from
+	 * read_c0_ebase() but never re-writes it on the no-veic/vint secondary,
+	 * so CPU1 vectors into the relocated base and dies. On XBurst1 (T31) the
+	 * vendor 3.10 kernel faults very early (right after "Starting kernel")
+	 * and that fault must reach the kernel vectors at 0x80000000 - vendor and
+	 * thingino U-Boot leave EBASE there; mainline did not. Same root fix.
 	 */
 	{
 		register unsigned long v = 0x80000000;

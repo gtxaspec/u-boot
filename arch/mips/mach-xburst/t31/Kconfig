@@ -82,19 +82,29 @@ config T31_DDR3
 config T31_APLL_MHZ
 	int
 	default 1512 if T31_VARIANT_T31A
-	default 1416 if T31_VARIANT_T31N
+	default 1404 if T31_VARIANT_T31N
 	default 1008 if T31_VARIANT_T31L
 	default 1104 if T31_VARIANT_T31LC
 	default 1392
 	help
 	  APLL (CPU PLL) target in MHz for the selected variant.
-	  These are the post-alignment values the vendor
-	  get_pllreg_value() actually programs (it aligns the
-	  nominal freq to a 24 MHz multiple): T31N nominal 1404 ->
-	  1416 (M=118); T31A nominal 1500 -> 1512 (M=126); LC 1104;
-	  L 1008; X/AL/C100 1392. The SPL programs CPAPCR
+	  These are the values the vendor get_pllreg_value() programs
+	  (APLL = 12 MHz * M, M = T31_APLL_MHZ / 12): T31N 1404
+	  (M=117, the vendor APLL_1400M value); T31A 1512 (M=126);
+	  LC 1104; L 1008; X/AL/C100 1392. The SPL programs CPAPCR
 	  M = T31_APLL_MHZ / 12 (N=1, OD0=1, OD1=2); the value must
 	  be a multiple of 12 and keep Fvco = 24*M in 1250-5000 MHz.
+
+# The XBurst1 CP0 timer counts at the CPU (APLL) clock, so the fixed
+# MIPS timer frequency must equal T31_APLL_MHZ in Hz. These mirror the
+# T31_APLL_MHZ defaults above (Kconfig int defaults can't multiply, so
+# the values are duplicated - keep them in sync).
+config SYS_MIPS_TIMER_FREQ
+	default 1512000000 if T31_VARIANT_T31A
+	default 1404000000 if T31_VARIANT_T31N
+	default 1104000000 if T31_VARIANT_T31LC
+	default 1008000000 if T31_VARIANT_T31L
+	default 1392000000
 
 config T31_MPLL_MHZ
 	int

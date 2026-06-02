@@ -35,7 +35,8 @@ dtb-$(CONFIG_TARGET_ISVP_T20) += t20-isvp.dtb t20-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T21) += t21-isvp.dtb t21-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T23) += t23-isvp.dtb t23-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T30) += t30-isvp.dtb t30-isvp-dfu.dtb
-dtb-$(CONFIG_TARGET_ISVP_T31) += t31-isvp.dtb
+dtb-$(CONFIG_TARGET_ISVP_T31) += t31x-isvp.dtb t31n-isvp.dtb t31l-isvp.dtb \
+	t31a-isvp.dtb t31l-isvp-dfu.dtb t31a-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T32) += t32-isvp.dtb
 dtb-$(CONFIG_TARGET_ISVP_T33) += t33-isvp.dtb
 dtb-$(CONFIG_SOC_LUTON) += luton_pcb090.dtb luton_pcb091.dtb

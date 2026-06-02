@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T31L DFU/USB-boot loader (DDR2 64 MB, CPU 1008 MHz).
+ *
+ * The T31L DDR2-64M init brings up the low 64 MB of any DDR2 T31 part,
+ * so this loader doubles as the universal DDR2 DFU loader (T31N/L/LC/X/
+ * AL). DDR3 parts (T31A) need their own loader.
+ */
+
+/dts-v1/;
+
+#include "t31-isvp-dfu.dtsi"
+
+&ddr {
+	compatible = "ingenic,t31l-ddr-innophy";
+};

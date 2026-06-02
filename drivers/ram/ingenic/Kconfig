@@ -15,3 +15,19 @@ config RAM_INGENIC_DDR_INNOPHY
 
 	  Ported from vendor U-Boot 2013 branch T41-1.2.6
 	  (arch/mips/cpu/xburst2/ddr_innophy.c).
+
+config RAM_INGENIC_DDR_T31
+	bool "Ingenic T31 (XBurst1) DDR controller + Innophy PHY"
+	depends on RAM
+	depends on ARCH_XBURST
+	select SPL_RAM if SPL
+	help
+	  Driver for the Ingenic T31 (XBurst1) DDR2/DDR3 memory controller
+	  paired with the on-chip Innophy DDR PHY. Sibling of the XBurst2
+	  driver above but a distinct IP (different register layout). The
+	  per-SKU register/clock tables are selected at runtime from the DT
+	  node's compatible via the driver of_match .data, so one driver
+	  covers every T31 SKU (T31X, T31N, T31L, T31LC, T31AL, T31A, C100).
+
+	  Ported from the vendor XBurst1 sdram_init path (formerly the inline
+	  arch/mips/mach-xburst/t31/sdram.c).

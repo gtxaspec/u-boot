@@ -9,7 +9,10 @@ obj-$(CONFIG_SANDBOX) += sandbox_ram.o
 obj-$(CONFIG_STM32MP1_DDR) += stm32mp1/
 obj-$(CONFIG_STM32_SDRAM) += stm32_sdram.o
 obj-$(CONFIG_ARCH_BMIPS) += bmips_ram.o
+# Ingenic DDR: XBurst2 (ddr_innophy) and XBurst1/T31 (ddr_t31) share the
+# directory; the two configs are mutually exclusive per build.
 obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ingenic/
+obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ingenic/
 
 obj-$(CONFIG_ARCH_ROCKCHIP) += rockchip/
 

@@ -15,8 +15,10 @@
 
 #include <config.h>
 #include <dm.h>
+#include <fdtdec.h>
 #include <hang.h>
 #include <init.h>
+#include <ram.h>
 #include <spl.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
@@ -31,7 +33,6 @@ void t31_spl_serial_init(void);
 void t31_spl_puts(const char *s);
 void t31_spl_putc(char c);
 void t31_spl_sfc_clk_init(void);
-void __weak sdram_init(void) { }
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -44,28 +45,21 @@ static void spl_put_hex(u32 v)
 		t31_spl_putc(hex[(v >> i) & 0xf]);
 }
 
-/* T31N/L/LC/C100 = 64 MB; T31X/T31AL = 128 MB (M14D1G1664A). */
-#if defined(CONFIG_T31_DRAM_128M)
-#define T31_DRAM_SIZE	0x08000000u	/* 128 MB */
-#else
-#define T31_DRAM_SIZE	0x04000000u	/* 64 MB */
-#endif
-
 /*
  * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
  * cached (KSEG0) window and verify the read-back. Steps across the
  * full part so a stuck/aliased address line is caught, not just
- * word 0.
+ * word 0. `size` is the DT-selected variant's DRAM size, from
+ * ram_get_info().
  */
-static int dram_verify(void)
+static int dram_verify(u32 size)
 {
 	static const u32 pat[] = {
 		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
 		0xdeadbeef, 0x12345678,
 	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
-	const u32 offs[] = { 0x0, 0x4, 0x100000,
-			     T31_DRAM_SIZE / 2, T31_DRAM_SIZE - 4 };
+	const u32 offs[] = { 0x0, 0x4, 0x100000, size / 2, size - 4 };
 	int b, o, p;
 
 	for (b = 0; b < 2; b++) {
@@ -115,6 +109,14 @@ void board_init_f(ulong dummy)
 	t31_spl_serial_init();
 	t31_spl_puts("\nT31 SPL: alive (pre-PLL)\n");
 
+	/*
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
+	 * so pll_init() can read the per-SKU PLL setpoints from the DDR node
+	 * before driver model comes up.
+	 */
+	if (fdtdec_setup())
+		hang();
+
 	pll_init();
 	t31_spl_puts("T31 SPL: PLL configured\n");
 
@@ -129,12 +131,15 @@ void board_init_f(ulong dummy)
 		hang();
 	{
 		struct udevice *dev;
+		struct ram_info ram;
 
 		if (uclass_first_device_err(UCLASS_RAM, &dev))
 			hang();
+		if (ram_get_info(dev, &ram))
+			hang();
+		if (dram_verify((u32)ram.size) == 0)
+			t31_spl_puts("T31 SPL: DDR OK\n");
 	}
-	if (dram_verify() == 0)
-		t31_spl_puts("T31 SPL: DDR OK\n");
 
 #ifdef CONFIG_SPL_T31_USB_BOOT
 	/*

@@ -118,7 +118,21 @@ void board_init_f(ulong dummy)
 	pll_init();
 	t31_spl_puts("T31 SPL: PLL configured\n");
 
-	sdram_init();
+	/*
+	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
+	 * probe runs sdram_init() to bring up DDR - replaces the old direct
+	 * sdram_init() call, mirroring the XBurst2 A1/T40/T41 flow. spl_init
+	 * here needs the enlarged SPL-f heap (SYS_MALLOC_F_LEN) for the DM
+	 * scan, since the DRAM malloc is not up until board_init_r.
+	 */
+	if (spl_init())
+		hang();
+	{
+		struct udevice *dev;
+
+		if (uclass_first_device_err(UCLASS_RAM, &dev))
+			hang();
+	}
 	if (dram_verify() == 0)
 		t31_spl_puts("T31 SPL: DDR OK\n");
 
@@ -151,6 +165,7 @@ void board_init_f(ulong dummy)
 	 * the tiny SPL-f heap - T31 needs no DM in board_init_f because DDR
 	 * is hand-rolled.
 	 */
+	preloader_console_init();
 	t31_spl_sfc_clk_init();
 	t31_spl_puts("T31 SPL: handing off to board_init_r (SPL_SPI NOR)\n");
 	board_init_r(NULL, 0);

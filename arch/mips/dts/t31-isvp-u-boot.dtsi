@@ -70,6 +70,7 @@
 &exclk { bootph-all; };
 &rtclk { bootph-all; };
 &cgu { bootph-all; };
+&ddr { bootph-all; };
 &pinctrl { bootph-all; };
 &gpa { bootph-all; };
 &gpb { bootph-all; };

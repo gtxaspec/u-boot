@@ -280,14 +280,14 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn;
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
 
 /*
- * Read ingenic,variant from the DT node matching `compatible`, look it
- * up in the variant table, and return that SKU's SPL PLL setpoints.
- * For the per-SoC pll.c, which runs in SPL before driver model is up
- * (it calls fdtdec_setup() first to make gd->fdt_blob available).
- * Returns 0 on success, negative on error.
+ * Find the DDR node in the FDT (by trying each known per-SKU compatible)
+ * and return that SKU's SPL PLL setpoints. For the per-SoC pll.c, which
+ * runs in SPL before driver model is up (it calls fdtdec_setup() first
+ * to make gd->fdt_blob available). Returns 0 on success, negative on
+ * error.
  */
-int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
-			      u32 *mpll_mnod, u32 *vpll_mnod);
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod,
+			      u32 *vpll_mnod);
 
 /* ----- Per-variant configs (T40 family) ----- */
 extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40a;

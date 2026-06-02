@@ -423,62 +423,59 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
  * probe skips it - DRAM is already alive.
  * ------------------------------------------------------------------ */
 
-/* Map ingenic,variant DT string to the per-variant config table. */
+/*
+ * Map the DT node compatible to the per-variant config table. The node's
+ * per-SKU compatible (ingenic,<sku>-ddr-innophy) selects the SKU via the
+ * driver of_match .data; this same table backs the SPL PLL-setpoint
+ * helper below (which has no live device to read .data from).
+ */
 static const struct {
-	const char *name;
+	const char *compatible;
 	const struct ingenic_ddr_variant *cfg;
 } ingenic_ddr_variants[] = {
-	{ "t41a",   &ingenic_ddr_variant_t41a   },
-	{ "t41l",   &ingenic_ddr_variant_t41l   },
-	{ "t41lq",  &ingenic_ddr_variant_t41lq  },
-	{ "t41n",   &ingenic_ddr_variant_t41n   },
-	{ "t41nq",  &ingenic_ddr_variant_t41nq  },
-	{ "t41xq",  &ingenic_ddr_variant_t41xq  },
-	{ "t41zg",  &ingenic_ddr_variant_t41zg  },
-	{ "t41zgc", &ingenic_ddr_variant_t41zgc },
-	{ "t41zl",  &ingenic_ddr_variant_t41zl  },
-	{ "t41zm",  &ingenic_ddr_variant_t41zm  },
-	{ "t41zmc", &ingenic_ddr_variant_t41zmc },
-	{ "t41zn",  &ingenic_ddr_variant_t41zn  },
-	{ "t41zx",  &ingenic_ddr_variant_t41zx  },
+	{ "ingenic,t41a-ddr-innophy",   &ingenic_ddr_variant_t41a   },
+	{ "ingenic,t41l-ddr-innophy",   &ingenic_ddr_variant_t41l   },
+	{ "ingenic,t41lq-ddr-innophy",  &ingenic_ddr_variant_t41lq  },
+	{ "ingenic,t41n-ddr-innophy",   &ingenic_ddr_variant_t41n   },
+	{ "ingenic,t41nq-ddr-innophy",  &ingenic_ddr_variant_t41nq  },
+	{ "ingenic,t41xq-ddr-innophy",  &ingenic_ddr_variant_t41xq  },
+	{ "ingenic,t41zg-ddr-innophy",  &ingenic_ddr_variant_t41zg  },
+	{ "ingenic,t41zgc-ddr-innophy", &ingenic_ddr_variant_t41zgc },
+	{ "ingenic,t41zl-ddr-innophy",  &ingenic_ddr_variant_t41zl  },
+	{ "ingenic,t41zm-ddr-innophy",  &ingenic_ddr_variant_t41zm  },
+	{ "ingenic,t41zmc-ddr-innophy", &ingenic_ddr_variant_t41zmc },
+	{ "ingenic,t41zn-ddr-innophy",  &ingenic_ddr_variant_t41zn  },
+	{ "ingenic,t41zx-ddr-innophy",  &ingenic_ddr_variant_t41zx  },
 	/* T40 family */
-	{ "t40a",   &ingenic_ddr_variant_t40a   },
-	{ "t40n",   &ingenic_ddr_variant_t40n   },
-	{ "t40nn",  &ingenic_ddr_variant_t40n   },	/* alias - same silicon */
-	{ "t40xp",  &ingenic_ddr_variant_t40xp  },
+	{ "ingenic,t40a-ddr-innophy",   &ingenic_ddr_variant_t40a   },
+	{ "ingenic,t40n-ddr-innophy",   &ingenic_ddr_variant_t40n   },
+	{ "ingenic,t40xp-ddr-innophy",  &ingenic_ddr_variant_t40xp  },
 #ifdef CONFIG_SOC_A1
 	/* A1 family */
-	{ "a1n",    &ingenic_ddr_variant_a1n    },
-	{ "a1nt",   &ingenic_ddr_variant_a1nt   },
-	{ "a1x",    &ingenic_ddr_variant_a1x    },
-	{ "a1a",    &ingenic_ddr_variant_a1x    },	/* A1A reuses the A1X profile (no A1A HW yet) */
-	{ "a1l",    &ingenic_ddr_variant_a1l    },
+	{ "ingenic,a1n-ddr-innophy",    &ingenic_ddr_variant_a1n    },
+	{ "ingenic,a1nt-ddr-innophy",   &ingenic_ddr_variant_a1nt   },
+	{ "ingenic,a1x-ddr-innophy",    &ingenic_ddr_variant_a1x    },
+	{ "ingenic,a1l-ddr-innophy",    &ingenic_ddr_variant_a1l    },
 #endif
 };
 
 /*
- * SPL helper for the per-SoC pll.c: read ingenic,variant from the DT
- * node matching `compatible` and return that SKU's PLL setpoints. Runs
- * before driver model, so it reads the FDT blob directly (the caller
- * must have set gd->fdt_blob, e.g. via fdtdec_setup()).
+ * SPL helper for the per-SoC pll.c: find the DDR node in the FDT by
+ * trying each known per-SKU compatible, and return that SKU's PLL
+ * setpoints. Runs before driver model, so it reads the FDT blob directly
+ * (the caller must have set gd->fdt_blob, e.g. via fdtdec_setup()).
  */
-int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
-			      u32 *mpll_mnod, u32 *vpll_mnod)
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *vpll_mnod)
 {
 	const void *blob = gd->fdt_blob;
-	const char *name;
 	int node, i;
 
 	if (!blob)
 		return -ENODEV;
-	node = fdt_node_offset_by_compatible(blob, -1, compatible);
-	if (node < 0)
-		return -ENODEV;
-	name = fdt_getprop(blob, node, "ingenic,variant", NULL);
-	if (!name)
-		return -EINVAL;
 	for (i = 0; i < ARRAY_SIZE(ingenic_ddr_variants); i++) {
-		if (!strcmp(name, ingenic_ddr_variants[i].name)) {
+		node = fdt_node_offset_by_compatible(blob, -1,
+						     ingenic_ddr_variants[i].compatible);
+		if (node >= 0) {
 			*apll_mnod = ingenic_ddr_variants[i].cfg->apll_mnod;
 			*mpll_mnod = ingenic_ddr_variants[i].cfg->mpll_mnod;
 			*vpll_mnod = ingenic_ddr_variants[i].cfg->vpll_mnod;
@@ -491,25 +488,13 @@ int ingenic_ddr_pll_setpoints(const char *compatible, u32 *apll_mnod,
 static int ingenic_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_ddr_variant *v = NULL;
-	const char *variant_name;
+	const struct ingenic_ddr_variant *v;
 	fdt_addr_t base;
 	u64 size;
-	int i;
 
-	variant_name = dev_read_string(dev, "ingenic,variant");
-	if (!variant_name) {
-		dev_err(dev, "missing ingenic,variant property\n");
-		return -EINVAL;
-	}
-	for (i = 0; i < ARRAY_SIZE(ingenic_ddr_variants); i++) {
-		if (!strcmp(variant_name, ingenic_ddr_variants[i].name)) {
-			v = ingenic_ddr_variants[i].cfg;
-			break;
-		}
-	}
+	v = (const struct ingenic_ddr_variant *)dev_get_driver_data(dev);
 	if (!v) {
-		dev_err(dev, "unknown ingenic,variant '%s'\n", variant_name);
+		dev_err(dev, "no variant data for compatible\n");
 		return -ENODEV;
 	}
 	p->cfg = v;
@@ -552,15 +537,55 @@ static const struct ram_ops ingenic_ddr_ops = {
 	.get_info = ingenic_ddr_get_info,
 };
 
+/*
+ * Per-SKU compatible + .data = variant struct (the upstream DM idiom:
+ * the node's compatible selects the SKU). Mirrors ingenic_ddr_variants[]
+ * above, which the SPL pll.c helper iterates (it has no live device to
+ * read .data from).
+ */
 static const struct udevice_id ingenic_ddr_ids[] = {
-	/* The same UCLASS_RAM driver covers every XBurst2 SoC that uses
-	 * this IP; the per-SoC compatible exists for binding clarity at
-	 * the DT level (so each board's DT names the SoC explicitly).
-	 * The variant struct is selected by the `ingenic,variant` DT
-	 * property, not the compatible. */
-	{ .compatible = "ingenic,a1-ddr-innophy" },
-	{ .compatible = "ingenic,t40-ddr-innophy" },
-	{ .compatible = "ingenic,t41-ddr-innophy" },
+	{ .compatible = "ingenic,t41a-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41a },
+	{ .compatible = "ingenic,t41l-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41l },
+	{ .compatible = "ingenic,t41lq-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41lq },
+	{ .compatible = "ingenic,t41n-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41n },
+	{ .compatible = "ingenic,t41nq-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41nq },
+	{ .compatible = "ingenic,t41xq-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41xq },
+	{ .compatible = "ingenic,t41zg-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zg },
+	{ .compatible = "ingenic,t41zgc-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zgc },
+	{ .compatible = "ingenic,t41zl-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zl },
+	{ .compatible = "ingenic,t41zm-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zm },
+	{ .compatible = "ingenic,t41zmc-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zmc },
+	{ .compatible = "ingenic,t41zn-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zn },
+	{ .compatible = "ingenic,t41zx-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t41zx },
+	{ .compatible = "ingenic,t40a-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t40a },
+	{ .compatible = "ingenic,t40n-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t40n },
+	{ .compatible = "ingenic,t40xp-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_t40xp },
+#ifdef CONFIG_SOC_A1
+	{ .compatible = "ingenic,a1n-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_a1n },
+	{ .compatible = "ingenic,a1nt-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_a1nt },
+	{ .compatible = "ingenic,a1x-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_a1x },
+	{ .compatible = "ingenic,a1l-ddr-innophy",
+	  .data = (ulong)&ingenic_ddr_variant_a1l },
+#endif
 	{ }
 };
 

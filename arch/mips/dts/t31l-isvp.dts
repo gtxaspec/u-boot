@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T31L (DDR2 64 MB M14D5121632A, CPU 1008 MHz, lite), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t31-isvp.dtsi"
+
+&ddr {
+	compatible = "ingenic,t31l-ddr-innophy";
+};

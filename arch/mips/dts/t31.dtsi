@@ -54,6 +54,11 @@
 		u-boot,dm-pre-reloc;
 	};
 
+	ddr: memory-controller@134f0000 {
+		compatible = "ingenic,t31-ddr";
+		reg = <0x134f0000 0x1000>;
+	};
+
 	/*
 	 * TCU (timer/counter unit). Container node mirroring the mainline
 	 * Linux binding (ingenic,t31-tcu / simple-mfd) so the watchdog

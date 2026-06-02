@@ -102,6 +102,13 @@ config ARCH_XBURST
 	select OF_CONTROL
 	select DM
 	select SPL_DM if SPL
+	# Ingenic vendor kernels read CP0_EBASE rather than forcing the base
+	# to 0x80000000 (the XBurst1 3.10 kernel faults very early; XBurst2 SMP
+	# secondaries vector off it), so U-Boot must restore the exception
+	# vector base before booting Linux - otherwise the kernel's early
+	# exceptions land in U-Boot's handler. Generic mechanism, handled in
+	# arch/mips/lib/{traps,bootm}.c via trap_restore().
+	select RESTORE_EXCEPTION_VECTOR_BASE
 	help
 	  Support for Ingenic XBurst T-Series SoCs - XBurst1 (T10/T20/T21/
 	  T23/T30/T31/T32/T33) and XBurst2 (A1/T40/T41). Camera/IoT SoCs

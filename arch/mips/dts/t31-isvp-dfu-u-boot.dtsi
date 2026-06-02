@@ -47,3 +47,14 @@
 		};
 	};
 };
+
+/*
+ * Keep the DDR controller (and its clock tree) in the SPL devicetree so
+ * the UCLASS_RAM probe can bind ingenic,t31-ddr and run sdram_init().
+ * Without this the SPL hangs at uclass_first_device_err(UCLASS_RAM)
+ * before DDR is up (the node is otherwise stripped from the SPL DT).
+ */
+&exclk { bootph-all; };
+&rtclk { bootph-all; };
+&cgu { bootph-all; };
+&ddr { bootph-all; };

@@ -1,11 +1,22 @@
 # Manually-triggered build of every Ingenic USB-boot loader, one SoC per
-# job. Build-only: it compiles each isvp_*_usbboot defconfig to catch
-# breakage; it does not publish artifacts.
+# job, using the official thingino prebuilt GCC 15.2 (uClibc) cross
+# toolchains - xburst1 for T10-T33, xburst2 for T40/T41/A1 - so the CI
+# builds with the exact compiler thingino ships. Build-only: it compiles
+# each isvp_*_usbboot defconfig to catch breakage; it does not publish
+# artifacts.
 #
-# Security: NO third-party actions are used (no `uses:` anywhere). The
-# source is fetched with the pre-installed, token-authed `gh` CLI, the
-# cross toolchain comes from the distro (gcc-mipsel-linux-gnu), and the
-# build is plain `make`. The job token is restricted to contents:read.
+# Security: the ONLY third-party action is actions/cache - first-party to
+# GitHub (the same `actions` org as the runner) and pinned to a full commit
+# SHA - used because the Actions cache backend has no `gh`/REST equivalent
+# for in-job save+restore. Everything else uses the pre-installed,
+# token-authed `gh` CLI: the source (`gh repo clone`, shallow) and the
+# toolchain (`gh release download`) are both fetched with gh, and the build
+# is plain `make`. The job token is restricted to contents:read.
+#
+# Caching: ccache is restored/saved via actions/cache, keyed per defconfig
+# with a rolling key (unique per commit + a prefix restore-key) so each run
+# saves a fresh cache and restores the latest. CCACHE_COMPILERCHECK=content
+# keeps hits valid even though the toolchain is re-extracted every run.
 #
 # NOTE: workflow_dispatch only fires for a workflow file present on the
 # repo's default branch; pick the branch to build in the "Run workflow"
@@ -25,45 +36,84 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        defconfig:
-          - isvp_t10_usbboot_defconfig
-          - isvp_t20_usbboot_defconfig
-          - isvp_t21_usbboot_defconfig
-          - isvp_t23_usbboot_defconfig
-          - isvp_t30_usbboot_defconfig
-          - isvp_t31_usbboot_defconfig
-          - isvp_t31a_usbboot_defconfig
-          - isvp_t32_usbboot_defconfig
-          - isvp_t33_usbboot_defconfig
-          - isvp_t40_usbboot_defconfig
-          - isvp_t40xp_usbboot_defconfig
-          - isvp_t41lq_usbboot_defconfig
-          - isvp_t41nq_usbboot_defconfig
-          - isvp_a1_usbboot_defconfig
+        include:
+          - { defconfig: isvp_t10_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t20_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t21_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t23_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t30_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t31_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t31a_usbboot_defconfig,  arch: xburst1 }
+          - { defconfig: isvp_t32_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t33_usbboot_defconfig,   arch: xburst1 }
+          - { defconfig: isvp_t40_usbboot_defconfig,   arch: xburst2 }
+          - { defconfig: isvp_t40xp_usbboot_defconfig, arch: xburst2 }
+          - { defconfig: isvp_t41lq_usbboot_defconfig, arch: xburst2 }
+          - { defconfig: isvp_t41nq_usbboot_defconfig, arch: xburst2 }
+          - { defconfig: isvp_a1_usbboot_defconfig,    arch: xburst2 }
     name: ${{ matrix.defconfig }}
     env:
       GH_TOKEN: ${{ github.token }}
-      CROSS_COMPILE: mipsel-linux-gnu-
+      # Both thingino SDKs expose the cross tools under this bare prefix
+      # (the binutils are mipsel-linux-ld/ar/...); keep it a bare prefix so
+      # ccache can wrap only gcc, not the binutils.
+      CROSS_COMPILE: mipsel-linux-
+      TOOLCHAIN_TARBALL: thingino-toolchain-x86_64_${{ matrix.arch }}_uclibc_gcc15-linux-mipsel.tar.gz
     steps:
-      - name: Install cross toolchain and build deps
+      - name: Install build deps and ccache
         run: |
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential \
-            gcc-mipsel-linux-gnu \
-            bison flex \
+            build-essential ccache bison flex \
             libssl-dev libgnutls28-dev uuid-dev \
             swig python3 python3-dev python3-setuptools python3-pyelftools \
             device-tree-compiler xz-utils
+          # Wrap the cross gcc (and, best-effort, the host gcc) with ccache
+          # via a PATH shim, so CROSS_COMPILE stays a bare prefix and the
+          # binutils are not wrapped. content compiler-check so the freshly
+          # re-extracted toolchain's mtime does not bust cross-run hits.
+          sudo mkdir -p /usr/lib/ccache
+          sudo /usr/sbin/update-ccache-symlinks 2>/dev/null || true
+          sudo ln -sf "$(command -v ccache)" /usr/lib/ccache/mipsel-linux-gcc
+          {
+            echo "CCACHE_DIR=$HOME/.ccache"
+            echo "CCACHE_MAXSIZE=500M"
+            echo "CCACHE_COMPILERCHECK=content"
+          } >> "$GITHUB_ENV"
 
-      - name: Checkout via gh (no actions)
+      - name: Restore/save ccache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ matrix.defconfig }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.defconfig }}-
+
+      - name: Fetch thingino ${{ matrix.arch }} toolchain (gh)
+        run: |
+          gh release download toolchain-x86_64 -R themactep/thingino-firmware \
+            --pattern "$TOOLCHAIN_TARBALL" --dir "$RUNNER_TEMP" --clobber
+          mkdir -p "$RUNNER_TEMP/toolchain"
+          tar -xzf "$RUNNER_TEMP/$TOOLCHAIN_TARBALL" -C "$RUNNER_TEMP/toolchain"
+          sdk="$RUNNER_TEMP/toolchain/$(ls -1 "$RUNNER_TEMP/toolchain" | head -1)"
+          # Buildroot SDK: rewrite the build-host paths to this location.
+          "$sdk/relocate-sdk.sh"
+          echo "TOOLCHAIN_BIN=$sdk/bin" >> "$GITHUB_ENV"
+
+      - name: Checkout via gh (shallow, no actions)
         run: |
           gh repo clone "$GITHUB_REPOSITORY" . -- \
             --branch "$GITHUB_REF_NAME" --depth 1
 
       - name: Build ${{ matrix.defconfig }}
         run: |
+          # ccache shim FIRST, then the toolchain bin, then the system.
+          export PATH="/usr/lib/ccache:$TOOLCHAIN_BIN:$PATH"
+          mipsel-linux-gcc --version | head -1
+          ccache --zero-stats
           make "${{ matrix.defconfig }}"
           make -j"$(nproc)"
           echo "==== usbboot loader binaries ===="
           ls -l spl/u-boot-spl.bin u-boot.bin
+          echo "==== ccache statistics ===="
+          ccache --show-stats

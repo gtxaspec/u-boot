@@ -41,20 +41,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { defconfig: isvp_t10_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t20_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t21_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t23_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t30_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t31_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t31a_usbboot_defconfig,  arch: xburst1 }
-          - { defconfig: isvp_t32_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t33_usbboot_defconfig,   arch: xburst1 }
-          - { defconfig: isvp_t40_usbboot_defconfig,   arch: xburst2 }
-          - { defconfig: isvp_t40xp_usbboot_defconfig, arch: xburst2 }
-          - { defconfig: isvp_t41lq_usbboot_defconfig, arch: xburst2 }
-          - { defconfig: isvp_t41nq_usbboot_defconfig, arch: xburst2 }
-          - { defconfig: isvp_a1_usbboot_defconfig,    arch: xburst2 }
+          - { defconfig: isvp_t10_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t20_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t21_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t23_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t30_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t31_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t31_usbboot_ddr3_defconfig,  arch: xburst1 }
+          - { defconfig: isvp_t32_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t33_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t40_usbboot_defconfig,       arch: xburst2 }
+          - { defconfig: isvp_t40_usbboot_ddr3_defconfig,  arch: xburst2 }
+          - { defconfig: isvp_t41_usbboot_defconfig,       arch: xburst2 }
+          - { defconfig: isvp_t41_usbboot_ddr3_defconfig,  arch: xburst2 }
+          - { defconfig: isvp_a1_usbboot_defconfig,        arch: xburst2 }
     name: ${{ matrix.defconfig }}
     env:
       GH_TOKEN: ${{ github.token }}

@@ -2,8 +2,9 @@
 # job, using the official thingino prebuilt GCC 15.2 (uClibc) cross
 # toolchains - xburst1 for T10-T33, xburst2 for T40/T41/A1 - so the CI
 # builds with the exact compiler thingino ships. Each job compiles one
-# isvp_*_usbboot defconfig and uploads its spl/u-boot-spl.bin + u-boot.bin
-# as a run artifact named after the defconfig.
+# isvp_*_usbboot defconfig and uploads u-boot-spl.bin + u-boot.bin (flat, no
+# spl/ prefix) as a run artifact named after the SoC (defconfig minus the
+# _defconfig suffix, e.g. isvp_a1_usbboot).
 #
 # Security: the only actions used are actions/cache and
 # actions/upload-artifact - both first-party to GitHub (the same `actions`
@@ -125,13 +126,17 @@ jobs:
           ls -l spl/u-boot-spl.bin u-boot.bin
           echo "==== ccache statistics ===="
           ccache --show-stats
+          # Stage a FLAT artifact dir (u-boot-spl.bin at the root, not under
+          # spl/) and derive the artifact name without the _defconfig suffix.
+          mkdir -p "$RUNNER_TEMP/artifact"
+          cp spl/u-boot-spl.bin u-boot.bin "$RUNNER_TEMP/artifact/"
+          defconfig="${{ matrix.defconfig }}"
+          echo "ARTIFACT_NAME=${defconfig%_defconfig}" >> "$GITHUB_ENV"
 
       - name: Upload ${{ matrix.defconfig }} binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.defconfig }}
-          path: |
-            spl/u-boot-spl.bin
-            u-boot.bin
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/artifact
           if-no-files-found: error
           retention-days: 30

@@ -2,67 +2,10 @@
 
 if SOC_T40
 
-choice
-	prompt "T40 SoC variant"
-	default T40_VARIANT_T40NN
-	help
-	  T40 product variant. Four labels, three distinct DDR setpoints
-	  - all values are direct output of vendor `tools/ingenic-tools/
-	  ddr_params_creator` from the T40-1.3.1 vendor branch:
-	    T40A  - DDR3 32-bit dual-rank 1 GiB W634GU6Q8 @ 700 MHz
-	    T40N  - DDR2 32-bit       128 MiB M14D5121632A @ 500 MHz
-	    T40NN - alias of T40N (same silicon, lab/board silkscreen)
-	    T40XP - DDR3 32-bit       256 MiB M15T1G1664A_2C @ 600 MHz
-	  Vendor T40-1.3.1 has no separate T40NN target; mainline keeps
-	  the T40NN label as an alias so defconfigs can match whichever
-	  name appears on the board.
-
-config T40_VARIANT_T40A
-	bool "T40A (DDR3-1333, 1 GiB dual-rank, 32-bit) [untested]"
-	help
-	  T40A: DDR3 32-bit dual-rank W634GU6Q8 (~1 GiB per
-	  ddr_params_creator; vendor isvp_common.h tags as
-	  CONFIG_DDR_128M for SoC addressing). APLL 1008 MHz, MPLL 1400
-	  MHz (DDR=700 MHz). Values are direct vendor T40-1.3.1
-	  ddr_params_creator output from isvp_t40a_sfcnor; not yet
-	  validated in mainline (no T40A hardware in the lab).
-
-config T40_VARIANT_T40N
-	bool "T40N (DDR2-1000, 128 MiB, 32-bit) [HW-validated]"
-	help
-	  T40N: DDR2 32-bit 128 MiB M14D5121632A. APLL 912 MHz, MPLL
-	  1000 MHz (DDR=500 MHz), per vendor T40-1.3.1 CONFIG_T40N /
-	  DDR_500M block. Direct ddr_params_creator output from
-	  isvp_t40n_sfcnor. HW-validated on the lab T40 board (board
-	  silkscreens this silicon as "T40NN"; functionally identical -
-	  see T40_VARIANT_T40NN).
-
-config T40_VARIANT_T40NN
-	bool "T40NN (DDR2-1000, 128 MiB, 32-bit) - alias of T40N [HW-validated]"
-	help
-	  T40NN: Wyze-class camera silkscreen label for what vendor
-	  T40-1.3.1 ships as plain T40N. Same DDR2-500 setpoint and same
-	  M14D5121632A chip as T40_VARIANT_T40N - both Kconfig options
-	  select t40n-ddr.h. Pick this variant when the board you are
-	  targeting is silkscreened "T40NN" to keep the defconfig
-	  matching the hardware label.
-
-config T40_VARIANT_T40XP
-	bool "T40XP (DDR3-1200, 256 MiB, 32-bit) [HW-validated]"
-	help
-	  T40XP: DDR3 32-bit 256 MiB M15T1G1664A_2C. APLL 1008 MHz,
-	  MPLL 1200 MHz (DDR=600 MHz), per vendor T40-1.3.1
-	  CONFIG_T40XP / DDR_600M block. Direct ddr_params_creator
-	  output from isvp_t40xp_sfcnor. HW-validated.
-
-endchoice
-
-config T40_DRAM_SIZE_MB
-	int
-	default 128 if T40_VARIANT_T40A
-	default 128 if T40_VARIANT_T40N
-	default 128 if T40_VARIANT_T40NN
-	default 256 if T40_VARIANT_T40XP
+# The T40 SKU (DDR type/geometry/clocks) is selected at runtime from the
+# devicetree: each leaf .dts sets a per-SKU compatible on &ddr and the
+# drivers/ram/ingenic/ddr_innophy driver carries the setpoints in its
+# of_match .data (same model as T31/T41/A1). No Kconfig variant.
 
 config SPL_T40_USB_BOOT
 	bool "T40 SPL: return to mask ROM for USB boot (dev loop)"
@@ -72,8 +15,8 @@ config SPL_T40_USB_BOOT
 	  PLLs and DDR, then return to the bootrom (jr ra) instead of
 	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
-	  defconfigs (isvp_t40n_usbboot_defconfig,
-	  isvp_t40xp_usbboot_defconfig).
+	  defconfigs (isvp_t40_usbboot_defconfig and
+	  isvp_t40_usbboot_ddr3_defconfig).
 
 config SPL_T40_SFC_NAND_BOOT
 	bool "T40 SPL: load U-Boot proper from SPI-NAND via SFC"

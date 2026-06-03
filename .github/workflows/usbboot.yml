@@ -1,0 +1,69 @@
+# Manually-triggered build of every Ingenic USB-boot loader, one SoC per
+# job. Build-only: it compiles each isvp_*_usbboot defconfig to catch
+# breakage; it does not publish artifacts.
+#
+# Security: NO third-party actions are used (no `uses:` anywhere). The
+# source is fetched with the pre-installed, token-authed `gh` CLI, the
+# cross toolchain comes from the distro (gcc-mipsel-linux-gnu), and the
+# build is plain `make`. The job token is restricted to contents:read.
+#
+# NOTE: workflow_dispatch only fires for a workflow file present on the
+# repo's default branch; pick the branch to build in the "Run workflow"
+# dialog (it is cloned via GITHUB_REF_NAME below).
+
+name: usbboot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        defconfig:
+          - isvp_t10_usbboot_defconfig
+          - isvp_t20_usbboot_defconfig
+          - isvp_t21_usbboot_defconfig
+          - isvp_t23_usbboot_defconfig
+          - isvp_t30_usbboot_defconfig
+          - isvp_t31_usbboot_defconfig
+          - isvp_t31a_usbboot_defconfig
+          - isvp_t32_usbboot_defconfig
+          - isvp_t33_usbboot_defconfig
+          - isvp_t40_usbboot_defconfig
+          - isvp_t40xp_usbboot_defconfig
+          - isvp_t41lq_usbboot_defconfig
+          - isvp_t41nq_usbboot_defconfig
+          - isvp_a1_usbboot_defconfig
+    name: ${{ matrix.defconfig }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CROSS_COMPILE: mipsel-linux-gnu-
+    steps:
+      - name: Install cross toolchain and build deps
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential \
+            gcc-mipsel-linux-gnu \
+            bison flex \
+            libssl-dev libgnutls28-dev uuid-dev \
+            swig python3 python3-dev python3-setuptools python3-pyelftools \
+            device-tree-compiler xz-utils
+
+      - name: Checkout via gh (no actions)
+        run: |
+          gh repo clone "$GITHUB_REPOSITORY" . -- \
+            --branch "$GITHUB_REF_NAME" --depth 1
+
+      - name: Build ${{ matrix.defconfig }}
+        run: |
+          make "${{ matrix.defconfig }}"
+          make -j"$(nproc)"
+          echo "==== usbboot loader binaries ===="
+          ls -l spl/u-boot-spl.bin u-boot.bin

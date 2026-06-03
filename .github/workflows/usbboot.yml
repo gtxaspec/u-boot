@@ -1,17 +1,20 @@
 # Manually-triggered build of every Ingenic USB-boot loader, one SoC per
 # job, using the official thingino prebuilt GCC 15.2 (uClibc) cross
 # toolchains - xburst1 for T10-T33, xburst2 for T40/T41/A1 - so the CI
-# builds with the exact compiler thingino ships. Build-only: it compiles
-# each isvp_*_usbboot defconfig to catch breakage; it does not publish
-# artifacts.
+# builds with the exact compiler thingino ships. Each job compiles one
+# isvp_*_usbboot defconfig and uploads its spl/u-boot-spl.bin + u-boot.bin
+# as a run artifact named after the defconfig.
 #
-# Security: the ONLY third-party action is actions/cache - first-party to
-# GitHub (the same `actions` org as the runner) and pinned to a full commit
-# SHA - used because the Actions cache backend has no `gh`/REST equivalent
-# for in-job save+restore. Everything else uses the pre-installed,
-# token-authed `gh` CLI: the source (`gh repo clone`, shallow) and the
-# toolchain (`gh release download`) are both fetched with gh, and the build
-# is plain `make`. The job token is restricted to contents:read.
+# Security: the only actions used are actions/cache and
+# actions/upload-artifact - both first-party to GitHub (the same `actions`
+# org as the runner) and pinned to full commit SHAs - because neither the
+# Actions cache backend (in-job save+restore) nor run-artifact upload has a
+# `gh`/REST equivalent. upload-artifact uses the Actions runtime token, not
+# GITHUB_TOKEN, so the job token stays restricted to contents:read.
+# Everything else avoids marketplace actions: the source is a plain shallow
+# single-branch `git clone` (no tags, no fork upstream), the thingino
+# toolchain is fetched with the pre-installed token-authed `gh` CLI (`gh
+# release download`), and the build is plain `make`.
 #
 # Caching: ccache is restored/saved via actions/cache, keyed per defconfig
 # with a rolling key (unique per commit + a prefix restore-key) so each run
@@ -100,10 +103,15 @@ jobs:
           "$sdk/relocate-sdk.sh"
           echo "TOOLCHAIN_BIN=$sdk/bin" >> "$GITHUB_ENV"
 
-      - name: Checkout via gh (shallow, no actions)
+      - name: Checkout this branch (shallow, single branch, no actions)
         run: |
-          gh repo clone "$GITHUB_REPOSITORY" . -- \
-            --branch "$GITHUB_REF_NAME" --depth 1
+          # Plain git clone of ONLY this branch at depth 1, no tags. Avoids
+          # `gh repo clone`, which - because this repo is a fork - auto-adds
+          # and fetches the u-boot/u-boot "upstream" remote (500+ tags, full
+          # history). The repo is public, so no auth is needed here.
+          git clone --depth 1 --single-branch --no-tags \
+            --branch "$GITHUB_REF_NAME" \
+            "https://github.com/$GITHUB_REPOSITORY" .
 
       - name: Build ${{ matrix.defconfig }}
         run: |
@@ -117,3 +125,13 @@ jobs:
           ls -l spl/u-boot-spl.bin u-boot.bin
           echo "==== ccache statistics ===="
           ccache --show-stats
+
+      - name: Upload ${{ matrix.defconfig }} binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.defconfig }}
+          path: |
+            spl/u-boot-spl.bin
+            u-boot.bin
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,85 @@
+# Manually-triggered generator for the "from <release> to ingenic" patch:
+# a single `git diff` of this branch against the last official upstream
+# U-Boot release, in the same plain-diff form thingino keeps under
+# package/all-patches/uboot/<version>/0001-from-<version>-to-ingenic.patch.
+# The patch is uploaded as a build artifact.
+#
+# "Last official release" = the newest u-boot/u-boot tag of the form
+# vYYYY.MM (optionally .NN), excluding -rc tags (so v2026.04, not
+# v2026.07-rc3). Override with the release_tag input to target an older
+# release. This branch sits directly on that release, so the diff is the
+# clean Ingenic delta.
+#
+# Security: the only action is actions/upload-artifact (first-party, pinned
+# by SHA, uses the runtime token so the job token stays contents:read).
+# Everything else is plain git over public HTTPS - no auth, no gh, no
+# marketplace actions: a shallow single-branch clone of this branch, a
+# shallow fetch of the one release tag, and `git diff` between the two tips
+# (a tree diff needs no shared history, so both sides can stay shallow).
+
+name: upstream-patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "u-boot release tag to diff against (blank = latest official, e.g. v2026.04)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: https://github.com/u-boot/u-boot
+    steps:
+      - name: Checkout this branch (shallow, single branch)
+        run: |
+          git clone --depth 1 --single-branch --no-tags \
+            --branch "$GITHUB_REF_NAME" \
+            "https://github.com/$GITHUB_REPOSITORY" .
+
+      - name: Resolve the release tag to diff against
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          TAG="$INPUT_TAG"
+          if [ -z "$TAG" ]; then
+            # Newest official release: vYYYY.MM(.NN), -rc tags excluded.
+            TAG=$(git ls-remote --tags --refs "$UPSTREAM" \
+                    | sed 's#.*refs/tags/##' \
+                    | grep -E '^v[0-9]{4}\.[0-9]{2}([.][0-9]+)?$' \
+                    | sort -V | tail -1)
+          fi
+          if ! printf '%s' "$TAG" | grep -qE '^v[0-9]{4}\.[0-9]{2}([.][0-9]+)?(-rc[0-9]+)?$'; then
+            echo "Could not resolve a valid u-boot release tag (got '$TAG')" >&2
+            exit 1
+          fi
+          echo "Diffing this branch against u-boot $TAG"
+          echo "REL_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "REL_VER=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Fetch the release tag (shallow)
+        run: |
+          git remote add upstream "$UPSTREAM"
+          git fetch --depth 1 upstream "refs/tags/$REL_TAG:refs/tags/$REL_TAG"
+
+      - name: Generate the from-$REL_VER-to-ingenic patch
+        run: |
+          out="$RUNNER_TEMP/0001-from-$REL_VER-to-ingenic.patch"
+          git diff "$REL_TAG" HEAD > "$out"
+          echo "==== patch summary (vs u-boot $REL_TAG) ===="
+          git diff --shortstat "$REL_TAG" HEAD
+          echo "wrote $(basename "$out"): $(wc -l < "$out") lines, $(du -h "$out" | cut -f1)"
+          echo "PATCH_FILE=$out" >> "$GITHUB_ENV"
+
+      - name: Upload the patch
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: uboot-${{ env.REL_VER }}-ingenic-patch
+          path: ${{ env.PATCH_FILE }}
+          if-no-files-found: error
+          retention-days: 30

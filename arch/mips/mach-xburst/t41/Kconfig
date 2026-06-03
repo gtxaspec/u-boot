@@ -2,131 +2,10 @@
 
 if SOC_T41
 
-choice
-	prompt "T41 SoC variant"
-	default T41_VARIANT_T41NQ
-	help
-	  T41 product variant. All 13 SKUs from vendor T41-1.2.6
-	  isvp_t41.h are exposed; per-variant DDR controller/PHY/MR
-	  values are direct output of vendor `tools/ingenic-tools/
-	  ddr_creator_chip/ddr_params_creator` for the specific chip +
-	  freq + bus config and live in arch/mips/mach-xburst/include/
-	  mach/t41<variant>-ddr.h.
-
-	  HW-validated: T41NQ (lab T41NQ board, sdram.c). The other 12
-	  variants build cleanly (Kconfig + DDR header) but the sdram.c
-	  init is currently T41NQ-tuned; selecting a different variant
-	  picks up its DDR header but boot behaviour at the controller/
-	  PHY level still needs a vendor-style ddr_params_creator
-	  refactor of sdram.c.
-
-config T41_VARIANT_T41A
-	bool "T41A (DDR3-1600, 128 MiB, 16-bit, W631GU6NG) [untested]"
-	help
-	  T41A: DDR3 @ 800 MHz, 16-bit, 128 MiB W631GU6NG. APLL 1300,
-	  MPLL 1600. Highest-clocked T41 SKU. Per vendor T41-1.2.6
-	  CONFIG_T41A / DDR_800M block.
-
-config T41_VARIANT_T41L
-	bool "T41L (DDR2-1200, 64 MiB, 16-bit, M14D5121632A) [untested]"
-	help
-	  T41L: DDR2 @ 600 MHz, 16-bit, 64 MiB M14D5121632A. APLL 1104,
-	  MPLL 1200. Low-cost DDR2 SKU. Per vendor T41-1.2.6 CONFIG_T41L
-	  / DDR_600M block.
-
-config T41_VARIANT_T41LQ
-	bool "T41LQ (DDR2-1200, 64 MiB, 16-bit, M14D5121632A) [untested]"
-	help
-	  T41LQ: DDR2 @ 600 MHz, 16-bit, 64 MiB M14D5121632A. APLL 1104,
-	  MPLL 1200. Functionally identical DDR setpoint to T41L. Per
-	  vendor T41-1.2.6 CONFIG_T41LQ / DDR_600M block.
-
-config T41_VARIANT_T41N
-	bool "T41N (DDR3-1500, 128 MiB, 16-bit, W631GU6NG) [untested]"
-	help
-	  T41N: DDR3 @ 750 MHz, 16-bit, 128 MiB W631GU6NG. APLL 1104,
-	  MPLL 1500. Per vendor T41-1.2.6 CONFIG_T41N / DDR_750M block.
-
-config T41_VARIANT_T41NQ
-	bool "T41NQ (DDR3-1400, 128 MiB, 16-bit, W631GU6NG) [HW-validated]"
-	help
-	  T41NQ: DDR3 @ 700 MHz, 16-bit, 128 MiB W631GU6NG. APLL 1104,
-	  MPLL 1400, VPLL 1080. HW-validated on the lab T41NQ board.
-	  Per vendor T41-1.2.6 CONFIG_T41NQ / DDR_700M block.
-
-config T41_VARIANT_T41XQ
-	bool "T41XQ (DDR3-1400, 256 MiB, 16-bit, W632GU6NG) [untested]"
-	help
-	  T41XQ: DDR3 @ 700 MHz, 16-bit, 256 MiB W632GU6NG. APLL 1104,
-	  MPLL 1400. 2 Gbit chip vs T41NQ's 1 Gbit. Per vendor T41-1.2.6
-	  CONFIG_T41XQ / DDR_700M block.
-
-config T41_VARIANT_T41ZG
-	bool "T41ZG (LPDDR2-1000, 256 MiB, 16-bit, M54D2G16128ACR11) [untested]"
-	help
-	  T41ZG: LPDDR2 @ 500 MHz, 16-bit, 256 MiB M54D2G16128ACR11.
-	  APLL 1104, MPLL 1000. Only LPDDR2 SKU in the T41 family. Per
-	  vendor T41-1.2.6 CONFIG_T41ZG / DDR_500M block.
-
-config T41_VARIANT_T41ZGC
-	bool "T41ZGC (DDR3-1400, 256 MiB, 16-bit, W632GU6NG) [untested]"
-	help
-	  T41ZGC: DDR3 @ 700 MHz, 16-bit, 256 MiB W632GU6NG. APLL 1104,
-	  MPLL 1400. Identical setpoint to T41XQ/T41ZX. Per vendor
-	  T41-1.2.6 CONFIG_T41ZGC / DDR_700M block.
-
-config T41_VARIANT_T41ZL
-	bool "T41ZL (DDR2-1200, 64 MiB, 16-bit, M14D5121632A) [untested]"
-	help
-	  T41ZL: DDR2 @ 600 MHz, 16-bit, 64 MiB M14D5121632A. APLL 1104,
-	  MPLL 1200. Same DDR setpoint as T41L/T41LQ. Per vendor
-	  T41-1.2.6 CONFIG_T41ZL / DDR_600M block.
-
-config T41_VARIANT_T41ZM
-	bool "T41ZM (LPDDR3-1400, 128 MiB, 16-bit, W63AH6N2B_BJ) [untested]"
-	help
-	  T41ZM: LPDDR3 @ 700 MHz, 16-bit, 128 MiB W63AH6N2B_BJ. APLL
-	  1104, MPLL 1400. Only LPDDR3 SKU in the T41 family. Per vendor
-	  T41-1.2.6 CONFIG_T41ZM / DDR_700M block.
-
-config T41_VARIANT_T41ZMC
-	bool "T41ZMC (DDR3-1400, 128 MiB, 16-bit, W631GU6NG) [untested]"
-	help
-	  T41ZMC: DDR3 @ 700 MHz, 16-bit, 128 MiB W631GU6NG. APLL 1104,
-	  MPLL 1400. Identical setpoint to T41NQ. Per vendor T41-1.2.6
-	  CONFIG_T41ZMC / DDR_700M block.
-
-config T41_VARIANT_T41ZN
-	bool "T41ZN (DDR3-1500, 128 MiB, 16-bit, W631GU6NG) [untested]"
-	help
-	  T41ZN: DDR3 @ 750 MHz, 16-bit, 128 MiB W631GU6NG. APLL 1104,
-	  MPLL 1500. Identical setpoint to T41N. Per vendor T41-1.2.6
-	  CONFIG_T41ZN / DDR_750M block.
-
-config T41_VARIANT_T41ZX
-	bool "T41ZX (DDR3-1400, 256 MiB, 16-bit, W632GU6NG) [untested]"
-	help
-	  T41ZX: DDR3 @ 700 MHz, 16-bit, 256 MiB W632GU6NG. APLL 1104,
-	  MPLL 1400. Identical setpoint to T41XQ/T41ZGC. Per vendor
-	  T41-1.2.6 CONFIG_T41ZX / DDR_700M block.
-
-endchoice
-
-config T41_DRAM_SIZE_MB
-	int
-	default 128 if T41_VARIANT_T41A
-	default 64  if T41_VARIANT_T41L
-	default 64  if T41_VARIANT_T41LQ
-	default 128 if T41_VARIANT_T41N
-	default 128 if T41_VARIANT_T41NQ
-	default 256 if T41_VARIANT_T41XQ
-	default 256 if T41_VARIANT_T41ZG
-	default 256 if T41_VARIANT_T41ZGC
-	default 64  if T41_VARIANT_T41ZL
-	default 128 if T41_VARIANT_T41ZM
-	default 128 if T41_VARIANT_T41ZMC
-	default 128 if T41_VARIANT_T41ZN
-	default 256 if T41_VARIANT_T41ZX
+# The T41 SKU (DDR type/geometry/clocks) is selected at runtime from the
+# devicetree: each leaf .dts sets a per-SKU compatible on &ddr and the
+# drivers/ram/ingenic/ddr_innophy driver carries the setpoints in its
+# of_match .data (same model as T31/T40/A1). No Kconfig variant.
 
 config SPL_T41_USB_BOOT
 	bool "T41 SPL: return to mask ROM for USB boot (dev loop)"
@@ -136,6 +15,7 @@ config SPL_T41_USB_BOOT
 	  PLLs and DDR, then return to the bootrom (jr ra) instead of
 	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
-	  defconfigs (isvp_t41nq_usbboot_defconfig).
+	  defconfigs (isvp_t41_usbboot_defconfig and
+	  isvp_t41_usbboot_ddr3_defconfig).
 
 endif

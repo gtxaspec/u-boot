@@ -397,17 +397,14 @@ static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
 /*
  * T40 (XBurst2). Same AIC IP as T31 / same split CDR layout
  * (CPM_I2STCDR=0x70, CPM_I2SRCDR=0x84, same M/N/CE/SRC encoding),
- * same CLKGR0 AIC gate (bit 11). MPLL is 1000 MHz on T40N and 1200
- * MHz on T40XP; pick T40N as the default and let the T40XP variant
- * override later if its 1200 MHz reference produces a different
- * sample-rate error budget.
+ * same CLKGR0 AIC gate (bit 11). MPLL is 1000 MHz on T40N and 1200 MHz
+ * on T40XP; only T40N builds sound today and mpll_hz only has to be
+ * "close enough" for the sample-rate divider, so use 1000 MHz. If T40XP
+ * audio is enabled later, refine this - ideally read the live MPLL rate
+ * from the CGU rather than hardcoding a per-SKU value.
  */
 static const struct ingenic_i2s_soc soc_t40  = {
-#ifdef CONFIG_T40_VARIANT_T40XP
-	.mpll_hz = 1200000000u,
-#else
 	.mpll_hz = 1000000000u,
-#endif
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,

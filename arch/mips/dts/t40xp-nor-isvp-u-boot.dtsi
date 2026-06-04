@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T40XP SFC-NOR boot
+ * (e.g. Wyze V3 Pro: T40XP DDR3 256 MiB on SPI-NOR). Identical NOR
+ * layout to t40n-isvp-u-boot.dtsi - the vendor 0x55aa5502 SFC-NOR boot
+ * header at flash offset 0, LZMA U-Boot at 0x10000. The only
+ * T40XP-specific difference (DDR3 vs T40N's DDR2) lives in the DDR node
+ * compatible in the leaf .dts, not here.
+ *
+ * 'make' produces u-boot-with-spl-lzma.bin: headered SPL at offset 0 +
+ * LZMA U-Boot at 0x10000 - flash at offset 0.
+ *
+ * min-spl-length 0x16000 stamps the SPL header length up to BSS_MAX so
+ * the bootrom cache-locks enough SRAM to back BSS during board_init_f
+ * (the SPL file ends well before SPL_BSS_START_ADDR 0x80014000).
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t40xp-nor {
+		filename = "u-boot-spl-t40xp-nor.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+			ingenic,min-spl-length = <0x16000>;
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t40xp-nor.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};

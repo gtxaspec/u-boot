@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+#include "t40-isvp.dtsi"
+#include "t40-isvp-nor.dtsi"
+
+/* T40XP on SFC-NOR (e.g. Wyze V3 Pro): DDR3 M15T1G1664A_2C, 256 MiB, SFC-NOR. */
+&ddr {
+	compatible = "ingenic,t40xp-ddr-innophy";
+};

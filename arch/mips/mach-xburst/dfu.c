@@ -66,48 +66,68 @@ static void free_cs0_of_spinand(void)
 {
 	struct udevice *sfc, *child;
 
-	if (uclass_first_device_err(UCLASS_SPI, &sfc))
-		return;
-
-	device_foreach_child(child, sfc) {
-		if (device_is_compatible(child, "spi-nand")) {
-			device_remove(child, DM_REMOVE_NORMAL);
-			device_unbind(child);
-			return;
+	/*
+	 * Walk every SFC controller (T41 has two) and free the spi-nand stub
+	 * that bound from the devicetree on each, so a SPI-NOR can probe the
+	 * now node-less CS0 of whichever bus actually has a NOR.
+	 */
+	for (uclass_first_device(UCLASS_SPI, &sfc); sfc;
+	     uclass_next_device(&sfc)) {
+		device_foreach_child(child, sfc) {
+			if (device_is_compatible(child, "spi-nand")) {
+				device_remove(child, DM_REMOVE_NORMAL);
+				device_unbind(child);
+				break;
+			}
 		}
 	}
 }
 
 int board_late_init(void)
 {
+	static const char * const nand[] = { "spi-nand0", "spi-nand1" };
 	struct spi_flash *flash;
 	struct mtd_info *mtd;
 	char info[48];
+	char cmd[32];
+	int i;
 
-	/* SPI-NAND first: flash@0 is spi-nand, so this probes it. */
+	/*
+	 * SPI-NAND first: each SFC's flash@0 is declared spi-nand, so this
+	 * probes them. T41 has two SFC controllers and the boot NAND may sit
+	 * on either; single-SFC SoCs simply lack spi-nand1.
+	 */
 	mtd_probe_devices();
-	mtd = get_mtd_device_nm("spi-nand0");
-	if (!IS_ERR_OR_NULL(mtd)) {
-		snprintf(info, sizeof(info), "spi-nand0 raw 0x0 0x%llx",
-			 (unsigned long long)mtd->size);
+	for (i = 0; i < 2; i++) {
+		mtd = get_mtd_device_nm(nand[i]);
+		if (IS_ERR_OR_NULL(mtd))
+			continue;
+		snprintf(info, sizeof(info), "%s raw 0x0 0x%llx",
+			 nand[i], (unsigned long long)mtd->size);
 		put_mtd_device(mtd);
 		env_set("dfu_alt_info", info);
-		env_set("dfubootcmd", "dfu 0 mtd spi-nand0");
+		snprintf(cmd, sizeof(cmd), "dfu 0 mtd %s", nand[i]);
+		env_set("dfubootcmd", cmd);
 		return 0;
 	}
 
 	/*
-	 * No NAND: unbind the failed spi-nand to free CS0, then probe a
-	 * SPI-NOR. spi_flash_probe() (not _bus_cs) binds the jedec_spi_nor
-	 * driver itself, so it works on the now node-less CS0; the device it
-	 * creates stays bound for the subsequent "dfu 0 sf 0:0".
+	 * No NAND on any SFC: unbind the failed spi-nand stubs to free the
+	 * chip-selects, then probe a SPI-NOR on each SFC bus in turn.
+	 * spi_flash_probe() (not _bus_cs) binds the jedec_spi_nor driver
+	 * itself, so it works on the now node-less CS0; the device it creates
+	 * stays bound for the subsequent "dfu 0 sf N:0". On single-SFC SoCs
+	 * bus 0 answers and bus 1 is a harmless miss.
 	 */
 	free_cs0_of_spinand();
-	flash = spi_flash_probe(0, 0, 50000000, 0);
-	if (flash && flash->size) {
+	for (i = 0; i < 2; i++) {
+		flash = spi_flash_probe(i, 0, 50000000, 0);
+		if (!flash || !flash->size)
+			continue;
 		snprintf(info, sizeof(info), "flash raw 0x0 0x%x", flash->size);
 		env_set("dfu_alt_info", info);
-		env_set("dfubootcmd", "dfu 0 sf 0:0");
+		snprintf(cmd, sizeof(cmd), "dfu 0 sf %d:0", i);
+		env_set("dfubootcmd", cmd);
 		return 0;
 	}
 

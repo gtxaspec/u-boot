@@ -491,6 +491,11 @@ int dfu_read(struct dfu_entity *dfu, void *buf, int size, int blk_seq_num)
 	if (dfu->i_blk_seq_num != blk_seq_num) {
 		printf("%s: Wrong sequence number! [%d] [%d]\n",
 		       __func__, dfu->i_blk_seq_num, blk_seq_num);
+		/* Reset the transaction so a fresh upload (block 0) can recover,
+		 * mirroring dfu_write(). Without this, an upload interrupted by a
+		 * host disconnect (e.g. a browser reload) leaves inited=1 and
+		 * i_blk_seq_num stuck, and no request can clear it. */
+		dfu_transaction_cleanup(dfu);
 		return -1;
 	}
 	/* handle rollover */

@@ -49,6 +49,7 @@ jobs:
           - { defconfig: isvp_t33_sfcnor_defconfig,          arch: xburst1 }
           - { defconfig: isvp_t40_sfcnor_defconfig,          arch: xburst2 }
           - { defconfig: isvp_t40xp_sfcnand_defconfig,       arch: xburst2 }
+          - { defconfig: isvp_t40xp_sfcnor_defconfig,        arch: xburst2 }
           - { defconfig: isvp_t41lq_sfcnor_defconfig,        arch: xburst2 }
           - { defconfig: isvp_t41nq_sfcnor_defconfig,        arch: xburst2 }
           - { defconfig: isvp_a1_sfcnor_defconfig,           arch: xburst2 }

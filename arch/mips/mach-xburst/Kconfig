@@ -28,6 +28,7 @@ config SOC_A1
 	select SUPPORTS_CPU_MIPS32_R2
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
+	select MIPS_L2_CACHE
 	select BINMAN
 	help
 	  Ingenic A1 XBurst2 dual-core camera SoC: 24 MHz EXTAL,

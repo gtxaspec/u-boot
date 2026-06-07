@@ -408,6 +408,9 @@ const struct flash_info spi_nor_ids[] = {
 	 ("p25q128h", 0x856018, 0, 64 * 1024, 256,
 	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO
+	 ("py25q128ha", 0x852018, 0, 64 * 1024, 256,
+	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{ INFO
 	 ("py25f512hb", 0x85231a, 0, 64 * 1024, 1024,
 	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
 	{ INFO

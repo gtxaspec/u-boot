@@ -131,6 +131,8 @@
 	 */
 	aic: audio-controller@b0020000 {
 		compatible = "ingenic,t40-aic";
+		clocks = <&cgu T40_CLK_MPLL>;
+		clock-names = "mpll";
 		reg = <0xb0020000 0x100>;
 		#sound-dai-cells = <0>;
 		status = "disabled";

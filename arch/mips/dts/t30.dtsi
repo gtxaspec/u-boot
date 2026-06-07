@@ -211,6 +211,8 @@
 	 */
 	aic: audio-controller@10020000 {
 		compatible = "ingenic,t30-aic";
+		clocks = <&cgu T30_CLK_MPLL>;
+		clock-names = "mpll";
 		reg = <0x10020000 0x100>;
 		#sound-dai-cells = <0>;
 		status = "disabled";

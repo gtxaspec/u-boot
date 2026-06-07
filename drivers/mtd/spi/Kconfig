@@ -177,6 +177,11 @@ config SPI_FLASH_FIDELIX
 	help
 	  Add support for Fidelix SPI flash chips (FM25xxx).
 
+config SPI_FLASH_FUDAN
+	bool "Shanghai Fudan Microelectronics SPI flash support"
+	help
+	  Add support for Shanghai Fudan Microelectronics SPI flash chips (FM25xxx).
+
 config SPI_FLASH_GIGADEVICE
 	bool "GigaDevice SPI flash support"
 	help

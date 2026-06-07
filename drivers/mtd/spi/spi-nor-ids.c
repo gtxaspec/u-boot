@@ -126,6 +126,15 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("fm25q64",    0xf83217, 0, 64 * 1024, 128,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 #endif
+#ifdef CONFIG_SPI_FLASH_FUDAN
+	/* Shanghai Fudan Microelectronics */
+	{ INFO("fm25q64",    0xa14017, 0, 64 * 1024, 128,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{ INFO("fm25q128",   0xa14018, 0, 64 * 1024, 256,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{ INFO("fm25w128",   0xa12818, 0, 64 * 1024, 256,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+#endif
 #ifdef CONFIG_SPI_FLASH_GIGADEVICE	/* GIGADEVICE */
 	/* GigaDevice */
 	{

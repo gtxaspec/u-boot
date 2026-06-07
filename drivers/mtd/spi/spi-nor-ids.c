@@ -77,6 +77,13 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("at25sl321",	0x1f4216, 0, 64 * 1024,  64, SECT_4K) },
 	{ INFO("at26df081a",	0x1f4501, 0, 64 * 1024,  16, SECT_4K) },
 #endif
+#ifdef CONFIG_SPI_FLASH_BOYA
+	/* Boya Microelectronics (BoHong) */
+	{ INFO("by25q64as",  0x684017, 0, 64 * 1024, 128,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{ INFO("by25q128as", 0x684018, 0, 64 * 1024, 256,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+#endif
 #ifdef CONFIG_SPI_FLASH_DOSILICON
 	/* Dosilicon Co., Ltd */
 	{ INFO("ds25m4cb", 0xe5401a, 0, 64 * 1024, 1024,

@@ -241,11 +241,11 @@ static inline void ddr_writel(const struct ingenic_ddr_priv *p, u32 val, u32 off
 	writel(val, p->base + off);
 }
 
-/* ----- Driver-internal entry points (ddr_innophy_phy.c, T41 family) ----- */
-int ingenic_ddr_phy_init(struct ingenic_ddr_priv *p);
-int ingenic_ddr_phy_hw_calibration(struct ingenic_ddr_priv *p);
-void ingenic_ddr_phy_set_drv_odt(struct ingenic_ddr_priv *p);
-void ingenic_ddr_phy_set_vref_skew(struct ingenic_ddr_priv *p);
+/* ----- Driver-internal entry points (ddr_innophy_phy_t41.c, T41 family) ----- */
+int ingenic_ddr_t41_phy_init(struct ingenic_ddr_priv *p);
+int ingenic_ddr_t41_phy_hw_calibration(struct ingenic_ddr_priv *p);
+void ingenic_ddr_t41_phy_set_drv_odt(struct ingenic_ddr_priv *p);
+void ingenic_ddr_t41_phy_set_vref_skew(struct ingenic_ddr_priv *p);
 
 /* ----- T40-family PHY paths (ddr_innophy_phy_t40.c) ----- */
 int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p);

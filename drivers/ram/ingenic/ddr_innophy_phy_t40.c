@@ -5,7 +5,7 @@
  *
  * Faithful port of arch/mips/mach-xburst/t40/sdram.c (vendor T40-1.3.1)
  * for use as the T40 branch of the UCLASS_RAM driver. The T41 family
- * uses ddr_innophy_phy.c instead; the two paths share the controller-
+ * uses ddr_innophy_phy_t41.c instead; the two paths share the controller-
  * side ddr_innophy.c (CGU init, DDRC reset/prev/post-init, MR program
  * via ddrc_dfi_init).
  *
@@ -409,7 +409,7 @@ void ingenic_ddr_t40_post_phy_fixups(struct ingenic_ddr_priv *p)
  * at 500 MHz. The register layout uses chA = 0x120 and chB = 0x1a0
  * (different from the T41 set_vref_skew which uses 0x1c0 + dq_off_rx[]
  * indexing). For DDR3, the equivalent T41-style table comes through
- * ingenic_ddr_phy_set_vref_skew on the T41 family.
+ * ingenic_ddr_t41_phy_set_vref_skew on the T41 family.
  */
 void ingenic_ddr_t40_phy_set_skew(struct ingenic_ddr_priv *p)
 {

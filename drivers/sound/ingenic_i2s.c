@@ -18,12 +18,14 @@
 
 #define LOG_CATEGORY UCLASS_I2S
 
+#include <clk.h>
 #include <dm.h>
 #include <i2s.h>
 #include <log.h>
 #include <sound.h>
 #include <asm/io.h>
 #include <linux/delay.h>
+#include <linux/err.h>
 
 /* AIC register offsets (xb47xx_i2s_v12.h). */
 #define AICFR		0x00
@@ -127,7 +129,6 @@
 #define AIC_SYSCLK_HZ		(44100u * 256u)		/* 11.2896 MHz */
 
 struct ingenic_i2s_soc {
-	u32 mpll_hz;		/* I2SCDR parent (MPLL) rate for this SoC */
 	u32 spk_cdr_off;	/* TX clk divider: 0x60 unified or 0x70 spk */
 	u32 mic_cdr_off;	/* RX clk divider: 0 (unified) or 0x84 mic */
 	u32 aic_gate_bit;	/* CLKGR0 bit for AIC gate (T31 bit 11, T32 bit 8) */
@@ -141,6 +142,8 @@ struct ingenic_i2s_soc {
 struct ingenic_i2s_priv {
 	void __iomem *base;
 	const struct ingenic_i2s_soc *soc;
+	unsigned long	mpll_hz;	/* live I2SCDR parent rate, read from
+					 * the clk uclass at probe */
 	bool		playing;	/* ERPL enabled, drop on stop_play */
 };
 
@@ -181,7 +184,7 @@ static void ingenic_aic_clk_init(struct ingenic_i2s_priv *priv)
 	 * and the TX FIFO never drains. Leave CE set afterwards (same
 	 * rule as the MSC0/MAC-PHY dividers).
 	 */
-	n = priv->soc->mpll_hz / AIC_SYSCLK_HZ;
+	n = priv->mpll_hz / AIC_SYSCLK_HZ;
 	if (!n)
 		n = 1;
 	if (n > I2SCDR_N_MASK)
@@ -311,7 +314,9 @@ static int ingenic_i2s_probe(struct udevice *dev)
 {
 	struct ingenic_i2s_priv *priv = dev_get_priv(dev);
 	struct i2s_uc_priv *uc = dev_get_uclass_priv(dev);
+	struct clk mpll;
 	fdt_addr_t addr;
+	int ret;
 
 	priv->soc = (const struct ingenic_i2s_soc *)dev_get_driver_data(dev);
 
@@ -319,6 +324,19 @@ static int ingenic_i2s_probe(struct udevice *dev)
 	if (addr == FDT_ADDR_T_NONE)
 		return -EINVAL;
 	priv->base = map_physmem(addr, 0x100, MAP_NOCACHE);
+
+	/*
+	 * The I2SCDR divider's parent is the MPLL. Read its live rate from
+	 * the clk uclass (clk-tXX) instead of hardcoding a per-SoC value, so
+	 * the sample-rate divider is correct on every SoC and SKU - e.g.
+	 * T40N (MPLL 1000 MHz) and T40XP (1200 MHz) share one compatible.
+	 */
+	ret = clk_get_by_name(dev, "mpll", &mpll);
+	if (ret)
+		return ret;
+	priv->mpll_hz = clk_get_rate(&mpll);
+	if (IS_ERR_VALUE(priv->mpll_hz) || !priv->mpll_hz)
+		return -EINVAL;
 
 	uc->id = 0;
 	uc->samplingrate = 44100;
@@ -336,9 +354,9 @@ static const struct i2s_ops ingenic_i2s_ops = {
 };
 
 /*
- * I2SCDR parent (MPLL) rate per SoC - only needs to be close enough
- * to land the SYSCLK near 12 MHz; the codec re-derives the audio fs.
- * Values per the mainline T-series PLL setup (clk-tXX / tXX pll.c).
+ * Per-SoC AIC descriptors. The I2SCDR parent (MPLL) rate is not carried
+ * here - it is read live from the clk uclass at probe (clk-tXX), so the
+ * sample-rate divider tracks each SKU's actual MPLL.
  * spk_cdr_off: 0x60 (T10/T20/T21/T30 unified) or 0x70 (T23/T31/C100/T32
  * split TX). mic_cdr_off: 0 (unified) or 0x84 (split RX).
  *
@@ -356,39 +374,39 @@ static const struct i2s_ops ingenic_i2s_ops = {
 #define T32_CODEC_SEL_BITS	(AICFR_ICDC)
 #define T32_AIC_SLAVE_BITS	(AICFR_T32_RMASTER | AICFR_T32_TMASTER)
 
-static const struct ingenic_i2s_soc soc_t10  = { .mpll_hz = 1200000000u,
+static const struct ingenic_i2s_soc soc_t10  = {
 	.spk_cdr_off = I2S_CDR_UNIFIED,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_t20  = { .mpll_hz = 1000000000u,
+static const struct ingenic_i2s_soc soc_t20  = {
 	.spk_cdr_off = I2S_CDR_UNIFIED,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_t21  = { .mpll_hz =  900000000u,
+static const struct ingenic_i2s_soc soc_t21  = {
 	.spk_cdr_off = I2S_CDR_UNIFIED,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_t23  = { .mpll_hz = 1200000000u,
+static const struct ingenic_i2s_soc soc_t23  = {
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_t30  = { .mpll_hz = 1000000000u,
+static const struct ingenic_i2s_soc soc_t30  = {
 	.spk_cdr_off = I2S_CDR_UNIFIED,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_t31  = { .mpll_hz = 1200000000u,
+static const struct ingenic_i2s_soc soc_t31  = {
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
 	.aic_codec_select = T31_CODEC_SEL_BITS,
 	.aic_slave_clear = T31_AIC_SLAVE_BITS };
-static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
+static const struct ingenic_i2s_soc soc_c100 = {
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
@@ -397,14 +415,11 @@ static const struct ingenic_i2s_soc soc_c100 = { .mpll_hz = 1200000000u,
 /*
  * T40 (XBurst2). Same AIC IP as T31 / same split CDR layout
  * (CPM_I2STCDR=0x70, CPM_I2SRCDR=0x84, same M/N/CE/SRC encoding),
- * same CLKGR0 AIC gate (bit 11). MPLL is 1000 MHz on T40N and 1200 MHz
- * on T40XP; only T40N builds sound today and mpll_hz only has to be
- * "close enough" for the sample-rate divider, so use 1000 MHz. If T40XP
- * audio is enabled later, refine this - ideally read the live MPLL rate
- * from the CGU rather than hardcoding a per-SKU value.
+ * same CLKGR0 AIC gate (bit 11). The MPLL differs per SKU (1000 MHz on
+ * T40N, 1200 MHz on T40XP); reading it live from the clk uclass keeps
+ * the sample-rate divider correct on both.
  */
 static const struct ingenic_i2s_soc soc_t40  = {
-	.mpll_hz = 1000000000u,
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T31,
@@ -417,7 +432,7 @@ static const struct ingenic_i2s_soc soc_t40  = {
  * CE[29]/SRC[31:30] layout, so the existing helpers Just Work.
  * MPLL is 1200 MHz on the "lq" PLL profile (mach-xburst/t32/pll.c).
  */
-static const struct ingenic_i2s_soc soc_t32  = { .mpll_hz = 1200000000u,
+static const struct ingenic_i2s_soc soc_t32  = {
 	.spk_cdr_off = I2S_SPK_CDR_SPLIT,
 	.mic_cdr_off = I2S_MIC_CDR_SPLIT,
 	.aic_gate_bit = CPM_CLKGR0_AIC_T32,

@@ -339,7 +339,7 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 	 * Family-specific PHY init. The T40 path also programs drive/ODT
 	 * via hard-coded T40N values (vendor t40n_phy_driver_odt is folded
 	 * into ingenic_ddr_t40_phy_init); the T41 path uses the efuse
-	 * par[] table programmed by ingenic_ddr_phy_set_drv_odt() below.
+	 * par[] table programmed by ingenic_ddr_t41_phy_set_drv_odt() below.
 	 * The A1 path programs drive/ODT/DQS/DQ/VREF from its a1_phy table
 	 * inside ingenic_ddr_a1_phy_init() (A1 builds only).
 	 */
@@ -350,7 +350,7 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 		ret = ingenic_ddr_a1_phy_init(p);
 #endif
 	else
-		ret = ingenic_ddr_phy_init(p);
+		ret = ingenic_ddr_t41_phy_init(p);
 	if (ret)
 		return ret;
 
@@ -363,7 +363,7 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 	    && v->family != INGENIC_DDR_FAMILY_A1
 #endif
 	   )
-		ingenic_ddr_phy_set_drv_odt(p);
+		ingenic_ddr_t41_phy_set_drv_odt(p);
 
 	ddrc_prev_init(p);
 
@@ -374,7 +374,7 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 		ret = ingenic_ddr_a1_phy_hw_calibration(p);
 #endif
 	else
-		ret = ingenic_ddr_phy_hw_calibration(p);
+		ret = ingenic_ddr_t41_phy_hw_calibration(p);
 	if (ret)
 		return ret;
 
@@ -407,7 +407,7 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 		writel(0x2bd07460,  (void __iomem *)(0xb3012048u));
 		writel(0x1,         (void __iomem *)(0xb301206cu));
 
-		ingenic_ddr_phy_set_vref_skew(p);
+		ingenic_ddr_t41_phy_set_vref_skew(p);
 	}
 
 	return 0;

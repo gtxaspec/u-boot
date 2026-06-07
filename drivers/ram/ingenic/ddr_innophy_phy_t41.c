@@ -52,7 +52,7 @@ static void phy_reg_set_range(struct ingenic_ddr_priv *p, u32 reg,
  * Vendor retries with the alternate PLL select if lock fails - we
  * inherit that, capped at one retry to avoid infinite loops.
  * ------------------------------------------------------------------ */
-int ingenic_ddr_phy_init(struct ingenic_ddr_priv *p)
+int ingenic_ddr_t41_phy_init(struct ingenic_ddr_priv *p)
 {
 	const struct ingenic_ddr_variant *v = p->cfg;
 	unsigned int rate = v->ddr_hz;
@@ -145,7 +145,7 @@ retry:
  * Hardware DQS calibration (always enabled).
  * Polls DDRP_CALIB_DONE for AL+AH (bits 0 and 1) both done.
  * ------------------------------------------------------------------ */
-int ingenic_ddr_phy_hw_calibration(struct ingenic_ddr_priv *p)
+int ingenic_ddr_t41_phy_hw_calibration(struct ingenic_ddr_priv *p)
 {
 	unsigned int timeout = 1000000;
 	u32 val;
@@ -174,7 +174,7 @@ int ingenic_ddr_phy_hw_calibration(struct ingenic_ddr_priv *p)
  * replicate. The 12 writes pair pull-up and pull-down for each lane
  * group: ODT, CMD, CLK, DQ.
  * ------------------------------------------------------------------ */
-void ingenic_ddr_phy_set_drv_odt(struct ingenic_ddr_priv *p)
+void ingenic_ddr_t41_phy_set_drv_odt(struct ingenic_ddr_priv *p)
 {
 	const unsigned int *par = p->cfg->par;
 
@@ -199,7 +199,7 @@ void ingenic_ddr_phy_set_drv_odt(struct ingenic_ddr_priv *p)
  * Triggered only when par[IDP_SKEW_TRX] is non-zero (RX bit 0, TX bit 1).
  * Most variants leave this 0 (vendor defaults) but T41NQ uses TRX=0x3.
  * ------------------------------------------------------------------ */
-void ingenic_ddr_phy_set_vref_skew(struct ingenic_ddr_priv *p)
+void ingenic_ddr_t41_phy_set_vref_skew(struct ingenic_ddr_priv *p)
 {
 	static const int dq_off_rx[] = { 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c,
 					 0x0e, 0x10, 0x17, 0x19, 0x1b, 0x1d,

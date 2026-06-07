@@ -4,7 +4,10 @@
 # builds with the exact compiler thingino ships. Each job compiles one
 # isvp_*_usbboot defconfig and uploads u-boot-spl.bin + u-boot.bin (flat, no
 # spl/ prefix) as a run artifact named after the SoC (defconfig minus the
-# _defconfig suffix, e.g. isvp_a1_usbboot).
+# _defconfig suffix, e.g. isvp_a1_usbboot). When every SoC build succeeds, a
+# final "release" job rolls a single rolling "usbboot" pre-release carrying all
+# the loader binaries, SoC-prefixed (<soc>-u-boot-spl.bin / <soc>-u-boot.bin),
+# recreated on each manual run.
 #
 # Security: the only actions used are actions/cache and
 # actions/upload-artifact - both first-party to GitHub (the same `actions`
@@ -15,7 +18,10 @@
 # Everything else avoids marketplace actions: the source is a plain shallow
 # single-branch `git clone` (no tags, no fork upstream), the thingino
 # toolchain is fetched with the pre-installed token-authed `gh` CLI (`gh
-# release download`), and the build is plain `make`.
+# release download`), and the build is plain `make`. The build jobs run with
+# contents:read; only the final release job is granted contents:write (to
+# create the rolling `usbboot` release/tag) and actions:read (so `gh run
+# download` can pull this run's artifacts) - both scoped to that one job.
 #
 # Caching: ccache is restored/saved via actions/cache, keyed per defconfig
 # with a rolling key (unique per commit + a prefix restore-key) so each run
@@ -140,3 +146,48 @@ jobs:
           path: ${{ runner.temp }}/artifact
           if-no-files-found: error
           retention-days: 30
+
+  # Once every SoC has built, roll a single "usbboot" pre-release carrying all
+  # the loader binaries. `gh run download` pulls this run's artifacts (gh has a
+  # native equivalent here, so no download-artifact action is needed), then
+  # `gh release` recreates the rolling tag. Runs only if all build jobs passed.
+  release:
+    name: release (usbboot)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the "usbboot" release + tag
+      actions: read     # gh run download: read this run's artifacts
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download this run's loader artifacts (gh, no action)
+        run: |
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -D artifacts
+          echo "==== downloaded artifacts ===="
+          ls -R artifacts
+
+      - name: Stage release assets (SoC-prefixed spl + u-boot per loader)
+        run: |
+          mkdir -p release
+          for d in artifacts/*/; do
+            soc="$(basename "$d")"
+            for f in "$d"*; do
+              cp "$f" "release/${soc}-$(basename "$f")"
+            done
+          done
+          echo "==== release assets ===="
+          ls -l release
+
+      - name: Roll the "usbboot" pre-release
+        run: |
+          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each <soc>-u-boot-spl.bin plus <soc>-u-boot.bin pair is uploaded to RAM via the mask-ROM USB boot, e.g.: python3 t31-usbboot.py --spl isvp_t31_usbboot-u-boot-spl.bin --uboot isvp_t31_usbboot-u-boot.bin . Rolling release - replaced on every manual run of the usbboot workflow."
+          # Drop the previous rolling release + tag (ignored on the first run),
+          # then recreate it at the commit that was built.
+          gh release delete usbboot -R "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          gh release create usbboot release/* \
+            -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Ingenic USB-boot loaders (latest)" \
+            --notes "$notes" \
+            --prerelease

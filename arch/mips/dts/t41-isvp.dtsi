@@ -122,6 +122,8 @@
 	aic: audio-controller@b0020000 {
 		compatible = "ingenic,t41-aic";
 		reg = <0xb0020000 0x100>;
+		clocks = <&cgu T41_CLK_APLL>;
+		clock-names = "apll";
 		#sound-dai-cells = <0>;
 		status = "okay";
 	};

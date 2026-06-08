@@ -23,12 +23,14 @@
 
 #include <cpu_func.h>
 #include <audio_codec.h>
+#include <clk.h>
 #include <dm.h>
 #include <i2s.h>
 #include <log.h>
 #include <sound.h>
 #include <asm/io.h>
 #include <linux/delay.h>
+#include <linux/err.h>
 
 /* ---- register blocks (KSEG1 uncached) ---- */
 #define CGU_BASE	0xb0000000
@@ -41,8 +43,17 @@
 #define CGU_I2STCDR	0xa0		/* I2S TX clock divider */
 #define CLKGR0_AIC	BIT(30)
 #define CLKGR1_DMAC	BIT(3)		/* PDMA controller gate */
-#define I2SCDR_VAL	0x220021b1	/* SCLKA/APLL, 256*16000 (vendor live) */
+/*
+ * The I2S bit-clock comes from SCLKA/APLL through the CGU fractional
+ * divider (out = parent * M / N). Keep the vendor numerator M = 32 and
+ * compute N at probe from the live APLL (read via the clk uclass). Every
+ * current A1 SKU runs APLL 1104 MHz so this reproduces the vendor live
+ * 0x220021b1 (M=32, N=8625), but reading it live keeps the bit-clock
+ * correct for any future SKU on a different APLL setpoint.
+ */
+#define I2SCDR_M	32
 #define I2SCDR_CE	BIT(29)
+#define AIC_SYSCLK_HZ	(256 * 16000)	/* 256 fs @ 16 kHz = 4.096 MHz */
 
 /* AIC */
 #define AICFR		0x00
@@ -251,15 +262,15 @@ U_BOOT_DRIVER(a1_codec) = {
 
 /* ============================ AIC ============================ */
 
-static void a1_aic_clk_init(void)
+static void a1_aic_clk_init(u32 i2scdr)
 {
 	void __iomem *cgu = (void __iomem *)CGU_BASE;
 
 	clrbits_le32(cgu + CGU_CLKGR0, CLKGR0_AIC);
 	clrbits_le32(cgu + CGU_CLKGR1, CLKGR1_DMAC);
 	/* Latch the fractional divider cleanly (CE 0->1 edge). */
-	writel(I2SCDR_VAL & ~I2SCDR_CE, cgu + CGU_I2STCDR);
-	writel(I2SCDR_VAL, cgu + CGU_I2STCDR);
+	writel(i2scdr & ~I2SCDR_CE, cgu + CGU_I2STCDR);
+	writel(i2scdr, cgu + CGU_I2STCDR);
 	/* Enable the PDMA engine. */
 	writel(PDMA_DMAC_DMAE, (void __iomem *)(PDMA_BASE + PDMA_DMAC));
 }
@@ -377,10 +388,27 @@ static int a1_aic_probe(struct udevice *dev)
 	struct a1_aic_priv *a = dev_get_priv(dev);
 	struct i2s_uc_priv *uc = dev_get_uclass_priv(dev);
 	fdt_addr_t addr = dev_read_addr(dev);
+	struct clk apll;
+	unsigned long rate;
+	u32 i2scdr;
+	int ret;
 
 	if (addr == FDT_ADDR_T_NONE)
 		return -EINVAL;
 	a->base = map_physmem(addr, 0x100, MAP_NOCACHE);
+
+	/*
+	 * Derive the I2SCDR from the live APLL instead of a hardcoded word
+	 * (out = APLL * M / N, M fixed at 32, N solved for 256*16 kHz).
+	 */
+	ret = clk_get_by_name(dev, "apll", &apll);
+	if (ret)
+		return ret;
+	rate = clk_get_rate(&apll);
+	if (IS_ERR_VALUE(rate) || !rate)
+		return -EINVAL;
+	i2scdr = I2SCDR_CE | (I2SCDR_M << 20) |
+		 ((u32)(((u64)I2SCDR_M * rate) / AIC_SYSCLK_HZ) & 0xfffff);
 
 	/* sound_beep buffer sizing: mono 16-bit 16 kHz. */
 	uc->id = 0;
@@ -391,7 +419,7 @@ static int a1_aic_probe(struct udevice *dev)
 	uc->bfs = 32;
 	uc->audio_pll_clk = 12000000;
 
-	a1_aic_clk_init();
+	a1_aic_clk_init(i2scdr);
 	a1_aic_init(a->base);
 	return 0;
 }

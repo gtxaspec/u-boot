@@ -147,6 +147,8 @@
 	aic: audio-controller@b0020000 {
 		compatible = "ingenic,a1-aic";
 		reg = <0xb0020000 0x100>;
+		clocks = <&cgu A1_CLK_APLL>;
+		clock-names = "apll";
 		#sound-dai-cells = <0>;
 		status = "okay";
 	};

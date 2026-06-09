@@ -2,6 +2,10 @@
 /dts-v1/;
 #include "t41-isvp.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T41NQ (SFC NOR)";
+};
+
 /* T41NQ: DDR3 W631GU6NG, 128 MiB. */
 &ddr {
 	compatible = "ingenic,t41nq-ddr-innophy";

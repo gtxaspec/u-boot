@@ -2,6 +2,10 @@
 /dts-v1/;
 #include "t40-isvp-dfu.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T40XP (DFU loader)";
+};
+
 /* T40XP: DDR3, 256 MiB. DFU loader, SFC-NAND target. */
 &ddr {
 	compatible = "ingenic,t40xp-ddr-innophy";

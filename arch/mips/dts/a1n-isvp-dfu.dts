@@ -2,6 +2,10 @@
 /dts-v1/;
 #include "a1-isvp-dfu.dtsi"
 
+/ {
+	model = "Ingenic ISVP-A1N (DFU loader)";
+};
+
 /* A1N: DDR3 W632GU6NG, 256 MiB. DFU loader, SFC-NOR target. */
 &ddr {
 	compatible = "ingenic,a1n-ddr-innophy";

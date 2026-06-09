@@ -2,6 +2,10 @@
 /dts-v1/;
 #include "a1-isvp.dtsi"
 
+/ {
+	model = "Ingenic ISVP-A1N (SFC NOR)";
+};
+
 /* A1N: DDR3 W632GU6NG, 256 MiB, SFC-NOR. */
 &ddr {
 	compatible = "ingenic,a1n-ddr-innophy";

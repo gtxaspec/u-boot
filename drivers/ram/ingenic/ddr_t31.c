@@ -377,35 +377,6 @@ int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
  * comes from of_match .data (the node's compatible IS the selector).
  * ------------------------------------------------------------------ */
 
-/*
- * Active-SKU accessors for the board checkboard() banner. Look the DDR
- * device up via the RAM uclass and read its variant struct from the
- * of_match driver-data - relocation-safe, unlike a file-static set at
- * probe time (the probe runs pre-relocation; checkboard runs after).
- */
-static const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_active(void)
-{
-	struct udevice *dev;
-
-	if (uclass_first_device_err(UCLASS_RAM, &dev))
-		return NULL;
-	return (const struct ingenic_t31_ddr_variant *)dev_get_driver_data(dev);
-}
-
-const char *ingenic_t31_ddr_active_name(void)
-{
-	const struct ingenic_t31_ddr_variant *v = ingenic_t31_ddr_active();
-
-	return v ? v->name : "?";
-}
-
-unsigned int ingenic_t31_ddr_active_cpu_mhz(void)
-{
-	const struct ingenic_t31_ddr_variant *v = ingenic_t31_ddr_active();
-
-	return v ? v->cpu_mhz : 0;
-}
-
 static int ingenic_t31_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_t31_ddr_priv *p = dev_get_priv(dev);

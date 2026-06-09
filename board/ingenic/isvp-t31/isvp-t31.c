@@ -243,9 +243,6 @@ int board_init(void)
  * time CONFIG_T31_VARIANT_*). */
 int checkboard(void)
 {
-	printf("Variant: %s (CPU %u MHz)\n",
-	       ingenic_t31_ddr_active_name(),
-	       ingenic_t31_ddr_active_cpu_mhz());
 #ifdef CONFIG_SPL_T31_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

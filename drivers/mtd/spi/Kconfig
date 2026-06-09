@@ -182,6 +182,12 @@ config SPI_FLASH_FUDAN
 	help
 	  Add support for Shanghai Fudan Microelectronics SPI flash chips (FM25xxx).
 
+config SPI_FLASH_GALLOP
+	bool "Gallop Memory (ChuangFeiXin) SPI flash support"
+	help
+	  Add support for Gallop Memory / ChuangFeiXin Technology SPI flash
+	  chips (GM25xxx). These parts report EON's 0x1c JEDEC manufacturer id.
+
 config SPI_FLASH_GIGADEVICE
 	bool "GigaDevice SPI flash support"
 	help

@@ -108,6 +108,13 @@ const struct flash_info spi_nor_ids[] = {
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO("en25s64",    0x1c3817, 0, 64 * 1024,  128, SECT_4K) },
 #endif
+#ifdef CONFIG_SPI_FLASH_GALLOP
+	/* Gallop Memory (ChuangFeiXin Technology) GM25xxx - reuses EON's 0x1c id */
+	{ INFO("gm25q64a",   0x1c4017, 0, 64 * 1024,  128,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{ INFO("gm25q128a",  0x1c4018, 0, 64 * 1024,  256,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+#endif
 #ifdef CONFIG_SPI_FRAM_FUJITSU
 	/* Fujitsu MB85RS256TY */
 	{

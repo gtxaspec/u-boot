@@ -134,14 +134,4 @@
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
-/*
- * T31 DDR driver (drivers/ram/ingenic/ddr_t31.c) accessors for the
- * boot banner: the active SKU name and CPU/APLL clock of the DT-selected
- * variant. Return "?"/0 until the RAM uclass has probed.
- */
-#ifndef __ASSEMBLY__
-const char *ingenic_t31_ddr_active_name(void);
-unsigned int ingenic_t31_ddr_active_cpu_mhz(void);
-#endif
-
 #endif /* __T31_H__ */

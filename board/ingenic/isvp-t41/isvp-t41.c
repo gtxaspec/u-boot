@@ -128,7 +128,6 @@ int board_init(void)
 
 int checkboard(void)
 {
-	puts("Board: Ingenic ISVP-T41 (XBurst2)\n");
 #ifdef CONFIG_SPL_T41_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

@@ -3,6 +3,10 @@
 #include "t40-isvp.dtsi"
 #include "t40-isvp-nand.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T40XP (SFC NAND)";
+};
+
 /* T40XP: DDR3 M15T1G1664A_2C, 256 MiB, SFC-NAND. */
 &ddr {
 	compatible = "ingenic,t40xp-ddr-innophy";

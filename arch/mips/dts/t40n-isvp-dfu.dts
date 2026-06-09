@@ -2,6 +2,10 @@
 /dts-v1/;
 #include "t40-isvp-dfu.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T40N (DFU loader)";
+};
+
 /* T40N (T40NN): DDR2, 128 MiB. DFU loader.
  * flash@0 is spi-nand so the NAND stack binds on NAND boards; the loader's
  * board_late_init() auto-detects NOR vs NAND - on a NOR board the spi-nand

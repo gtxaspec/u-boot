@@ -7,6 +7,10 @@
 
 #include "t31-isvp-dfu.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T31A (DFU loader)";
+};
+
 &ddr {
 	compatible = "ingenic,t31a-ddr-innophy";
 };

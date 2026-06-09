@@ -7,6 +7,10 @@
 
 #include "t31-isvp.dtsi"
 
+/ {
+	model = "Ingenic ISVP-T31A (SFC NOR)";
+};
+
 &ddr {
 	compatible = "ingenic,t31a-ddr-innophy";
 };

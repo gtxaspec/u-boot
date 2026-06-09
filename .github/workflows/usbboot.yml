@@ -181,7 +181,7 @@ jobs:
 
       - name: Roll the "usbboot" pre-release
         run: |
-          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each <soc>-u-boot-spl.bin plus <soc>-u-boot.bin pair is uploaded to RAM via the mask-ROM USB boot, e.g.: python3 t31-usbboot.py --spl isvp_t31_usbboot-u-boot-spl.bin --uboot isvp_t31_usbboot-u-boot.bin . Rolling release - replaced on every manual run of the usbboot workflow."
+          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each <soc>-u-boot-spl.bin plus <soc>-u-boot.bin pair is uploaded to RAM via the mask-ROM USB boot. Rolling release - replaced on every manual run of the usbboot workflow."
           # Drop the previous rolling release + tag (ignored on the first run),
           # then recreate it at the commit that was built.
           gh release delete usbboot -R "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true

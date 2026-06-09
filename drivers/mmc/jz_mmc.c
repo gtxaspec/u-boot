@@ -153,24 +153,48 @@ static int jz_mmc_clock_rate(void)
 }
 
 #if CONFIG_IS_ENABLED(MMC_WRITE)
-static inline void jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
+static inline int jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
 {
 	int sz = DIV_ROUND_UP(data->blocks * data->blocksize, 4);
 	const void *buf = data->src;
+	int ret;
 
 	while (sz--) {
 		u32 val = get_unaligned_le32(buf);
 
-		wait_for_bit_le32(priv->regs + MSC_IREG,
-				  MSC_IREG_TXFIFO_WR_REQ,
-				  true, 10000, false);
+		ret = wait_for_bit_le32(priv->regs + MSC_IREG,
+					MSC_IREG_TXFIFO_WR_REQ,
+					true, 10000, false);
+		if (ret)
+			return ret;
 		writel(val, priv->regs + MSC_TXFIFO);
 		buf += 4;
 	}
+
+	/*
+	 * The data is now queued in the FIFO; wait for the card to finish
+	 * programming it (PRG_DONE) before returning. Without this the
+	 * generic mmc layer's post-write CMD13 races the in-progress write -
+	 * the card reports a status error and the controller is left mid-
+	 * transfer, wedging the next command. Mirrors the read path's
+	 * DATA_TRAN_DONE wait; matches the legacy Ingenic MSC driver.
+	 */
+	ret = wait_for_bit_le32(priv->regs + MSC_STAT,
+				MSC_STAT_PRG_DONE, true, 10000, false);
+	if (ret)
+		return ret;
+	writel(MSC_IREG_PRG_DONE, priv->regs + MSC_IREG);
+
+	if (readl(priv->regs + MSC_STAT) & MSC_STAT_CRC_WRITE_ERROR)
+		return -EIO;
+
+	return 0;
 }
 #else
-static void jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
-{}
+static int jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
+{
+	return 0;
+}
 #endif
 
 static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *data)
@@ -332,9 +356,11 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 		}
 	}
 	if (data) {
-		if (data->flags & MMC_DATA_WRITE)
-			jz_mmc_write_data(priv, data);
-		else if (data->flags & MMC_DATA_READ) {
+		if (data->flags & MMC_DATA_WRITE) {
+			ret = jz_mmc_write_data(priv, data);
+			if (ret)
+				return ret;
+		} else if (data->flags & MMC_DATA_READ) {
 			ret = jz_mmc_read_data(priv, data);
 			if (ret)
 				return ret;

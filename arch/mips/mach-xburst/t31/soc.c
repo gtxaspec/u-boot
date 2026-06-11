@@ -107,7 +107,6 @@ void board_init_f(ulong dummy)
 	 */
 	clk_ungate_uart(T31_CONSOLE_UART);
 	t31_spl_serial_init();
-	t31_spl_puts("\nT31 SPL: alive (pre-PLL)\n");
 
 	/*
 	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
@@ -118,7 +117,6 @@ void board_init_f(ulong dummy)
 		hang();
 
 	pll_init();
-	t31_spl_puts("T31 SPL: PLL configured\n");
 
 	/*
 	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
@@ -137,8 +135,7 @@ void board_init_f(ulong dummy)
 			hang();
 		if (ram_get_info(dev, &ram))
 			hang();
-		if (dram_verify((u32)ram.size) == 0)
-			t31_spl_puts("T31 SPL: DDR OK\n");
+		dram_verify((u32)ram.size);
 	}
 
 #ifdef CONFIG_SPL_T31_USB_BOOT
@@ -149,7 +146,6 @@ void board_init_f(ulong dummy)
 	 * sp, so a plain jr ra resumes it).
 	 */
 	t31_spl_sfc_clk_init();
-	t31_spl_puts("T31 SPL: DDR up; returning to mask ROM (USB boot)\n");
 	return;
 #else
 	/*
@@ -172,7 +168,6 @@ void board_init_f(ulong dummy)
 	 */
 	preloader_console_init();
 	t31_spl_sfc_clk_init();
-	t31_spl_puts("T31 SPL: handing off to board_init_r (SPL_SPI NOR)\n");
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 #endif

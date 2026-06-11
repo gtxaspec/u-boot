@@ -101,6 +101,11 @@
 			function = "mac0";
 			groups = "mac0-data";
 		};
+
+		pins_mmc0: mmc0 {
+			function = "mmc0";
+			groups = "mmc0-1bit", "mmc0-4bit";
+		};
 	};
 
 	uart1: serial@b0031000 {
@@ -168,6 +173,8 @@
 		clock-names = "mmc";
 		bus-width = <4>;
 		broken-cd;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mmc0>;
 		status = "okay";
 	};
 

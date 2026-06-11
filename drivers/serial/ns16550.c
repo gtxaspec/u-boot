@@ -237,6 +237,26 @@ void ns16550_init(struct ns16550 *com_port, int baud_divisor)
 	}
 #endif
 
+#if defined(CONFIG_ARCH_XBURST)
+	/*
+	 * Ingenic XBurst: the SPL configures and uses this UART, then hands
+	 * it to U-Boot proper with the transmitter still busy, so TEMT may
+	 * never re-assert and the unconditional drain below would spin
+	 * forever - before the console is up, with no diagnostics. When the
+	 * transmitter is not already empty, reset it the way the vendor
+	 * driver does, by toggling the UART module off then on through the
+	 * FCR (which also flushes both FIFOs), mirroring the OMAP34XX
+	 * hand-off quirk above.
+	 */
+	if (!(serial_in(&com_port->lsr) & UART_LSR_TEMT)) {
+		serial_out(UART_FCR_FIFO_EN | UART_FCR_CLEAR_RCVR |
+			   UART_FCR_CLEAR_XMIT, &com_port->fcr);  /* off + flush */
+		serial_out(UART_FCR_FIFO_EN | UART_FCR_CLEAR_RCVR |
+			   UART_FCR_CLEAR_XMIT | UART_FCR_UME,
+			   &com_port->fcr);			  /* on + flush */
+	}
+#endif
+
 	while (!(serial_in(&com_port->lsr) & UART_LSR_TEMT))
 		;
 

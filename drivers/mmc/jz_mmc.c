@@ -7,13 +7,16 @@
  */
 
 #include <malloc.h>
+#include <clk.h>
 #include <mmc.h>
+#include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/unaligned.h>
 #include <errno.h>
 #include <dm/device_compat.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
+#include <time.h>
 #if !CONFIG_IS_ENABLED(DM_MMC)
 #include <mach/jz4780.h>	/* MSC0_BASE / jz_mmc_init() - legacy path only */
 #endif
@@ -139,6 +142,8 @@ struct jz_mmc_priv {
 	void __iomem		*regs;
 	u32			flags;
 	enum jz_mmc_variant	variant;
+	ulong			clk_rate;	/* MSC source clock, divider base */
+	struct gpio_desc	cd_gpio;	/* optional card-detect */
 /* priv flags */
 #define JZ_MMC_BUS_WIDTH_MASK	0x3
 #define JZ_MMC_BUS_WIDTH_1	0x0
@@ -197,10 +202,14 @@ static int jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
 }
 #endif
 
+/* Upper bound on a single PIO data transfer; see the read loop below. */
+#define JZ_MMC_DATA_TIMEOUT_MS	1000
+
 static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *data)
 {
 	int sz = data->blocks * data->blocksize;
 	void *buf = data->dest;
+	unsigned long start = get_timer(0);
 	u32 stat, val;
 
 	do {
@@ -211,6 +220,15 @@ static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *da
 		if (stat & MSC_STAT_CRC_READ_ERROR)
 			return -EINVAL;
 		if (stat & MSC_STAT_DATA_FIFO_EMPTY) {
+			/*
+			 * RDTO is programmed to the maximum, so the controller's
+			 * own read-timeout effectively never fires; bound the
+			 * wait here so a stalled transfer can never wedge the
+			 * boot (return -ETIMEDOUT and let the mmc core fail the
+			 * card instead of spinning forever).
+			 */
+			if (get_timer(start) > JZ_MMC_DATA_TIMEOUT_MS)
+				return -ETIMEDOUT;
 			udelay(10);
 			continue;
 		}
@@ -372,7 +390,13 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 
 static int jz_mmc_set_ios(struct mmc *mmc, struct jz_mmc_priv *priv)
 {
-	u32 real_rate = jz_mmc_clock_rate();
+	/*
+	 * Divide down from the real MSC source clock. The DM path records it
+	 * from the clock framework (jz_mmc_of_to_plat); the legacy path and
+	 * any board without a wired "mmc" clock fall back to the historical
+	 * 24 MHz assumption.
+	 */
+	u32 real_rate = priv->clk_rate ? priv->clk_rate : jz_mmc_clock_rate();
 	u8 clk_div = 0;
 
 	/* calculate clock divide */
@@ -498,9 +522,28 @@ static int jz_mmc_dm_set_ios(struct udevice *dev)
 	return jz_mmc_set_ios(mmc, priv);
 };
 
+/*
+ * Card detect via an optional "cd-gpios" property. dm_gpio_get_value folds in
+ * the DT active-low flag, so it returns 1 when a card is present. With no
+ * cd-gpios the desc is invalid and we report "present", preserving the
+ * probe-and-time-out behaviour for boards that have no detect line.
+ */
+static int jz_mmc_get_cd(struct udevice *dev)
+{
+	struct jz_mmc_priv *priv = dev_get_priv(dev);
+	int cd;
+
+	cd = dm_gpio_get_value(&priv->cd_gpio);
+	if (cd < 0)
+		return 1;
+
+	return cd;
+}
+
 static const struct dm_mmc_ops jz_msc_ops = {
 	.send_cmd	= jz_mmc_dm_send_cmd,
 	.set_ios	= jz_mmc_dm_set_ios,
+	.get_cd		= jz_mmc_get_cd,
 };
 
 static int jz_mmc_of_to_plat(struct udevice *dev)
@@ -508,11 +551,27 @@ static int jz_mmc_of_to_plat(struct udevice *dev)
 	struct jz_mmc_priv *priv = dev_get_priv(dev);
 	struct jz_mmc_plat *plat = dev_get_plat(dev);
 	struct mmc_config *cfg;
+	struct clk clk;
 	int ret;
 
 	priv->regs = map_physmem(dev_read_addr(dev), 0x100, MAP_NOCACHE);
 	priv->variant = dev_get_driver_data(dev);
 	cfg = &plat->cfg;
+
+	/*
+	 * Program the MSC source clock. The XBurst SPLs leave the MSC CDR
+	 * unconfigured on some SoCs (notably T20, where it defaults to the
+	 * full ~850 MHz APLL), and the driver never set it before - so the
+	 * data phase was clocked far out of spec and every block read failed
+	 * while the slow init commands scraped by. Pin it to 24 MHz like the
+	 * vendor driver and use the real rate as the divider base. Boards
+	 * without a wired "mmc" clock keep the legacy 24 MHz assumption.
+	 */
+	if (!clk_get_by_index(dev, 0, &clk)) {
+		clk_enable(&clk);
+		clk_set_rate(&clk, 24000000);
+		priv->clk_rate = clk_get_rate(&clk);
+	}
 
 	cfg->name = "MSC";
 	cfg->host_caps = MMC_MODE_HS_52MHz | MMC_MODE_HS;
@@ -528,6 +587,14 @@ static int jz_mmc_of_to_plat(struct udevice *dev)
 
 	cfg->voltages = MMC_VDD_32_33 | MMC_VDD_33_34 | MMC_VDD_165_195;
 	cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+
+	/*
+	 * Optional card-detect line. Requesting it as an input applies the DT
+	 * flags (active-low + any bias such as pull-up) through the gpio
+	 * driver's set_flags, so the pin is biased correctly before the first
+	 * read. Absent property -> invalid desc -> treated as always-present.
+	 */
+	gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio, GPIOD_IS_IN);
 
 	return 0;
 }

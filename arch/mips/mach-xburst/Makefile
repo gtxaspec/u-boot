@@ -4,9 +4,10 @@ extra-$(CONFIG_XPL_BUILD)	:= start.o
 
 obj-y				+= cpu.o
 
-# DFU loaders (U-Boot proper only): runtime-sized dfu_alt_info hook.
+# U-Boot proper only (these hook misc_init_r / board_late_init, not the SPL).
 ifndef CONFIG_XPL_BUILD
 obj-$(CONFIG_SET_DFU_ALT_INFO)	+= dfu.o
+obj-$(CONFIG_XBURST_MAC_FROM_EFUSE)	+= ethaddr.o
 endif
 
 obj-$(CONFIG_SOC_A1)		+= a1/

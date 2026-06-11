@@ -33,6 +33,8 @@
 #define CPM_CLKGR1		0x28
 #define CPM_MAC0CDR		0x54	/* MACCDR */
 #define CPM_SFC0CDR		0x60
+#define CPM_MSC0CDR		0x68
+#define CPM_MSC1CDR		0x6c
 
 #define EXT_RATE		24000000UL
 #define RTC_RATE		32768UL
@@ -63,8 +65,8 @@ struct t40_clk_desc {
 static const struct t40_clk_desc t40_clks[T40_CLK_COUNT] = {
 	[T40_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 21, 1 },
 	[T40_CLK_SFC1]  = { 0, 0, 0, 0, NO_GATE, 0 },	/* T40 has one SFC */
-	[T40_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
-	[T40_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
+	[T40_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
+	[T40_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
 	[T40_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
 	[T40_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T40_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 16 },

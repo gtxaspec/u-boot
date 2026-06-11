@@ -198,6 +198,19 @@ source "arch/mips/mach-xburst/t33/Kconfig"
 source "arch/mips/mach-xburst/t40/Kconfig"
 source "arch/mips/mach-xburst/t41/Kconfig"
 
+config XBURST_MAC_FROM_EFUSE
+	bool "Derive Ethernet MAC address from the SoC eFUSE serial"
+	depends on NET
+	select MISC_INIT_R
+	help
+	  Read the XBurst SoC's per-die eFUSE chip serial and derive a stable,
+	  locally-administered "ethaddr" from it when none is set in the
+	  environment, instead of generating a fresh random MAC every boot.
+
+	  The derivation matches the one the Ingenic Linux userspace uses, so
+	  the bootloader and the running system present the same MAC address.
+	  An unfused part falls back to a random MAC.
+
 choice
 	prompt "Board select"
 	default TARGET_ISVP_T31

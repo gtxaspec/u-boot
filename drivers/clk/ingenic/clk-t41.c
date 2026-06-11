@@ -41,6 +41,8 @@
 #define CPM_CLKGR1		0x28
 #define CPM_MAC0CDR		0x54	/* MACCDR */
 #define CPM_SFC0CDR		0x60
+#define CPM_MSC0CDR		0x68
+#define CPM_MSC1CDR		0x6c
 #define CPM_SFC1CDR		0x7c
 
 #define EXT_RATE		24000000UL
@@ -73,8 +75,8 @@ struct t41_clk_desc {
 static const struct t41_clk_desc t41_clks[T41_CLK_COUNT] = {
 	[T41_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 21, 1 },
 	[T41_CLK_SFC1]  = { CPM_SFC1CDR, 29, 28, 27, CPM_CLKGR1, 12, 1 },
-	[T41_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
-	[T41_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
+	[T41_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
+	[T41_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
 	[T41_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
 	[T41_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T41_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 16 },

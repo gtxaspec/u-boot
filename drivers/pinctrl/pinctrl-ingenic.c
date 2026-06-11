@@ -4,7 +4,8 @@
  *
  * Mirrors the mainline Linux ingenic pinctrl binding so one device
  * tree is valid on both: an "ingenic,<soc>-pinctrl" node owning the
- * 0x10010000 register block, with gpio child banks (0x1000 stride).
+ * 0x10010000 register block, with gpio child banks (0x1000 stride;
+ * 0x100 on the first-gen T10/T20, picked per-SoC at probe).
  * Consumers select a function with the standard pinmux binding (a pin
  * node with function/groups), applied via pinctrl-generic.
  *
@@ -49,10 +50,26 @@
 #define GPIO_PXPAT1C	0x38
 #define GPIO_PXPAT0S	0x44
 #define GPIO_PXPAT0C	0x48
-#define GPIO_PXPENS	0x118	/* pull set   -> disabled */
-#define GPIO_PXPENC	0x11c	/* pull clear -> enabled  */
+/*
+ * Bias on the modern XBurst SoCs (T23, T31, T32/T33, T40/T41, A1) is two
+ * separate 1-bit-per-pin enables: pull-up (PUEN) and pull-down (PDEN), each
+ * with set/clear aliases at +4/+8. Confirmed against the vendor headers for
+ * every SoC the driver covers. The older T10/T20/T21/T30 instead have a single
+ * legacy PXPE at 0x60, so bias is only wired for the split-pull SoCs below.
+ */
+#define GPIO_PXPUENS	0x114	/* pull-up enable, set   */
+#define GPIO_PXPUENC	0x118	/* pull-up enable, clear */
+#define GPIO_PXPDENS	0x124	/* pull-down enable, set   */
+#define GPIO_PXPDENC	0x128	/* pull-down enable, clear */
 
-#define BANK_STRIDE	0x1000
+/*
+ * GPIO bank stride. The first-generation XBurst1 parts (T10/T20) space their
+ * banks 0x100 apart; T21/T30 and every later SoC use 0x1000. The within-bank
+ * register offsets above are identical across the whole family, so only this
+ * stride is selected per-SoC at probe (priv->bank_stride).
+ */
+#define BANK_STRIDE		0x1000	/* T21/T23/T30 and newer */
+#define BANK_STRIDE_LEGACY	0x100	/* T10/T20 first-gen XBurst1 */
 #define PINS_PER_BANK	32
 
 struct t31_group {
@@ -190,8 +207,10 @@ static const struct t31_function a1_functions[] = {
 
 struct t31_pinctrl_priv {
 	void __iomem *base;
+	u32 bank_stride;	/* 0x100 on T10/T20, else 0x1000 */
 	bool is_t32_family;	/* T32/T33: 6-pin SFC0 on PA23-28, func 0 */
 	bool is_t40;		/* T40: 6-pin SFC on PA23-28, func 1 */
+	bool split_pull;	/* PUEN/PDEN bias regs (vs legacy PXPE) */
 	const struct t31_group *groups;
 	unsigned int ngroups;
 	const struct t31_function *functions;
@@ -220,14 +239,14 @@ static const char *t31_get_function_name(struct udevice *dev, unsigned int sel)
 
 static void t31_set_pin_fn(struct t31_pinctrl_priv *p, int pin, u8 func)
 {
-	void __iomem *r = p->base + (pin / PINS_PER_BANK) * BANK_STRIDE;
+	void __iomem *r = p->base + (pin / PINS_PER_BANK) * p->bank_stride;
 	u32 bit = BIT(pin % PINS_PER_BANK);
 
 	writel(bit, r + GPIO_PXINTC);				/* not irq */
 	writel(bit, r + GPIO_PXMSKC);				/* device fn */
 	writel(bit, r + ((func & 2) ? GPIO_PXPAT1S : GPIO_PXPAT1C));
 	writel(bit, r + ((func & 1) ? GPIO_PXPAT0S : GPIO_PXPAT0C));
-	writel(bit, r + GPIO_PXPENS);				/* pull off */
+	writel(bit, r + GPIO_PXPUENC);				/* pull-up off */
 }
 
 static int t31_pinmux_group_set(struct udevice *dev, unsigned int group,
@@ -279,11 +298,33 @@ static int t31_pinctrl_probe(struct udevice *dev)
 	if (!p->base)
 		return -EINVAL;
 
+	/*
+	 * First-gen T10/T20 space their GPIO banks 0x100 apart; T21 and every
+	 * later SoC use 0x1000. Getting this wrong misaddresses every bank>=1
+	 * GPIO (e.g. T20 mmc card-detect/power on PB), so pick it per-SoC.
+	 */
+	p->bank_stride = (device_is_compatible(dev, "ingenic,t10-pinctrl") ||
+			  device_is_compatible(dev, "ingenic,t20-pinctrl")) ?
+			 BANK_STRIDE_LEGACY : BANK_STRIDE;
+
 	p->is_t32_family = device_is_compatible(dev, "ingenic,t32-pinctrl") ||
 			   device_is_compatible(dev, "ingenic,t33-pinctrl");
 	/* T41 reuses the T40 6-pin / function-1 SFC layout. */
 	p->is_t40 = device_is_compatible(dev, "ingenic,t40-pinctrl") ||
 		    device_is_compatible(dev, "ingenic,t41-pinctrl");
+	/*
+	 * Split pull-up/pull-down enable registers (PUEN 0x110 / PDEN 0x120).
+	 * Present on T23 and every SoC from T31 onward; the older T10/T20/T21/
+	 * T30 use a single legacy PXPE register instead, so leave their bias
+	 * alone rather than poke the wrong offset.
+	 */
+	p->split_pull = device_is_compatible(dev, "ingenic,t23-pinctrl") ||
+			device_is_compatible(dev, "ingenic,t31-pinctrl") ||
+			device_is_compatible(dev, "ingenic,t32-pinctrl") ||
+			device_is_compatible(dev, "ingenic,t33-pinctrl") ||
+			device_is_compatible(dev, "ingenic,t40-pinctrl") ||
+			device_is_compatible(dev, "ingenic,t41-pinctrl") ||
+			device_is_compatible(dev, "ingenic,a1-pinctrl");
 
 	if (device_is_compatible(dev, "ingenic,a1-pinctrl")) {
 		p->groups = a1_groups;
@@ -330,6 +371,7 @@ U_BOOT_DRIVER(ingenic_t31_pinctrl) = {
 struct t31_gpio_priv {
 	void __iomem	*regs;
 	char		bank_name[4];
+	bool		split_pull;	/* PUEN/PDEN bias available */
 };
 
 static int t31_gpio_direction_input(struct udevice *dev, unsigned int off)
@@ -385,12 +427,52 @@ static int t31_gpio_get_function(struct udevice *dev, unsigned int off)
 	return GPIOF_OUTPUT;
 }
 
+/*
+ * Apply consumer/DT GPIOD_ flags in one shot: direction (mirrors the
+ * direction_* ops) plus bias. The uclass folds active-low into
+ * GPIOD_IS_OUT_ACTIVE, so the output level is read straight from it. Bias maps
+ * to the split PUEN/PDEN enables and is only touched on SoCs that have them; a
+ * request carrying neither pull flag leaves the bias untouched, so a plain
+ * "gpio input" keeps its power-on bias.
+ */
+static int t31_gpio_set_flags(struct udevice *dev, unsigned int off,
+			      ulong flags)
+{
+	struct t31_gpio_priv *priv = dev_get_priv(dev);
+	u32 bit = BIT(off);
+
+	if (flags & GPIOD_IS_OUT) {
+		writel(bit, priv->regs + GPIO_PXINTC);
+		writel(bit, priv->regs + GPIO_PXMSKS);
+		writel(bit, priv->regs + GPIO_PXPAT1C);
+		writel(bit, priv->regs + ((flags & GPIOD_IS_OUT_ACTIVE) ?
+					  GPIO_PXPAT0S : GPIO_PXPAT0C));
+	} else if (flags & GPIOD_IS_IN) {
+		writel(bit, priv->regs + GPIO_PXINTC);
+		writel(bit, priv->regs + GPIO_PXMSKS);
+		writel(bit, priv->regs + GPIO_PXPAT1S);
+	}
+
+	if (priv->split_pull) {
+		if (flags & GPIOD_PULL_UP) {
+			writel(bit, priv->regs + GPIO_PXPDENC); /* pull-down off */
+			writel(bit, priv->regs + GPIO_PXPUENS); /* pull-up on    */
+		} else if (flags & GPIOD_PULL_DOWN) {
+			writel(bit, priv->regs + GPIO_PXPUENC); /* pull-up off    */
+			writel(bit, priv->regs + GPIO_PXPDENS); /* pull-down on   */
+		}
+	}
+
+	return 0;
+}
+
 static const struct dm_gpio_ops t31_gpio_ops = {
 	.direction_input	= t31_gpio_direction_input,
 	.direction_output	= t31_gpio_direction_output,
 	.get_value		= t31_gpio_get_value,
 	.set_value		= t31_gpio_set_value,
 	.get_function		= t31_gpio_get_function,
+	.set_flags		= t31_gpio_set_flags,
 };
 
 static int t31_gpio_probe(struct udevice *dev)
@@ -400,7 +482,8 @@ static int t31_gpio_probe(struct udevice *dev)
 	struct t31_pinctrl_priv *pc = dev_get_priv(dev->parent);
 	u32 bank = dev_read_addr(dev);
 
-	priv->regs = pc->base + bank * BANK_STRIDE;
+	priv->regs = pc->base + bank * pc->bank_stride;
+	priv->split_pull = pc->split_pull;
 	priv->bank_name[0] = 'P';
 	priv->bank_name[1] = 'A' + bank;
 	priv->bank_name[2] = '\0';

@@ -11,6 +11,8 @@
  */
 
 #include <init.h>
+#include <dm.h>
+#include <ram.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <mach/t23.h>
@@ -27,11 +29,20 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-#if defined(CONFIG_T23_DRAM_32M)
-	gd->ram_size = 32 << 20;	/* T23DL/T23DN: M14D2561616A */
-#else
-	gd->ram_size = 64 << 20;	/* T23/T23N: M14D5121632A */
-#endif
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 

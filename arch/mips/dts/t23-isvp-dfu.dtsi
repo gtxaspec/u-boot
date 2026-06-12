@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23, DFU/USB-boot loader variant.
+ * Ingenic ISVP-T23 shared DFU/USB-boot board body.
  *
- * Identical to t23-isvp.dts except the DWC2 OTG is dr_mode =
+ * Identical to t23-isvp.dtsi except the DWC2 OTG is dr_mode =
  * "peripheral" so the dwc2_udc_otg gadget binds (dwc2_udc_otg_bind
- * rejects "host"). Used only by isvp_t23_usbboot_defconfig - the
- * dev/flash loader that USB-boots and auto-enters DFU. Production
- * NOR uses t23-isvp.dts (dr_mode="host" for USB host + USB-NIC).
+ * rejects "host"), and the audio nodes stay off. Used by the usbboot
+ * defconfigs - the dev/flash loader that USB-boots and auto-enters
+ * DFU. Production NOR uses t23-isvp.dtsi (dr_mode="host" for USB
+ * host + USB-NIC).
+ *
+ * The per-SKU leaf .dts files (t23n-isvp-dfu.dts, ...) include this
+ * and set the DDR node's per-SKU compatible; the matching
+ * <leaf>-u-boot.dtsi pulls in t23-isvp-dfu-uboot-common.dtsi.
  */
-
-/dts-v1/;
 
 #include <dt-bindings/gpio/gpio.h>
 #include "t23.dtsi"
@@ -28,7 +31,8 @@
 
 	memory {
 		device_type = "memory";
-		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T23/T23N) */
+		/* Placeholder; the DDR driver reports the real per-SKU size. */
+		reg = <0x0 0x04000000>;
 	};
 };
 

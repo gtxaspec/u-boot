@@ -2,16 +2,25 @@
 /*
  * Ingenic T23 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM with no driver model: minimal
- * console, PLLs, Innophy DDR2, then load U-Boot proper. With
- * CONFIG_SPL_T23_USB_BOOT it brings up console + PLL + DDR and
- * returns to the mask ROM (SFC NOR-boot lands next). Full U-Boot
- * uses driver model.
+ * The SPL runs from on-chip SRAM. It brings up a minimal console,
+ * configures the PLLs, then brings driver model up: the UCLASS_RAM
+ * driver (the shared XBurst1 ddr_t31.c, T23 variant) probes off the
+ * SPL devicetree and inits Innophy DDR2, and U-Boot loading goes
+ * through the standard SPL_SPI framework: board_init_r() reads U-Boot
+ * proper from SPI-NOR via the DM SFC driver, LZMA-decompresses it and
+ * jumps. Full U-Boot uses driver model. Forward-ported from the vendor
+ * T23 spl.c.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <config.h>
+#include <dm.h>
+#include <fdtdec.h>
+#include <hang.h>
+#include <init.h>
+#include <ram.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
 #include <linux/string.h>
@@ -24,8 +33,7 @@ void clk_ungate_uart(unsigned int idx);
 void t23_spl_serial_init(void);
 void t23_spl_puts(const char *s);
 void t23_spl_putc(char c);
-void t23_spl_load_uboot(void);
-void __weak sdram_init(void) { }
+void t23_spl_sfc_clk_init(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -38,35 +46,28 @@ static void spl_put_hex(u32 v)
 		t23_spl_putc(hex[(v >> i) & 0xf]);
 }
 
-#if defined(CONFIG_T23_DRAM_32M)
-#define T23_DRAM_SIZE	0x02000000u	/* 32 MB */
-#else
-#define T23_DRAM_SIZE	0x04000000u	/* 64 MB */
-#endif
-
 /*
- * Verify DRAM up to the *configured* size (T23 is 64 MB, or 32 MB
- * for T23DL/DN - never 128 MB). Two passes:
+ * Verify DRAM up to the DT-selected variant size (T23 is 64 MB, or
+ * 32 MB for T23DL/DN - never 128 MB). Two passes:
  *
- *  1. Stuck-bit: walk patterns at offsets within [0, SIZE) at both
+ *  1. Stuck-bit: walk patterns at offsets within [0, size) at both
  *     the KSEG1 (uncached) and KSEG0 (cached) windows.
- *  2. Alias: write a unique marker per offset across [0, SIZE) via
+ *  2. Alias: write a unique marker per offset across [0, size) via
  *     KSEG1, then read them all back. If the DDR controller is
  *     configured larger than the populated part (the classic
- *     wrong-geometry bug) the high offsets wrap onto the low ones
- *     and the markers collide - so "DDR OK" actually proves the
- *     size/geometry, instead of a write-then-read-same-address
- *     test that silently passes on an aliased part.
+ *     wrong-geometry bug) the high offsets wrap onto the low ones and
+ *     the markers collide - so "DDR OK" actually proves the size/
+ *     geometry, instead of a write-then-read-same-address test that
+ *     silently passes on an aliased part.
  */
-static int dram_verify(void)
+static int dram_verify(u32 size)
 {
 	static const u32 pat[] = {
 		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
 		0xdeadbeef, 0x12345678,
 	};
 	const u32 offs[] = {
-		0x0, 0x4, 0x100000, T23_DRAM_SIZE / 4,
-		T23_DRAM_SIZE / 2, T23_DRAM_SIZE - 4,
+		0x0, 0x4, 0x100000, size / 4, size / 2, size - 4,
 	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
 	int b, o, p;
@@ -113,8 +114,13 @@ gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
-	gd = &gdata;
+	/*
+	 * Zero BSS - start.S jumps straight here without clearing it.
+	 * DM-in-SPL needs a clean gd / BSS before spl_init() brings driver
+	 * model up.
+	 */
 	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	gd = &gdata;
 
 	/*
 	 * The mask ROM leaves a usable EXTAL-based clock, so the console
@@ -123,33 +129,61 @@ void board_init_f(ulong dummy)
 	 */
 	clk_ungate_uart(T23_CONSOLE_UART);
 	t23_spl_serial_init();
-	t23_spl_puts("\nT23 SPL: alive (pre-PLL)\n");
+
+	/*
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
+	 * so pll_init() can match the DDR node's per-SKU compatible and pick
+	 * the per-SKU PLL setpoints before driver model comes up.
+	 */
+	if (fdtdec_setup())
+		hang();
 
 	pll_init();
-	t23_spl_puts("T23 SPL: PLL configured\n");
 
-	sdram_init();
-	if (dram_verify() == 0) {
-		t23_spl_puts("T23 SPL: DDR OK ");
-		spl_put_hex(T23_DRAM_SIZE);
-		t23_spl_puts(" (alias-checked)\n");
+	/*
+	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
+	 * probe runs the Innophy DDR2 init to bring up DDR - replaces the
+	 * old direct sdram_init() call, mirroring the T31 flow.
+	 */
+	if (spl_init())
+		hang();
+	{
+		struct udevice *dev;
+		struct ram_info ram;
+
+		if (uclass_first_device_err(UCLASS_RAM, &dev))
+			hang();
+		if (ram_get_info(dev, &ram))
+			hang();
+		dram_verify((u32)ram.size);
 	}
 
 #ifdef CONFIG_SPL_T23_USB_BOOT
 	/*
-	 * USB-boot stage1: clocks and DDR are up. Return to the mask
-	 * ROM (start.S branches in, so $ra still holds the bootrom
-	 * return address and this epilogue jr's back into the bootrom
-	 * USB loop). The host then uploads U-Boot proper over USB.
+	 * USB-boot stage1: clocks and DDR are up. Set up the SFC clock so
+	 * U-Boot proper (uploaded to DRAM by the mask ROM) can probe NOR,
+	 * then return into the mask ROM USB loop (start.S kept the bootrom
+	 * sp, so a plain jr ra resumes it).
 	 */
-	t23_spl_puts("T23 SPL: DDR up; returning to mask ROM (USB boot)\n");
+	t23_spl_sfc_clk_init();
 	return;
 #else
-	/* Load U-Boot proper from SPI-NOR into DRAM and jump. */
-	t23_spl_puts("T23 SPL: loading U-Boot...\n");
-	t23_spl_load_uboot();
-	for (;;)
-		;
+	/*
+	 * NOR cold-boot: DDR is up, so hand off to the standard SPL
+	 * framework board_init_r(). It sets up the DRAM malloc heap and
+	 * loads u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS via the DM
+	 * SFC driver (spl_boot_device() == BOOT_DEVICE_SPI),
+	 * LZMA-decompresses it and jumps. Does not return.
+	 */
+	preloader_console_init();
+	t23_spl_sfc_clk_init();
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
+}
+
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */

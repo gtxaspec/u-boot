@@ -18,8 +18,6 @@
 #include <asm/global_data.h>
 #include <mach/t23.h>
 
-#include "../../../drivers/ram/ingenic/ddr_t31.h"
-
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <dm/ofnode.h>
 #include <linux/usb/otg.h>
@@ -168,21 +166,12 @@ int board_init(void)
 #endif
 
 /*
- * Printed right after the "Model:" line; shows the exact T23 SKU as
- * resolved at runtime from the DDR node's per-SKU compatible (the
- * variant struct hangs off the RAM device's of_match .data).
+ * The SKU is identified by the leaf DT's model string (the "Model:"
+ * line); like the other DM-SPL platforms there is no separate
+ * Variant line.
  */
 int checkboard(void)
 {
-	const struct ingenic_t31_ddr_variant *v;
-	struct udevice *dev;
-
-	if (!uclass_first_device_err(UCLASS_RAM, &dev)) {
-		v = (const void *)dev_get_driver_data(dev);
-		if (v)
-			printf("Variant: %s (CPU %u MHz)\n",
-			       v->name, v->cpu_mhz);
-	}
 #ifdef CONFIG_SPL_T23_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

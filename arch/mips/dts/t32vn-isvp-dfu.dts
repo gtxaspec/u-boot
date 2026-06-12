@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32VN DFU/USB-boot loader (DDR3 128 MB @700, CPU 900 MHz).
+ *
+ * The VN DDR3-128M@700 init is the conservative DDR3 bring-up (the
+ * pin-wrap table is unused on T32, so the W631/W632 parts differ only
+ * in geometry/timing), making this the universal DDR3 DFU loader: on
+ * the 256 MB W632 parts the low 128 MB comes up, which is plenty for
+ * flashing. The DDR2 parts use t32lq-isvp-dfu; LPDDR3 (VNP) needs its
+ * own loader once hardware is available to validate.
+ */
+
+/dts-v1/;
+
+#include "t32-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T32VN (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t32vn-ddr-innophy";
+};

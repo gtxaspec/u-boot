@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T23 SPL SFC clock + controller bring-up.
+ * Ingenic T23 SPL SFC clock + controller bring-up, plus a minimal
+ * polled NOR read.
  *
- * After PLL + (UCLASS_RAM) DDR init, the T23 SPL hands U-Boot loading
- * to the standard SPL_SPI framework (NOR cold-boot, via board_init_r)
- * or returns to the mask ROM (USB-boot). Both need the SFC clock
- * derived off MPLL and the controller GLB/DEV_CONF programmed before
- * the DM SFC driver (drivers/spi/ingenic_sfc.c, compatible
- * ingenic,t31-sfc) touches the flash.
+ * After PLL + DDR init, the T23 SPL hands U-Boot loading to the
+ * standard SPL_SPI framework (NOR cold-boot, via board_init_r) or
+ * returns to the mask ROM (USB-boot). Both need the SFC clock derived
+ * off MPLL and the controller GLB/DEV_CONF programmed before the DM
+ * SFC driver (drivers/spi/ingenic_sfc.c, compatible ingenic,t31-sfc)
+ * touches the flash.
  *
  * T23 clocks the SFC off the SSI clock divider (CPM_SSICDR), exactly
- * like T31 (same SFC block, same SSICDR, same MPLL 1200 source). The
- * hand-rolled NOR read + LZMA loader that used to live here is gone now
- * that the NOR path uses the standard SPL_SPI flow with the shared DM
- * SFC driver.
+ * like T31 (same SFC block, same SSICDR, same MPLL 1200 source).
+ *
+ * t23_spl_nor_read() is a pre-driver-model polled NOR read (vendor
+ * sfc_read transliteration). The T23 SPL boots cache-as-RAM and must
+ * make itself DRAM-resident once DDR is up; the bootrom-loaded cache
+ * copy of the image is NOT trustworthy by then (cold clean lines may
+ * already have been evicted - discarded - by pre-DDR stack/data cache
+ * pressure), so soc.c re-reads the pristine image straight from NOR
+ * into DRAM instead of copying it out of the cache.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -51,6 +57,11 @@ static u32 cpm_readl(unsigned int off)
 static void cpm_writel(u32 val, unsigned int off)
 {
 	writel(val, (void __iomem *)(CPM_BASE + off));
+}
+
+static u32 jz_sfc_readl(unsigned int offset)
+{
+	return readl((void __iomem *)(SFC_BASE + offset));
 }
 
 static void jz_sfc_writel(unsigned int value, unsigned int offset)
@@ -104,4 +115,86 @@ void t23_spl_sfc_clk_init(void)
 
 	/* low power consumption */
 	jz_sfc_writel(0, SFC_CGE);
+}
+
+/*
+ * Minimal polled NOR read (vendor sfc_read transliteration): basic
+ * 1-1-1 READ (0x03), 3-byte address, FIFO polling, no DMA/IRQ. Word
+ * (u32) granularity.
+ */
+static void sfc_set_read_reg(unsigned int cmd, unsigned int addr,
+			     unsigned int addr_len)
+{
+	unsigned int tmp;
+
+	tmp = jz_sfc_readl(SFC_GLB);
+	tmp &= ~PHASE_NUM_MSK;
+	tmp |= (0x1 << PHASE_NUM_OFFSET);
+	jz_sfc_writel(tmp, SFC_GLB);
+
+	tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN | DATEEN |
+	      (cmd << CMD_OFFSET);
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
+	jz_sfc_writel(addr, SFC_DEV_ADDR(0));
+	jz_sfc_writel(0, SFC_DEV_ADDR_PLUS(0));
+
+	/* zero dummy bits, standard single-line SPI mode */
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_CONF_DMYBITS_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_MODE_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
+
+	jz_sfc_writel(START, SFC_TRIG);
+}
+
+static void sfc_read_data(unsigned int *data, unsigned int words)
+{
+	unsigned int tmp_len = 0;
+	unsigned int fifo_num;
+	unsigned int i;
+
+	while (tmp_len < words) {
+		if (!(jz_sfc_readl(SFC_SR) & RECE_REQ))
+			continue;
+
+		jz_sfc_writel(CLR_RREQ, SFC_SCR);
+		if ((words - tmp_len) > THRESHOLD)
+			fifo_num = THRESHOLD;
+		else
+			fifo_num = words - tmp_len;
+
+		for (i = 0; i < fifo_num; i++) {
+			*data = jz_sfc_readl(SFC_DR);
+			data++;
+			tmp_len++;
+		}
+	}
+
+	while ((jz_sfc_readl(SFC_SR) & SFC_SR_END) != SFC_SR_END)
+		;
+	jz_sfc_writel(CLR_END, SFC_SCR);
+}
+
+/*
+ * Read `bytes` (rounded up to a whole word) from NOR offset `nor_off`
+ * to `dst`. Self-contained: derives the SFC clock and programs the
+ * controller, so it works before driver model is up. `dst` should be
+ * a KSEG1 (uncached) pointer when the point is to populate DRAM
+ * without disturbing the cache (the cache-as-RAM reload).
+ */
+void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes)
+{
+	unsigned int words = (bytes + 3) / 4;
+
+	t23_spl_sfc_clk_init();
+
+	jz_sfc_writel(STOP, SFC_TRIG);
+	jz_sfc_writel(FLUSH, SFC_TRIG);
+
+	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
+	sfc_set_read_reg(CMD_READ, nor_off, 3);
+	sfc_read_data(dst, words);
 }

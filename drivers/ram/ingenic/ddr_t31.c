@@ -313,6 +313,19 @@ static void ddr_inno_phy_init(const struct ingenic_t31_ddr_variant *cfg)
 /* Top-level DDR2/DDR3 init (innophy path of the vendor sdram_init()). */
 int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg)
 {
+	static bool ddr_done;
+
+	/*
+	 * One-shot: DDR may be brought up imperatively from board_init_f
+	 * (before spl_init, so the DM scan's heap/stack land in real DRAM
+	 * rather than the cache-as-RAM budget) and then the UCLASS_RAM SPL
+	 * probe calls this again - the second call must not re-run the init
+	 * sequence (it would reset a live controller).
+	 */
+	if (ddr_done)
+		return 0;
+	ddr_done = true;
+
 	ddr_clk_set_rate(cfg);
 	reset_dll();
 
@@ -377,6 +390,28 @@ int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
 		}
 	}
 	return -ENODEV;
+}
+
+/*
+ * Pre-DM variant lookup (same FDT match as pll_setpoints): hand back the
+ * variant struct for the DDR node's per-SKU compatible so board_init_f can
+ * bring DRAM up imperatively before driver model is up.
+ */
+const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void)
+{
+	const void *blob = gd->fdt_blob;
+	int node, i;
+
+	if (!blob)
+		return NULL;
+
+	for (i = 0; i < ARRAY_SIZE(t31_ddr_variants); i++) {
+		node = fdt_node_offset_by_compatible(blob, -1,
+						     t31_ddr_variants[i].compatible);
+		if (node >= 0)
+			return t31_ddr_variants[i].cfg;
+	}
+	return NULL;
 }
 
 /* ------------------------------------------------------------------

@@ -16,12 +16,17 @@
 #define CFG_SYS_NS16550_CLK	24000000
 
 /*
- * SPL SRAM layout (mirrors T31; the T23 SRAM window is huge - the
- * mask-ROM USB probe round-tripped real backing well past 2 MB):
+ * SPL memory layout. T23 boots cache-as-RAM: there is NO backed memory
+ * until the SPL itself brings DDR up, and the whole pre-DDR budget is
+ * the 16 KB L1 + 64 KB L2 (~80 KB) - only the cache-resident footprint
+ * (image + BSS + the live top of the stack) exists. board_init_f()
+ * inits DDR imperatively and copies the SPL to DRAM before spl_init(),
+ * so by the time anything allocates from the malloc-f arena these are
+ * real DRAM addresses:
  *   0x80001000-0x80012000 : SPL image  (SPL_MAX_SIZE = 0x13000 ceiling)
  *   0x80012000-0x80014000 : SPL BSS     (SPL_BSS_MAX_SIZE = 0x2000)
- *   0x80014000            : SYS_MALLOC_F arena (SPL_SYS_MALLOC_F_LEN)
- *   0x80018000            : SPL stack top (grows down)
+ *   0x80014000-0x80024000 : SYS_MALLOC_F arena (SPL_SYS_MALLOC_F_LEN 64 KB)
+ *   0x80080000            : SPL stack top (grows down; far above the heap)
  *
  * board_init_f() reassigns gd = &gdata (a clean BSS gd) for DM-in-SPL,
  * which drops the malloc base the framework reserved below the stack.

@@ -114,6 +114,14 @@ struct ingenic_t31_ddr_variant {
 	u32 mpll_mnod;
 	u32 cpccr;
 
+	/*
+	 * CPM_DDRCDR divider field (DDR CK = MPLL / (ddr_cdr + 1)).
+	 * 0 = default = 1, i.e. MPLL/2 - every T31 SKU and the T23
+	 * 600/500 MHz SKUs. Only the T23N-LP 400 MHz profile (MPLL 1200
+	 * / 3) needs ddr_cdr = 2.
+	 */
+	u8 ddr_cdr;
+
 	/* DDR controller GOLD values (ddr_params_creator). */
 	u32 ddrc_cfg;
 	u32 ddrc_ctrl;
@@ -148,5 +156,18 @@ extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31lc;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31al;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31a;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_c100;
+
+/*
+ * T23 SKUs (ddr_t23_types.c). Same XBurst1 legacy DDRC + Innophy DDR2
+ * IP as T31, so they reuse this driver - only the per-SKU geometry/
+ * clock values differ. T23ZN is param-identical to T23N (shared
+ * struct); T23N-HP/-LP are clock profiles of the 64M T23N silicon.
+ */
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dl;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n_hp;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n_lp;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23x;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dn;
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T31_H */

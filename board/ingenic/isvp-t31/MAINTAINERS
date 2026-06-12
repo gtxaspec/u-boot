@@ -3,6 +3,6 @@ M:	Alfonso Gamboa <gtxent@gmail.com>
 S:	Maintained
 F:	board/ingenic/isvp-t31/
 F:	include/configs/isvp-t31.h
-F:	configs/isvp_t31_sfcnor_ddr128M_defconfig
-F:	arch/mips/dts/t31.dtsi
-F:	arch/mips/dts/t31-isvp.dts
+F:	configs/isvp_t31*_defconfig
+F:	arch/mips/dts/t31*.dtsi
+F:	arch/mips/dts/t31*.dts

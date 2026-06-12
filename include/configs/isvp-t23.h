@@ -20,9 +20,10 @@
  * until the SPL itself brings DDR up, and the whole pre-DDR budget is
  * the 16 KB L1 + 64 KB L2 (~80 KB) - only the cache-resident footprint
  * (image + BSS + the live top of the stack) exists. board_init_f()
- * inits DDR imperatively and copies the SPL to DRAM before spl_init(),
- * so by the time anything allocates from the malloc-f arena these are
- * real DRAM addresses:
+ * inits DDR imperatively and makes the SPL DRAM-resident (image
+ * re-read from NOR, live data copied from the cache) before
+ * spl_init(), so by the time anything allocates from the malloc-f
+ * arena these are real DRAM addresses:
  *   0x80001000-0x80012000 : SPL image  (SPL_MAX_SIZE = 0x13000 ceiling)
  *   0x80012000-0x80014000 : SPL BSS     (SPL_BSS_MAX_SIZE = 0x2000)
  *   0x80014000-0x80024000 : SYS_MALLOC_F arena (SPL_SYS_MALLOC_F_LEN 64 KB)

@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T23N DFU/USB-boot loader (DDR2 64 MB, CPU 1188 MHz).
+ *
+ * The T23N DDR2-64M init brings up the low 64 MB of any 64 MB T23
+ * part, so this loader doubles as the universal 64 MB DDR2 DFU loader
+ * (T23N/ZN/X/N-HP/N-LP). The 32 MB parts (T23DL/DN) use their own
+ * loader.
+ */
+
+/dts-v1/;
+
+#include "t23-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T23N (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t23n-ddr-innophy";
+};
+
+/*
+ * flash@0 declared spi-nand so the NAND stack binds on NAND boards.
+ * board_late_init() (arch/mips/mach-xburst/dfu.c) auto-detects NOR vs
+ * NAND: on a NOR board the spi-nand probe fails, the node is unbound,
+ * and a SPI-NOR is probed on CS0 instead - one loader flashes either.
+ */
+&sfc {
+	flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};

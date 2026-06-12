@@ -31,3 +31,21 @@ config RAM_INGENIC_DDR_T31
 
 	  Ported from the vendor XBurst1 sdram_init path (formerly the inline
 	  arch/mips/mach-xburst/t31/sdram.c).
+
+config RAM_INGENIC_DDR_T32
+	bool "Ingenic T32 uMCTL2 DDR controller + Innophy PHY"
+	depends on RAM
+	depends on ARCH_XBURST
+	select SPL_RAM if SPL
+	help
+	  Driver for the Ingenic T32 (vendor PRJ007) DDR memory controller:
+	  a Synopsys uMCTL2-class controller paired with an Innophy training
+	  PHY - a distinct IP from both the legacy XBurst1 DDRC (T10-T31)
+	  and the XBurst2 controller. Supports DDR2 (soft-train), DDR3 and
+	  LPDDR3 (hardware-train) chips. The per-SKU register/clock tables
+	  are selected at runtime from the DT node's compatible via the
+	  driver of_match .data, so one driver covers every T32 SKU (T32LQ,
+	  T32VL, T32ZL, T32NQ, T32VN, T32ZN, T32XQ, T32VX, T32ZX, T32VNP).
+
+	  Ported from the vendor U-Boot 2022.10 PRJ ddr_innophy.c (formerly
+	  the inline arch/mips/mach-xburst/t32/sdram.c).

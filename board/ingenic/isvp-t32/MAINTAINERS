@@ -4,3 +4,10 @@ S:	Maintained
 F:	board/ingenic/isvp-t32/
 F:	include/configs/isvp-t32.h
 F:	configs/isvp_t32_sfcnor_defconfig
+F:	configs/isvp_t32nq_sfcnor_defconfig
+F:	configs/isvp_t32vn_sfcnor_defconfig
+F:	configs/isvp_t32xq_sfcnor_defconfig
+F:	configs/isvp_t32vx_sfcnor_defconfig
+F:	configs/isvp_t32vnp_sfcnor_defconfig
+F:	configs/isvp_t32_usbboot_defconfig
+F:	configs/isvp_t32_usbboot_ddr3_defconfig

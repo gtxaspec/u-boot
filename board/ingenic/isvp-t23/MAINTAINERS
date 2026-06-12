@@ -3,4 +3,4 @@ M:	Alfonso Gamboa <gtxent@gmail.com>
 S:	Maintained
 F:	board/ingenic/isvp-t23/
 F:	include/configs/isvp-t23.h
-F:	configs/isvp_t23_usbboot_defconfig
+F:	configs/isvp_t23*_defconfig

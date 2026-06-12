@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Shared U-Boot overlay for the Ingenic ISVP-T23 SFC-NOR leaf DTs.
+ * Each per-SKU <leaf>-u-boot.dtsi is a one-line #include of this file
+ * (the U-Boot build auto-appends <leaf>-u-boot.dtsi to <leaf>.dts).
+ *
+ * Provides the binman image description for the SFC-NOR boot. The T23
+ * mask ROM SFC-NOR boot path is the common XBurst1 one (the 2 KiB
+ * header CRC7+length finalized by the ingenic-t31-spl binman etype -
+ * that header format is family-generic, emitted by the shared
+ * start.S, not T31-specific):
+ *
+ *   u-boot-spl-t23.bin       : SPL with the finalized boot header.
+ *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 + LZMA U-Boot
+ *                              at 0x14000 (CONFIG_SYS_SPI_U_BOOT_OFFS,
+ *                              read by SPL_SPI_LOAD), trimmed.
+ *
+ * ...and tags the SPL-needed nodes bootph-all so fdtgrep keeps only
+ * these in the SPL device tree (otherwise dm_autoprobe() exhausts the
+ * early SPL malloc).
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t23 {
+		filename = "u-boot-spl-t23.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t23.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x14000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};
+
+&exclk { bootph-all; };
+&rtclk { bootph-all; };
+&cgu { bootph-all; };
+&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&pins_sfc { bootph-all; };
+&uart1 { bootph-all; };
+&sfc {
+	bootph-all;
+	flash@0 {
+		bootph-all;
+	};
+};

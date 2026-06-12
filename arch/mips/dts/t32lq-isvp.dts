@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32LQ (DDR2 64 MB M14D5121632A, CPU 900 MHz), SFC-NOR.
+ * T32VL/T32ZL are param-identical vendor bin badges of the same part.
+ */
+
+/dts-v1/;
+
+#include "t32-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T32LQ (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t32lq-ddr-innophy";
+};

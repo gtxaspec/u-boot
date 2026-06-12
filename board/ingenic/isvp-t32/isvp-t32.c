@@ -3,14 +3,17 @@
  * Ingenic ISVP-T32 board (PRJ007, DDR2 M14D5121632A target)
  *
  * U-Boot-proper board glue. The SPL (mach-xburst/t32) brings up
- * console + PLL (Stage 1); Innophy DDR2 + the real RAM size land
- * with Stage 2. Forward-ported from the vendor U-Boot 2022.10 PRJ
- * (PRJ007 = T32).
+ * console + PLL; DDR comes up via the UCLASS_RAM driver
+ * (drivers/ram/ingenic/ddr_t32.c) probed off the devicetree, which
+ * also reports the per-SKU DRAM size consumed by dram_init() below.
+ * Forward-ported from the vendor U-Boot 2022.10 PRJ (PRJ007 = T32).
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <init.h>
+#include <dm.h>
+#include <ram.h>
 #include <stdio.h>
 #include <usb.h>
 #include <asm/global_data.h>
@@ -18,15 +21,25 @@
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <mach/t32.h>
-#include <mach/t32-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	/* Per the Kconfig DDR class: 64 MB DDR2 / 128 MB DDR3 /
-	 * 256 MB DDR3-W632 / 128 MB LPDDR3. */
-	gd->ram_size = T32_DDR_SIZE;
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 

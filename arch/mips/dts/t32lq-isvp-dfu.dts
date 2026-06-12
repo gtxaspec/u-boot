@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32LQ DFU/USB-boot loader (DDR2 64 MB, CPU 900 MHz).
+ *
+ * The LQ DDR2-64M init brings up any DDR2 T32 part (LQ/VL/ZL are
+ * param-identical), so this loader doubles as the universal DDR2 DFU
+ * loader. DDR3/LPDDR3 parts (NQ/VN/XQ/VX/ZN/ZX/VNP) need their own
+ * loader.
+ */
+
+/dts-v1/;
+
+#include "t32-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T32LQ (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t32lq-ddr-innophy";
+};

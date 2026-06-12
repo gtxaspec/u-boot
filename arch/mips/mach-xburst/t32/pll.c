@@ -3,51 +3,37 @@
  * Ingenic T32 PLL and clock setup (SPL)
  *
  * Forward-port of the vendor U-Boot 2022.10 PRJ pllsetting.c for the
- * T32 (PRJ007) "lq" profile: APLL 900 MHz, MPLL 1200 MHz, VPLL
- * 1188 MHz, DDR 600, EXTAL 24 MHz. T32 uses the M/N/OD0/OD1
- * CPAPCR/CPMPCR/CPVPCR form (like T31/T23/T20). The register words
- * are the exact host pll_params_creator output for
- * PRJ007_lq_goat_sfcnor (verbatim, NOT recomputed):
- *   APLL M=0x4b N=1 OD1=2 OD0=1 EN=1 -> CPAPCR 0x04b051c1 (900 MHz)
- *   MPLL M=0x64 N=1 OD1=2 OD0=1 EN=1 -> CPMPCR 0x064051c1 (1200 MHz)
- *   VPLL M=0x63 N=1 OD1=2 OD0=1 EN=1 -> CPVPCR 0x063051c1 (1188 MHz)
- * CPxPCR = (EN<<0)|(M<<20)|(N<<14)|(OD1<<11)|(OD0<<8)|(1<<7)|(1<<6).
+ * T32 (PRJ007). T32 uses the M/N/OD0/OD1 CPAPCR/CPMPCR/CPVPCR form
+ * (like T31/T23/T20). The per-SKU APLL/MPLL words and the two-stage
+ * CPCCR programming words (dividers, then source selects) live in the
+ * DDR variant struct (drivers/ram/ingenic/ddr_t32_types.c) and are
+ * selected at runtime by matching the &ddr node's per-SKU compatible
+ * (ingenic,t32<sku>-ddr-innophy) - the same of_match table the RAM
+ * driver uses. soc.c calls fdtdec_setup() before pll_init() so the
+ * FDT blob is available here, before driver model is up.
+ *
  * UNLIKE T33/PRJ008, T32/PRJ007 DOES program VPLL (vendor pll_sets()
- * skips it only for PRJ008). CPCCR dividers CDIV=0 L2DIV=1 H0DIV=3
- * H2DIV=3 PDIV=7; selects SRC=2 CPLL=1 H0PLL=2 H2PLL=2 (same mux as
- * T33 - source-select is not frequency dependent).
+ * skips it only for PRJ008); VPLL is SoC-fixed at 1188 MHz on every
+ * SKU so it stays a constant here rather than in the variant table.
+ * CPxPCR = (EN<<0)|(M<<20)|(N<<14)|(OD1<<11)|(OD0<<8)|(1<<7)|(1<<6).
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
 
+#include <hang.h>
 #include <asm/io.h>
 #include <mach/t32.h>
 
-/*
- * Exact vendor pll_params_creator words, per DDR class (verbatim,
- * NOT recomputed). T32/PRJ007 always programs VPLL (CPVPCR const
- * across classes). cpccr_default writes 0x55700000 first. Class
- * map: LQ/VL/ZL DDR2 600; NQ/XQ DDR3 900; VN/ZN/VX/ZX DDR3 700;
- * VNP LPDDR3 700.
- */
 #define T32_CPVPCR	0x0c609101u	/* VPLL 1188 MHz (vendor SPL verified) */
 #define T32_CPCCR_DEFAULT	0x55700000u
-#if defined(CONFIG_T32_DDR3_W631_900) || defined(CONFIG_T32_DDR3_W632_900)
-#define T32_CPAPCR	0x06405101u	/* NQ/XQ */
-#define T32_CPMPCR	0x04b05101u
-#define T32_CPCCR_DIV	0x55752210u	/* H0/H2DIV 2, PDIV 5 */
-#define T32_CPCCR_SEL	0x9a052210u
-#elif defined(CONFIG_T32_HWTRAIN)	/* VN/ZN/VX/ZX DDR3 + VNP LPDDR3, 700 */
-#define T32_CPAPCR	0x04b05101u
-#define T32_CPMPCR	0x0af05901u
-#define T32_CPCCR_DIV	0x55794410u	/* H0/H2DIV 4, PDIV 9 */
-#define T32_CPCCR_SEL	0x9a094410u
-#else					/* LQ/VL/ZL DDR2 600 (default) */
-#define T32_CPAPCR	0x04b05101u
-#define T32_CPMPCR	0x06405101u
-#define T32_CPCCR_DIV	0x557b5510u	/* H0/H2DIV 5, PDIV 11 (vendor HW-verified) */
-#define T32_CPCCR_SEL	0x9a7b5510u
-#endif
+
+/*
+ * SPL helper from the T32 DDR driver: find the DDR node in the FDT (by
+ * its per-SKU compatible) and return that SKU's CPAPCR/CPMPCR words and
+ * the two-stage CPCCR programming words. Runs before driver model is up.
+ */
+int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
+				  u32 *cpccr_div, u32 *cpccr_sel);
 
 static u32 cpm_r(unsigned int off)
 {
@@ -73,48 +59,37 @@ static void pll_set(unsigned int reg, u32 word)
 
 void pll_init(void)
 {
+	u32 cpapcr, cpmpcr, cpccr_div, cpccr_sel;
+
+	if (ingenic_t32_ddr_pll_setpoints(&cpapcr, &cpmpcr,
+					  &cpccr_div, &cpccr_sel))
+		hang();
+
 	/* cpccr_default: known state, wait CPCSR stable. */
 	cpm_w(T32_CPCCR_DEFAULT, CPM_CPCCR);
 	while ((cpm_r(CPM_CPCSR) & 0xf0000007) != 0xf0000000)
 		;
 
-	pll_set(CPM_CPAPCR, T32_CPAPCR);	/* APLL 900 MHz */
-	pll_set(CPM_CPMPCR, T32_CPMPCR);	/* MPLL 1200 MHz */
-	pll_set(CPM_CPVPCR, T32_CPVPCR);	/* VPLL 1188 MHz (PRJ007) */
+	pll_set(CPM_CPAPCR, cpapcr);
+	pll_set(CPM_CPMPCR, cpmpcr);
+	pll_set(CPM_CPVPCR, T32_CPVPCR);	/* VPLL (PRJ007 programs it) */
 
 	/* cpccr_sets: program dividers, then the source selects. */
-	cpm_w(T32_CPCCR_DIV, CPM_CPCCR);
+	cpm_w(cpccr_div, CPM_CPCCR);
 	while (cpm_r(CPM_CPCSR) & 7)
 		;
-	cpm_w(T32_CPCCR_SEL, CPM_CPCCR);
+	cpm_w(cpccr_sel, CPM_CPCCR);
 	while ((cpm_r(CPM_CPCSR) & 0xf0000000) != 0xf0000000)
 		;
 }
 
-/* Ungate the console UART (CLKGR0: UART0 = bit 14, UART1 = bit 15). */
+/* Ungate the console UART (CLKGR0: UART0 = bit 11, UART1 = bit 12). */
 void clk_ungate_uart(unsigned int idx)
 {
 	cpm_w(cpm_r(CPM_CLKGR0) & ~(CPM_CLKGR0_UART0 << idx), CPM_CLKGR0);
 }
 
-/*
- * DDR clock. Vendor sdram_init() does _clk_set_rate(DDR,
- * CONFIG_SYS_MEM_FREQ / 2); for PRJ007_lq that is the MPLL-sourced
- * DDR CK of 300 MHz (600 MT/s). CPM_DDRCDR layout (vendor CGU
- * descriptor [DDR] = {.., sel_bit 30, ce 29, busy 28, stop 27}):
- * src[31:30] (1=APLL, 2=MPLL), ce[29], busy[28], stop[27],
- * divider[7:0]. cdr = MPLL / CK - 1.
- */
-#define T32_EXTAL_HZ	24000000U
-#if defined(CONFIG_T32_DDR3_W631_900) || defined(CONFIG_T32_DDR3_W632_900)
-#define T32_DDR_CK_HZ	450000000U	/* NQ/XQ: 900M / 2 */
-#elif defined(CONFIG_T32_HWTRAIN)
-#define T32_DDR_CK_HZ	350000000U	/* VN/ZN/VX/ZX/VNP: 700M / 2 */
-#else
-#define T32_DDR_CK_HZ	300000000U	/* LQ/VL/ZL: 600M / 2 */
-#endif
-
-/* CPxPCR (CPAPCR/CPMPCR) -> Hz. Shared by the DDR and SFC0 clocks. */
+/* CPxPCR (CPAPCR/CPMPCR) -> Hz. Used by the SPL SFC clock (sfc.c). */
 u32 t32_pll_rate(unsigned int cpxpcr_off)
 {
 	u32 v = cpm_r(cpxpcr_off);
@@ -132,19 +107,5 @@ u32 t32_pll_rate(unsigned int cpxpcr_off)
 	if (!od0)
 		od0 = 1;
 
-	return (u32)((u64)T32_EXTAL_HZ * m / n / od1 / od0);
-}
-
-void ddr_clk_init(void)
-{
-	u32 mpll = t32_pll_rate(CPM_CPMPCR);
-	u32 cdr = ((mpll + T32_DDR_CK_HZ - 1) / T32_DDR_CK_HZ - 1) & 0xff;
-	u32 v;
-
-	v = cpm_r(CPM_DDRCDR);
-	v &= ~((3u << 30) | (1u << 28) | (1u << 27) | 0xff);
-	v |= (2u << 30) | (1u << 29) | cdr;	/* src=MPLL, ce, divider */
-	cpm_w(v, CPM_DDRCDR);
-	while (cpm_r(CPM_DDRCDR) & (1u << 28))	/* wait change-busy clear */
-		;
+	return (u32)((u64)24000000 * m / n / od1 / od0);
 }

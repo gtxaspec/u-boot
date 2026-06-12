@@ -93,15 +93,16 @@ static void t23_spl_to_dram(void)
 			*(volatile u32 *)((from) + a);			\
 } while (0)
 #ifdef CONFIG_SPL_T23_USB_BOOT
-	T23_CP(0x80000000UL, 0x10000);	/* bootrom vars + SPL + DTB */
+	/* bootrom vars + SPL + DTB */
+	T23_CP(0x80000000UL, CONFIG_SPL_BSS_START_ADDR - 0x80000000UL);
 #else
 	t23_spl_nor_read(0, (unsigned int *)(CONFIG_SPL_TEXT_BASE |
 					     0x20000000),
 			 CONFIG_SPL_BSS_START_ADDR - CONFIG_SPL_TEXT_BASE);
 	T23_CP(0x80000000UL, 0x1000);	/* bootrom vars page */
 #endif
-	T23_CP(0x80012000UL, 0x2000);	/* BSS / gd */
-	T23_CP(0x8007c000UL, 0x4000);	/* live stack */
+	T23_CP(CONFIG_SPL_BSS_START_ADDR, CONFIG_SPL_BSS_MAX_SIZE);
+	T23_CP(CONFIG_SPL_STACK - 0x4000, 0x4000);	/* live stack */
 #undef T23_CP
 }
 

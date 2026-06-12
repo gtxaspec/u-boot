@@ -64,7 +64,7 @@ void board_init_f(ulong dummy)
 
 	/*
 	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
-	 * so pll_init() can read ingenic,variant from the DDR node and pick
+	 * so pll_init() can match the DDR node's per-SKU compatible and pick
 	 * the per-SKU PLL setpoints before driver model comes up.
 	 */
 	if (fdtdec_setup())
@@ -83,7 +83,7 @@ void board_init_f(ulong dummy)
 	 * Bring driver model up so the UCLASS_RAM driver in
 	 * drivers/ram/ingenic/ probes off the memory-controller node in the
 	 * SPL device tree and runs ingenic_ddr_sdram_init() (A1 family)
-	 * against the variant selected by the `ingenic,variant` property.
+	 * against the variant selected by the DDR node's per-SKU compatible.
 	 * Replaces the old direct sdram_init() call.
 	 */
 	if (spl_init())

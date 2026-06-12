@@ -2,7 +2,7 @@
 /*
  * Ingenic ISVP-T41 USB-boot DFU-loader board body, shared by every
  * T41 SKU. Trimmed sibling of t41-isvp.dtsi (no audio; OTG in gadget
- * mode for DFU/g_dnl). The per-SKU leaf .dts sets ingenic,variant on
+ * mode for DFU/g_dnl). The leaf .dts sets the per-SKU compatible on
  * &ddr.
  */
 

@@ -4,8 +4,9 @@ if SOC_A1
 
 # A1 SoC variant, DDR parameters, DRAM size and PLL setpoints are all
 # selected at runtime from the device tree (the per-SKU <sku>-isvp.dts sets
-# ingenic,variant on the memory-controller node; the UCLASS_RAM driver and
-# pll_init() read it). No compile-time variant Kconfig is needed.
+# the memory-controller node's compatible to ingenic,<sku>-ddr-innophy; the
+# UCLASS_RAM driver of_match and pll_init() select on it). No compile-time
+# variant Kconfig is needed.
 
 config SPL_A1_USB_BOOT
 	bool "A1 SPL: return to mask ROM for USB boot (dev loop)"

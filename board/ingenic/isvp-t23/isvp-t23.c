@@ -3,9 +3,10 @@
  * Ingenic ISVP-T23 board (DDR2, SFC NOR)
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
- * (mach-xburst/t23) brings up console + PLL + Innophy DDR2.
- * T23/T23N = 64 MB, T23DL/T23DN = 32 MB (CONFIG_T23_DRAM_32M);
- * no 128 MB board.
+ * (mach-xburst/t23) brings up console + PLL + Innophy DDR2. The T23
+ * SKU (geometry + clocks) is selected at runtime by the DDR node's
+ * per-SKU compatible (drivers/ram/ingenic/ddr_t23_types.c);
+ * T23/T23N = 64 MB, T23DL/T23DN = 32 MB, no 128 MB board.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -16,6 +17,8 @@
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <mach/t23.h>
+
+#include "../../../drivers/ram/ingenic/ddr_t31.h"
 
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <dm/ofnode.h>
@@ -164,10 +167,22 @@ int board_init(void)
 }
 #endif
 
-/* Printed right after the "Model:" line; shows the exact T23 SKU. */
+/*
+ * Printed right after the "Model:" line; shows the exact T23 SKU as
+ * resolved at runtime from the DDR node's per-SKU compatible (the
+ * variant struct hangs off the RAM device's of_match .data).
+ */
 int checkboard(void)
 {
-	printf("Variant: %s\n", CONFIG_T23_VARIANT_NAME);
+	const struct ingenic_t31_ddr_variant *v;
+	struct udevice *dev;
+
+	if (!uclass_first_device_err(UCLASS_RAM, &dev)) {
+		v = (const void *)dev_get_driver_data(dev);
+		if (v)
+			printf("Variant: %s (CPU %u MHz)\n",
+			       v->name, v->cpu_mhz);
+	}
 #ifdef CONFIG_SPL_T23_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

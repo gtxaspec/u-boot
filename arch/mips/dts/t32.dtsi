@@ -124,6 +124,27 @@
 	};
 
 	/*
+	 * GMAC: Synopsys DesignWare MAC, same base/glue as T31
+	 * (vendor PRJ.dtsi mac@0x134b0000, mode-reg 0x100000e8) and the
+	 * same RMII pad set (PB6-11/PB13-16 func 0). ingenic,mode-reg is
+	 * the CPM GMAC-PHY-control register used to select the PHY
+	 * interface; the glue also ungates the GMAC clock and programs
+	 * CPM_MACCDR off the live MPLL (per-SKU 1200/1400 MHz).
+	 */
+	gmac: ethernet@134b0000 {
+		compatible = "ingenic,t32-gmac";
+		reg = <0x134b0000 0x2000>;
+		phy-mode = "rmii";
+		max-speed = <100>;
+		macphy-rate = <50000000>;
+		clocks = <&cgu T32_CLK_GMAC>;
+		ingenic,mode-reg = <0x100000e8>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mac>;
+		status = "disabled";
+	};
+
+	/*
 	 * DWC2 USB OTG. T32 puts the controller at the same base as
 	 * T31 (0x13500000). The host/peripheral split is per-board:
 	 * production NOR boots use dr_mode = "host" so the host can
@@ -227,6 +248,11 @@
 		pins_mmc0: mmc0 {
 			function = "mmc0";
 			groups = "mmc0-1bit", "mmc0-4bit";
+		};
+
+		pins_mac: mac {
+			function = "mac";
+			groups = "mac-rmii";
 		};
 
 		/*

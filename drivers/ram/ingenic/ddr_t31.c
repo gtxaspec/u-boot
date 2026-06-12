@@ -69,14 +69,15 @@ static void reset_dll(void)
  * if it left the source on APLL the cdr=1 divider would overclock the
  * DDR and randomly corrupt memory.
  */
-static void ddr_clk_set_rate(void)
+static void ddr_clk_set_rate(const struct ingenic_t31_ddr_variant *cfg)
 {
+	u32 cdr = cfg->ddr_cdr ? cfg->ddr_cdr : 1;	/* 0 = default MPLL/2 */
 	u32 regval = cpm_readl(CPM_DDRCDR);
 
 	regval &= ~(0xf | (0x3f << 24));
 	regval &= ~(0x3 << 30);
 	regval |= (0x2 << 30);
-	regval |= ((1 << 29) | 1);		/* change-enable (bit 29) + cdr=1 */
+	regval |= ((1 << 29) | cdr);		/* change-enable (bit 29) + divider */
 	cpm_writel(regval, CPM_DDRCDR);
 	while (cpm_readl(CPM_DDRCDR) & (1 << 28))	/* busy = bit 28 */
 		;
@@ -312,7 +313,7 @@ static void ddr_inno_phy_init(const struct ingenic_t31_ddr_variant *cfg)
 /* Top-level DDR2/DDR3 init (innophy path of the vendor sdram_init()). */
 int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg)
 {
-	ddr_clk_set_rate();
+	ddr_clk_set_rate(cfg);
 	reset_dll();
 
 	reset_controller();
@@ -341,13 +342,20 @@ static const struct {
 	const char *compatible;
 	const struct ingenic_t31_ddr_variant *cfg;
 } t31_ddr_variants[] = {
-	{ "ingenic,t31x-ddr-innophy",  &ingenic_t31_ddr_variant_t31x  },
-	{ "ingenic,t31n-ddr-innophy",  &ingenic_t31_ddr_variant_t31n  },
-	{ "ingenic,t31l-ddr-innophy",  &ingenic_t31_ddr_variant_t31l  },
-	{ "ingenic,t31lc-ddr-innophy", &ingenic_t31_ddr_variant_t31lc },
-	{ "ingenic,t31al-ddr-innophy", &ingenic_t31_ddr_variant_t31al },
-	{ "ingenic,t31a-ddr-innophy",  &ingenic_t31_ddr_variant_t31a  },
-	{ "ingenic,c100-ddr-innophy",  &ingenic_t31_ddr_variant_c100  },
+	{ "ingenic,t31x-ddr-innophy",  &ingenic_t31_ddr_variant_t31x   },
+	{ "ingenic,t31n-ddr-innophy",  &ingenic_t31_ddr_variant_t31n   },
+	{ "ingenic,t31l-ddr-innophy",  &ingenic_t31_ddr_variant_t31l   },
+	{ "ingenic,t31lc-ddr-innophy", &ingenic_t31_ddr_variant_t31lc  },
+	{ "ingenic,t31al-ddr-innophy", &ingenic_t31_ddr_variant_t31al  },
+	{ "ingenic,t31a-ddr-innophy",  &ingenic_t31_ddr_variant_t31a   },
+	{ "ingenic,c100-ddr-innophy",  &ingenic_t31_ddr_variant_c100   },
+	{ "ingenic,t23n-ddr-innophy",  &ingenic_t31_ddr_variant_t23n   },
+	{ "ingenic,t23zn-ddr-innophy", &ingenic_t31_ddr_variant_t23n   },
+	{ "ingenic,t23dl-ddr-innophy", &ingenic_t31_ddr_variant_t23dl  },
+	{ "ingenic,t23nhp-ddr-innophy", &ingenic_t31_ddr_variant_t23n_hp },
+	{ "ingenic,t23nlp-ddr-innophy", &ingenic_t31_ddr_variant_t23n_lp },
+	{ "ingenic,t23x-ddr-innophy",  &ingenic_t31_ddr_variant_t23x   },
+	{ "ingenic,t23dn-ddr-innophy", &ingenic_t31_ddr_variant_t23dn  },
 };
 
 int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
@@ -429,6 +437,21 @@ static const struct udevice_id ingenic_t31_ddr_ids[] = {
 	  .data = (ulong)&ingenic_t31_ddr_variant_t31a },
 	{ .compatible = "ingenic,c100-ddr-innophy",
 	  .data = (ulong)&ingenic_t31_ddr_variant_c100 },
+	/* T23: same XBurst1 legacy DDRC + Innophy DDR2 IP. */
+	{ .compatible = "ingenic,t23n-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23n },
+	{ .compatible = "ingenic,t23zn-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23n },
+	{ .compatible = "ingenic,t23dl-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23dl },
+	{ .compatible = "ingenic,t23nhp-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23n_hp },
+	{ .compatible = "ingenic,t23nlp-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23n_lp },
+	{ .compatible = "ingenic,t23x-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23x },
+	{ .compatible = "ingenic,t23dn-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t23dn },
 	{ }
 };
 

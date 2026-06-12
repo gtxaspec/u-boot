@@ -49,6 +49,13 @@
 	status = "okay";
 };
 
+&gmac {
+	status = "okay";
+	/* No PHY reset line by default (the driver falls back to an MDIO
+	 * BMCR soft-reset). Boards that wire one add ingenic,reset-gpio
+	 * here, like T31 (vendor T32 reference: PB26 active-low). */
+};
+
 &otg {
 	status = "okay";
 	/* Host by default; USB-NIC and mass-storage commands need a

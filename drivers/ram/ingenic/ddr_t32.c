@@ -709,7 +709,16 @@ static const struct {
 	const char *compatible;
 	const struct ingenic_t32_ddr_variant *cfg;
 } t32_ddr_variants[] = {
-	{ "ingenic,t32lq-ddr-innophy", &ingenic_t32_ddr_variant_t32lq },
+	{ "ingenic,t32lq-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
+	{ "ingenic,t32vl-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
+	{ "ingenic,t32zl-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
+	{ "ingenic,t32nq-ddr-innophy",  &ingenic_t32_ddr_variant_t32nq  },
+	{ "ingenic,t32vn-ddr-innophy",  &ingenic_t32_ddr_variant_t32vn  },
+	{ "ingenic,t32zn-ddr-innophy",  &ingenic_t32_ddr_variant_t32vn  },
+	{ "ingenic,t32xq-ddr-innophy",  &ingenic_t32_ddr_variant_t32xq  },
+	{ "ingenic,t32vx-ddr-innophy",  &ingenic_t32_ddr_variant_t32vx  },
+	{ "ingenic,t32zx-ddr-innophy",  &ingenic_t32_ddr_variant_t32vx  },
+	{ "ingenic,t32vnp-ddr-innophy", &ingenic_t32_ddr_variant_t32vnp },
 };
 
 int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
@@ -781,6 +790,24 @@ static const struct ram_ops ingenic_t32_ddr_ops = {
 static const struct udevice_id ingenic_t32_ddr_ids[] = {
 	{ .compatible = "ingenic,t32lq-ddr-innophy",
 	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
+	{ .compatible = "ingenic,t32vl-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
+	{ .compatible = "ingenic,t32zl-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
+	{ .compatible = "ingenic,t32nq-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32nq },
+	{ .compatible = "ingenic,t32vn-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32vn },
+	{ .compatible = "ingenic,t32zn-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32vn },
+	{ .compatible = "ingenic,t32xq-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32xq },
+	{ .compatible = "ingenic,t32vx-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32vx },
+	{ .compatible = "ingenic,t32zx-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32vx },
+	{ .compatible = "ingenic,t32vnp-ddr-innophy",
+	  .data = (ulong)&ingenic_t32_ddr_variant_t32vnp },
 	{ }
 };
 

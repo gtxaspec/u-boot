@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T23N (DDR2 64 MB M14D5121632A, CPU 1188 MHz), SFC-NOR.
+ * T23ZN is a param-identical vendor bin badge of the same part.
+ */
+
+/dts-v1/;
+
+#include "t23-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T23N (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t23n-ddr-innophy";
+};

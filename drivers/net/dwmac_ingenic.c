@@ -458,6 +458,14 @@ static const struct dwmac_ingenic_data t31_gmac_data = {
 	.inner_phy = false,
 };
 
+static const struct dwmac_ingenic_data t32_gmac_data = {
+	.mpll_hz = 0,			/* read MPLL from CPM at runtime:
+					 * 1200 MHz (LQ/NQ/XQ classes) vs
+					 * 1400 MHz (VN/VX/VNP @700) */
+	.inner_phy = false,		/* external RMII PHY */
+	.t40_pll = true,		/* T32 CPMPCR is the raw M/N/OD form */
+};
+
 static const struct dwmac_ingenic_data t21_gmac_data = {
 	.mpll_hz = 900000000u,		/* T21N MPLL (t21/pll.c) */
 	.inner_phy = true,
@@ -477,6 +485,7 @@ static const struct dwmac_ingenic_data t41_gmac_data = {
 
 static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
+	{ .compatible = "ingenic,t32-gmac", .data = (ulong)&t32_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
 	{ .compatible = "ingenic,t40-gmac", .data = (ulong)&t40_gmac_data },
 	{ .compatible = "ingenic,t41-gmac", .data = (ulong)&t41_gmac_data },

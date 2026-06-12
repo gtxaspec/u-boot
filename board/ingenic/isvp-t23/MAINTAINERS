@@ -4,3 +4,5 @@ S:	Maintained
 F:	board/ingenic/isvp-t23/
 F:	include/configs/isvp-t23.h
 F:	configs/isvp_t23*_defconfig
+F:	arch/mips/dts/t23*.dtsi
+F:	arch/mips/dts/t23*.dts

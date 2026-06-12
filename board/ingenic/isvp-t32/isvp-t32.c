@@ -176,10 +176,10 @@ int board_init(void)
 	return 0;
 }
 
-/* Printed right after the "Model:" line; shows the exact T32 SKU. */
+/* Printed right after the "Model:" line. The exact T32 SKU is carried
+ * by the per-SKU DT /model (no compile-time CONFIG_T32_VARIANT_*). */
 int checkboard(void)
 {
-	printf("Variant: %s\n", CONFIG_T32_VARIANT_NAME);
 #ifdef CONFIG_SPL_T32_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

@@ -11,3 +11,7 @@ obj-$(CONFIG_SOC_A1) += ddr_innophy_phy_a1.o
 # T31 (XBurst1) DDR - sibling driver, distinct IP.
 obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ddr_t31.o
 obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ddr_t31_types.o
+
+# T32 (PRJ007) uMCTL2 + Innophy DDR - sibling driver, distinct IP.
+obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32.o
+obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32_types.o

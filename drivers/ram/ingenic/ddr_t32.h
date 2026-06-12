@@ -342,7 +342,15 @@ int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_variant *cfg);
 int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
 				  u32 *cpccr_div, u32 *cpccr_sel);
 
-/* Per-SKU variant configs (ddr_t32_types.c). */
+/*
+ * Per-SKU variant configs (ddr_t32_types.c). Param-identical vendor
+ * bin badges share a struct: VL/ZL = LQ, ZN = VN, ZX = VX.
+ */
 extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32lq;
+extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32nq;
+extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vn;
+extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32xq;
+extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vx;
+extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vnp;
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T32_H */

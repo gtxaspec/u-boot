@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Ingenic ISVP-A1 board body, shared by every A1 SKU. The per-SKU
- * leaf .dts (a1n-isvp.dts, ...) includes this file and sets
- * ingenic,variant on &ddr. A1 is SFC-NOR only today; if a NAND A1
+ * leaf .dts (a1n-isvp.dts, ...) includes this file and sets the
+ * per-SKU compatible on &ddr. A1 is SFC-NOR only today; if a NAND A1
  * board appears, split the flash node into boot-media fragments like
  * T40.
  */

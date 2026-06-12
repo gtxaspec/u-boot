@@ -4,8 +4,8 @@
  * SKU. Identical to a1-isvp.dtsi except OTG0 is dr_mode = "peripheral"
  * so the dwc2_udc_otg gadget binds to it (dwc2_udc_otg_bind rejects
  * "host"). OTG0 is the mask-ROM USB-boot port, so the DFU gadget comes
- * up on the same connector the loader is USB-booted over. The per-SKU
- * leaf .dts sets ingenic,variant on &ddr.
+ * up on the same connector the loader is USB-booted over. The leaf
+ * .dts sets the per-SKU compatible on &ddr.
  */
 
 #include <dt-bindings/clock/ingenic,a1-cgu.h>

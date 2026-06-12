@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0+
-
-/dts-v1/;
+/*
+ * Ingenic ISVP-T32 shared board body (SFC-NOR, USB host).
+ *
+ * The per-SKU leaf .dts files (t32lq-isvp.dts, ...) include this and
+ * set the DDR node's per-SKU compatible (ingenic,t32<sku>-ddr-innophy),
+ * which selects the variant table in the DDR driver. The matching
+ * <leaf>-u-boot.dtsi pulls in t32-isvp-uboot-common.dtsi (binman image
+ * + SPL bootph).
+ */
 
 #include <dt-bindings/gpio/gpio.h>
 #include "t32.dtsi"
@@ -19,7 +26,8 @@
 
 	memory {
 		device_type = "memory";
-		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (M14D5121632A) */
+		/* Placeholder; the DDR driver reports the real per-SKU size. */
+		reg = <0x0 0x04000000>;
 	};
 };
 

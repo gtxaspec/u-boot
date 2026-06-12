@@ -12,6 +12,8 @@
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t31.h>
+
+#include "../../../drivers/ram/ingenic/ddr_t31.h"
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <usb.h>
 #include <dm/ofnode.h>
@@ -243,6 +245,15 @@ int board_init(void)
  * time CONFIG_T31_VARIANT_*). */
 int checkboard(void)
 {
+	const struct ingenic_t31_ddr_variant *v;
+	struct udevice *dev;
+
+	if (!uclass_first_device_err(UCLASS_RAM, &dev)) {
+		v = (const void *)dev_get_driver_data(dev);
+		if (v)
+			printf("Variant: %s (CPU %u MHz)\n",
+			       v->name, v->cpu_mhz);
+	}
 #ifdef CONFIG_SPL_T31_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

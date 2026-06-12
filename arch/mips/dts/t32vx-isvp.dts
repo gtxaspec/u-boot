@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32VX (DDR3 256 MB W632GU6NG @700, CPU 900 MHz), SFC-NOR.
+ * T32ZX is a param-identical vendor bin badge of the same part.
+ */
+
+/dts-v1/;
+
+#include "t32-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T32VX (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t32vx-ddr-innophy";
+};

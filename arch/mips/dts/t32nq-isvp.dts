@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T32NQ (DDR3 128 MB W631GU6NG @900, CPU 1200 MHz), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t32-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T32NQ (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t32nq-ddr-innophy";
+};

@@ -12,8 +12,6 @@
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/t31.h>
-
-#include "../../../drivers/ram/ingenic/ddr_t31.h"
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <usb.h>
 #include <dm/ofnode.h>
@@ -240,20 +238,13 @@ int board_init(void)
 	return 0;
 }
 
-/* Printed right after the "Model:" line; shows the exact T31 SKU. The
- * variant + CPU clock come from the DT-selected DDR driver (no compile-
- * time CONFIG_T31_VARIANT_*). */
+/*
+ * The SKU is identified by the leaf DT's model string (the "Model:"
+ * line); like the other DM-SPL platforms there is no separate
+ * Variant line.
+ */
 int checkboard(void)
 {
-	const struct ingenic_t31_ddr_variant *v;
-	struct udevice *dev;
-
-	if (!uclass_first_device_err(UCLASS_RAM, &dev)) {
-		v = (const void *)dev_get_driver_data(dev);
-		if (v)
-			printf("Variant: %s (CPU %u MHz)\n",
-			       v->name, v->cpu_mhz);
-	}
 #ifdef CONFIG_SPL_T31_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

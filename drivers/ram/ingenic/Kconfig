@@ -17,7 +17,7 @@ config RAM_INGENIC_DDR_INNOPHY
 	  (arch/mips/cpu/xburst2/ddr_innophy.c).
 
 config RAM_INGENIC_DDR_T31
-	bool "Ingenic T31 (XBurst1) DDR controller + Innophy PHY"
+	bool "Ingenic T31/T23 (XBurst1) DDR controller + Innophy PHY"
 	depends on RAM
 	depends on ARCH_XBURST
 	select SPL_RAM if SPL
@@ -29,8 +29,12 @@ config RAM_INGENIC_DDR_T31
 	  node's compatible via the driver of_match .data, so one driver
 	  covers every T31 SKU (T31X, T31N, T31L, T31LC, T31AL, T31A, C100).
 
+	  T23 reuses this driver: it has the identical legacy XBurst1 DDRC +
+	  Innophy DDR2 IP, so only its per-SKU variant table (ddr_t23_types.c)
+	  is added - T23N/ZN/DL/N-HP/N-LP/X/DN.
+
 	  Ported from the vendor XBurst1 sdram_init path (formerly the inline
-	  arch/mips/mach-xburst/t31/sdram.c).
+	  arch/mips/mach-xburst/{t31,t23}/sdram.c).
 
 config RAM_INGENIC_DDR_T32
 	bool "Ingenic T32 uMCTL2 DDR controller + Innophy PHY"

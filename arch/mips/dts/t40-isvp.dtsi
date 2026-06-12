@@ -3,8 +3,8 @@
  * Ingenic ISVP-T40 board body, shared by every T40 SKU and boot mode.
  * A per-SKU leaf .dts (t40n-isvp.dts, t40xp-isvp.dts, ...) includes
  * this file, one boot-media fragment (t40-isvp-nor.dtsi /
- * t40-isvp-nand.dtsi) for the flash node, and sets ingenic,variant on
- * &ddr.
+ * t40-isvp-nand.dtsi) for the flash node, and sets the per-SKU
+ * compatible on &ddr.
  */
 
 #include <dt-bindings/clock/ingenic,t40-cgu.h>
@@ -30,7 +30,7 @@
 
 	/*
 	 * DDR controller + Innophy PHY. ddr_innophy.c picks the per-SKU
-	 * timing/type table from the ingenic,variant string (set by the
+	 * timing/type table from the &ddr node's compatible (set by the
 	 * leaf .dts).
 	 */
 	ddr: memory-controller@b34f0000 {

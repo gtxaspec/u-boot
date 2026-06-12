@@ -4,9 +4,10 @@
  *
  * Vendor ddr_params_creator output (T41-1.2.6 / T40-1.3.1), the
  * efuse_ddr_get.c init_ddr_par[] defaults, and the per-SKU PLL
- * setpoints (apll/mpll/vpll_mnod). One struct per SKU, matched by the
- * DT ingenic,variant string at driver probe (and by
- * ingenic_ddr_pll_setpoints() in SPL). This is the single source for
+ * setpoints (apll/mpll/vpll_mnod). One struct per SKU, selected by the
+ * &ddr node's per-SKU compatible (ingenic,<sku>-ddr-innophy) through the
+ * driver of_match .data at probe (and by ingenic_ddr_pll_setpoints() in
+ * SPL). This is the single source for
  * the per-variant values; the former mach/<soc><variant>-ddr.h header
  * set was folded in here and removed.
  */

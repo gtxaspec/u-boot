@@ -81,7 +81,7 @@ void board_init_f(ulong dummy)
 
 	/*
 	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
-	 * so pll_init() can read ingenic,variant from the DDR node and pick
+	 * so pll_init() can match the DDR node's per-SKU compatible and pick
 	 * the per-SKU PLL setpoints before driver model comes up.
 	 */
 	if (fdtdec_setup())

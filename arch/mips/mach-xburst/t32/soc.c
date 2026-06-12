@@ -2,23 +2,31 @@
 /*
  * Ingenic T32 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM with no driver model: minimal
- * console, PLLs, DDR, then load U-Boot proper. Stage 1 brings up
- * console + PLL and (CONFIG_SPL_T32_USB_BOOT) returns to the mask
- * ROM; the Innophy DDR2 (Stage 2) + SFC NOR-boot (Stage 3) land
- * next. Forward-ported from the vendor U-Boot 2022.10 T32 spl.c;
- * full U-Boot uses driver model.
+ * The SPL runs from on-chip SRAM (>= 128 KB: the vendor BIG_SPL build
+ * runs 100 KB SPLs pre-DDR and places BSS at 0x8001f000). It brings up
+ * a minimal console, configures the PLLs, then brings driver model up:
+ * the UCLASS_RAM driver (drivers/ram/ingenic/ddr_t32.c) probes off the
+ * SPL devicetree and inits DDR, and U-Boot loading goes through the
+ * standard SPL_SPI framework: board_init_r() reads U-Boot proper from
+ * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps. Full
+ * U-Boot uses driver model. Forward-ported from the vendor U-Boot
+ * 2022.10 T32 spl.c.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <config.h>
+#include <dm.h>
+#include <fdtdec.h>
+#include <hang.h>
+#include <init.h>
+#include <ram.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t32.h>
-#include <mach/t32-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -27,8 +35,7 @@ void clk_ungate_uart(unsigned int idx);
 void t32_spl_serial_init(void);
 void t32_spl_puts(const char *s);
 void t32_spl_putc(char c);
-void t32_spl_load_uboot(void);
-void __weak sdram_init(void) { }
+void t32_spl_sfc_clk_init(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -43,21 +50,19 @@ static void spl_put_hex(u32 v)
 
 /*
  * Walk a few patterns through DRAM at both an uncached (KSEG1) and a
- * cached (KSEG0) window and verify the read-back, stepping across the
- * whole part (64 MB DDR2 / 128 MB DDR3 / 256 MB DDR3-W632 / 128 MB
- * LPDDR3) so a stuck/aliased address line is caught.
+ * cached (KSEG0) window and verify the read-back. Steps across the
+ * full part so a stuck/aliased address line is caught, not just
+ * word 0. `size` is the DT-selected variant's DRAM size, from
+ * ram_get_info().
  */
-#define T32_DRAM_SIZE	T32_DDR_SIZE	/* per Kconfig DDR class */
-
-static int dram_verify(void)
+static int dram_verify(u32 size)
 {
 	static const u32 pat[] = {
 		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
 		0xdeadbeef, 0x12345678,
 	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
-	const u32 offs[] = { 0x0, 0x4, 0x100000,
-			     T32_DRAM_SIZE / 2, T32_DRAM_SIZE - 4 };
+	const u32 offs[] = { 0x0, 0x4, 0x100000, size / 2, size - 4 };
 	int b, o, p;
 
 	for (b = 0; b < 2; b++) {
@@ -87,10 +92,13 @@ gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
-	u32 socid;
-
-	gd = &gdata;
+	/*
+	 * Zero BSS - start.S jumps straight here without clearing it.
+	 * DM-in-SPL needs a clean gd / BSS before spl_init() brings
+	 * driver model up.
+	 */
 	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	gd = &gdata;
 
 	/*
 	 * The mask ROM leaves a usable EXTAL-based clock, so the console
@@ -99,12 +107,6 @@ void board_init_f(ulong dummy)
 	 */
 	clk_ungate_uart(T32_CONSOLE_UART);
 	t32_spl_serial_init();
-	t32_spl_puts("\nT32 SPL: alive (pre-PLL)\n");
-
-	socid = readl((void __iomem *)T32_SOCID_ADDR);
-	t32_spl_puts("T32 SPL: SOCID ");
-	spl_put_hex(socid);
-	t32_spl_puts(socid == T32_SOCID ? " (T32)\n" : " (unexpected)\n");
 
 	/*
 	 * Vendor T32 spl.c pre-PLL pokes: clear the OST gate bit (the
@@ -118,40 +120,63 @@ void board_init_f(ulong dummy)
 	writel(readl((void __iomem *)(CPM_BASE + CPM_MESTSEL)) | 0x7,
 	       (void __iomem *)(CPM_BASE + CPM_MESTSEL));
 
+	/*
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
+	 * so pll_init() can match the DDR node's per-SKU compatible and pick
+	 * the per-SKU PLL setpoints before driver model comes up.
+	 */
+	if (fdtdec_setup())
+		hang();
+
 	pll_init();
-	t32_spl_puts("T32 SPL: PLL configured\n");
 
 	/*
-	 * Ungate the DDR controller clock (CPM_CLKGR0 bit 27).
-	 * Without this the uMCTL2 controller has no APB/AXI clock,
-	 * stays in init state forever, and the PHY-training STAT
-	 * poll spins. Vendor T32 clk.c clk_init() clears the same
-	 * bit before any DDR access.
+	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
+	 * probe runs the uMCTL2/Innophy sdram_init to bring up DDR -
+	 * replaces the old direct sdram_init() call, mirroring the
+	 * T31/XBurst2 flow. spl_init here needs the enlarged SPL-f heap
+	 * (SYS_MALLOC_F_LEN) for the DM scan, since the DRAM malloc is not
+	 * up until board_init_r.
 	 */
-	writel(readl((void __iomem *)(CPM_BASE + CPM_CLKGR0)) & ~BIT(27),
-	       (void __iomem *)(CPM_BASE + CPM_CLKGR0));
+	if (spl_init())
+		hang();
+	{
+		struct udevice *dev;
+		struct ram_info ram;
 
-	sdram_init();
-	if (dram_verify() == 0)
-		t32_spl_puts("T32 SPL: DDR OK\n");
-	else
-		t32_spl_puts("T32 SPL: DDR verify FAILED\n");
+		if (uclass_first_device_err(UCLASS_RAM, &dev))
+			hang();
+		if (ram_get_info(dev, &ram))
+			hang();
+		dram_verify((u32)ram.size);
+	}
 
 #ifdef CONFIG_SPL_T32_USB_BOOT
 	/*
-	 * USB-boot stage1: clocks are up. Return to the mask ROM
-	 * (start.S branches in, so $ra still holds the bootrom return
-	 * address and this epilogue jr's back into the bootrom USB
-	 * loop). The host then uploads U-Boot proper over USB.
+	 * USB-boot stage1: clocks and DDR are up. Set up the SFC clock so
+	 * U-Boot proper (uploaded to DRAM by the mask ROM) can probe NOR,
+	 * then return into the mask ROM USB loop (start.S kept the bootrom
+	 * sp, so a plain jr ra resumes it).
 	 */
-	t32_spl_puts("T32 SPL: returning to mask ROM (USB boot)\n");
+	t32_spl_sfc_clk_init();
 	return;
 #else
-	/* Load U-Boot proper from SPI-NOR into DRAM and jump. */
-	t32_spl_puts("T32 SPL: loading U-Boot...\n");
-	t32_spl_load_uboot();
-	for (;;)
-		;
+	/*
+	 * NOR cold-boot: DDR is up, so hand off to the standard SPL
+	 * framework board_init_r(). It sets up the DRAM malloc heap and
+	 * loads u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS via the
+	 * DM SFC driver (spl_boot_device() == BOOT_DEVICE_SPI),
+	 * LZMA-decompresses it and jumps. Does not return.
+	 */
+	preloader_console_init();
+	t32_spl_sfc_clk_init();
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
 #endif
+}
+
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */

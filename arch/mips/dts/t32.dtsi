@@ -53,6 +53,19 @@
 	};
 
 	/*
+	 * DDR: Synopsys uMCTL2-class controller + Innophy training PHY,
+	 * each with its own APB aperture. The per-SKU compatible
+	 * (ingenic,t32<sku>-ddr-innophy) is set by the leaf .dts and
+	 * selects the variant table in drivers/ram/ingenic/ddr_t32.c
+	 * (of_match .data). bootph-all is added by the leaf's shared
+	 * U-Boot overlay so the node survives into the SPL devicetree.
+	 */
+	ddr: memory-controller@13012000 {
+		reg = <0x13012000 0x1000>,	/* uMCTL2 controller APB */
+		      <0x13011000 0x1000>;	/* Innophy PHY APB */
+	};
+
+	/*
 	 * TCU container (mirrors the Linux ingenic tcu/simple-mfd
 	 * binding) so the watchdog child binds; U-Boot only needs the
 	 * watchdog for sysreset (it self-clocks from the 32 kHz RTC).
@@ -81,10 +94,10 @@
 	};
 
 	/*
-	 * SFC2 (descriptor-capable SPI-NOR controller). The SPL uses it
-	 * to load U-Boot proper; a U-Boot-proper DM SPI driver for the
-	 * SFC2 register model is a follow-up, so this node stays
-	 * disabled (env is not in flash in the initial T32 profile).
+	 * SFC2 (descriptor-capable SPI-NOR controller), driven by the DM
+	 * SFC driver (drivers/spi/ingenic_sfc.c) in both the SPL (the
+	 * standard SPL_SPI U-Boot load) and U-Boot proper. Status
+	 * disabled here, enabled per-board.
 	 */
 	sfc: spi@13440000 {
 		compatible = "ingenic,t32-sfc";

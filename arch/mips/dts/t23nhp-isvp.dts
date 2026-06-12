@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T23N-HP (DDR2 64 MB M14D5121632A, CPU 1400 MHz profile of T23N), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t23-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T23N-HP (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t23nhp-ddr-innophy";
+};

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T23DN (DDR2 32 MB M14D2561616A, CPU 1000 MHz / DDR 500), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t23-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T23DN (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t23dn-ddr-innophy";
+};

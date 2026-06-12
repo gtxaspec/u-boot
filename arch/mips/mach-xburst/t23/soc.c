@@ -2,19 +2,25 @@
 /*
  * Ingenic T23 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM. It brings up a minimal console,
- * configures the PLLs, then brings driver model up: the UCLASS_RAM
- * driver (the shared XBurst1 ddr_t31.c, T23 variant) probes off the
- * SPL devicetree and inits Innophy DDR2, and U-Boot loading goes
- * through the standard SPL_SPI framework: board_init_r() reads U-Boot
- * proper from SPI-NOR via the DM SFC driver, LZMA-decompresses it and
- * jumps. Full U-Boot uses driver model. Forward-ported from the vendor
- * T23 spl.c.
+ * The SPL runs cache-as-RAM: the mask ROM cache-locks the image at
+ * 0x80001000 and there is no backed memory until DDR is up - the whole
+ * pre-DDR budget is the 16 KB L1 + 64 KB L2 (~80 KB). That cannot hold
+ * the SPL image plus the DM scan's heap/stack (T31's 32 KB L1 + 128 KB
+ * L2 can), so unlike T31 the DDR is brought up imperatively (shared
+ * XBurst1 ddr_t31.c, T23 variant, selected by the DDR node's per-SKU
+ * compatible) and the SPL makes itself DRAM-resident *before*
+ * spl_init() brings driver model up (image re-read from NOR, live data
+ * copied out of the cache - see t23_spl_to_dram()). From there the
+ * flow matches T31: the UCLASS_RAM probe records the DRAM size, and
+ * board_init_r() reads U-Boot proper from SPI-NOR via the DM SFC
+ * driver, LZMA-decompresses it and jumps. Full U-Boot uses driver
+ * model. Forward-ported from the vendor T23 spl.c.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <config.h>
+#include <cpu_func.h>
 #include <dm.h>
 #include <fdtdec.h>
 #include <hang.h>
@@ -34,6 +40,13 @@ void t23_spl_serial_init(void);
 void t23_spl_puts(const char *s);
 void t23_spl_putc(char c);
 void t23_spl_sfc_clk_init(void);
+void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
+
+/* ddr_t31.c: imperative DDR bring-up before driver model (cache-as-RAM). */
+struct ingenic_t31_ddr_variant;
+const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void);
+int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -44,6 +57,52 @@ static void spl_put_hex(u32 v)
 	t23_spl_puts("0x");
 	for (i = 28; i >= 0; i -= 4)
 		t23_spl_putc(hex[(v >> i) & 0xf]);
+}
+
+/*
+ * Make the cache-resident SPL DRAM-resident. The bootrom loaded the SPL
+ * into the cache and there is no backing store behind it, so an evicted
+ * line is simply gone: clean lines (all of .text/.rodata) are discarded
+ * on eviction and a later refill reads back un-initialised DRAM. By the
+ * time DDR is up, pre-DDR stack/data cache pressure may ALREADY have
+ * evicted cold image lines - the cache copy of the image is not
+ * trustworthy, and copying it out would faithfully reproduce the
+ * garbage (observed on real T23N silicon: which cold line dies varies
+ * with link layout, so builds flip between booting and hanging). The
+ * image (+ appended DTB) is therefore re-read from its pristine source
+ * - NOR offset 0 - straight into DRAM through the uncached window.
+ *
+ * The runtime data has no NOR source and IS copied from the cache:
+ * cached read -> uncached (KSEG1) write, in separate small spans
+ * (reading the un-backed gaps through the cache would itself allocate
+ * and evict lines). These lines are hot (written throughout the
+ * pre-DDR phase), so unlike the cold image lines they are reliably
+ * still resident.
+ *
+ * The USB-boot SPL was uploaded to the cache by the mask ROM and NOR
+ * holds no (matching) image, so there the cache copy is the only
+ * source for the image span too.
+ */
+static void t23_spl_to_dram(void)
+{
+	unsigned long a;
+
+#define T23_CP(from, sz) do {						\
+	for (a = 0; a < (sz); a += 4)					\
+		*(volatile u32 *)(((from) + a) | 0x20000000) =		\
+			*(volatile u32 *)((from) + a);			\
+} while (0)
+#ifdef CONFIG_SPL_T23_USB_BOOT
+	T23_CP(0x80000000UL, 0x10000);	/* bootrom vars + SPL + DTB */
+#else
+	t23_spl_nor_read(0, (unsigned int *)(CONFIG_SPL_TEXT_BASE |
+					     0x20000000),
+			 CONFIG_SPL_BSS_START_ADDR - CONFIG_SPL_TEXT_BASE);
+	T23_CP(0x80000000UL, 0x1000);	/* bootrom vars page */
+#endif
+	T23_CP(0x80012000UL, 0x2000);	/* BSS / gd */
+	T23_CP(0x8007c000UL, 0x4000);	/* live stack */
+#undef T23_CP
 }
 
 /*
@@ -141,9 +200,30 @@ void board_init_f(ulong dummy)
 	pll_init();
 
 	/*
-	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
-	 * probe runs the Innophy DDR2 init to bring up DDR - replaces the
-	 * old direct sdram_init() call, mirroring the T31 flow.
+	 * Bring DDR up imperatively, BEFORE spl_init(). The ~80 KB
+	 * cache-as-RAM budget cannot hold the SPL image plus the DM scan's
+	 * heap/stack, so driver model must run DRAM-backed. Uses the same
+	 * shared ddr_t31 driver as the uclass path (sdram_init() is one-shot;
+	 * the UCLASS_RAM probe below then just records the size). T31's
+	 * 32 KB L1 + 128 KB L2 fits DM-in-SPL, so it keeps probing DDR via
+	 * the uclass.
+	 */
+	ingenic_t31_ddr_sdram_init(ingenic_t31_ddr_get_variant());
+
+	/*
+	 * Make the SPL DRAM-resident, then invalidate the cache so all
+	 * further execution refills from DRAM - past here the cache is a
+	 * normal write-back cache over real DRAM, not the bootrom's cache-
+	 * as-RAM (whose clean lines vanish on eviction). flush_cache's
+	 * I-invalidate is only safe now: before the reload it would kill
+	 * the running instruction stream.
+	 */
+	t23_spl_to_dram();
+	flush_cache(0x80000000, 0x100000);
+
+	/*
+	 * Bring driver model up and probe the UCLASS_RAM driver. With DDR
+	 * already alive, the DM scan's allocations land in DRAM.
 	 */
 	if (spl_init())
 		hang();

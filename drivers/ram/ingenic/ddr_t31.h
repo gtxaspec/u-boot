@@ -148,6 +148,9 @@ int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg);
  */
 int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr);
 
+/* Pre-DM variant lookup for an imperative board_init_f DDR bring-up. */
+const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void);
+
 /* Per-SKU variant configs (ddr_t31_types.c). */
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31x;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31n;

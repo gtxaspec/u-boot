@@ -2,8 +2,8 @@
 /*
  * Ingenic ISVP-T40 USB-boot DFU-loader board body, shared by every
  * T40 SKU. Trimmed sibling of t40-isvp.dtsi (no audio/MMC; OTG in
- * gadget mode for DFU/g_dnl). The per-SKU leaf .dts sets
- * ingenic,variant on &ddr and adds its flash@0 node on &sfc (the DFU
+ * gadget mode for DFU/g_dnl). The leaf .dts sets the per-SKU
+ * compatible on &ddr and adds its flash@0 node on &sfc (the DFU
  * loader's SPL returns to the mask ROM, so the boot-media bootph tags
  * differ from the cold-boot DT and are carried by the leaf).
  */

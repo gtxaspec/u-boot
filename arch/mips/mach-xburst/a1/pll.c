@@ -21,7 +21,8 @@
 /*
  * Per-SKU APLL/MPLL setpoints live in the DDR variant struct
  * (drivers/ram/ingenic/ddr_innophy_types.c) and are selected at runtime
- * from the DT ingenic,variant property - the same string the RAM driver
+ * by matching the &ddr node's per-SKU compatible
+ * (ingenic,<sku>-ddr-innophy) - the same of_match table the RAM driver
  * matches. board_init_f() calls fdtdec_setup() before pll_init() so the
  * FDT blob is available here, before driver model is up.
  *

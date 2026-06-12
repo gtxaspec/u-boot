@@ -2,8 +2,8 @@
 /*
  * Ingenic ISVP-T41 SFC-NOR board body, shared by every T41 SKU.
  * The per-SKU leaf .dts (t41nq-isvp.dts, t41lq-isvp.dts, ...) includes
- * this file and sets ingenic,variant on &ddr - the only thing that
- * differs between SKUs is the soldered DDR part (DDR2 vs DDR3).
+ * this file and sets the per-SKU compatible on &ddr - the only thing
+ * that differs between SKUs is the soldered DDR part (DDR2 vs DDR3).
  */
 
 #include <dt-bindings/clock/ingenic,t41-cgu.h>
@@ -29,7 +29,7 @@
 
 	/*
 	 * DDR controller + Innophy PHY. ddr_innophy.c picks the per-SKU
-	 * timing/type table from the ingenic,variant string (set by the
+	 * timing/type table from the &ddr node's compatible (set by the
 	 * leaf .dts). SPL probes this off DT and runs sdram_init() with
 	 * hardware DQS calibration enabled.
 	 */

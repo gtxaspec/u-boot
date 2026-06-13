@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T30 shared board body (SFC-NOR, USB host).
+ *
+ * The per-SKU leaf .dts files (t30n-isvp.dts, t30l-isvp.dts,
+ * t30x-isvp.dts, t30a-isvp.dts) include this and set the DDR node's
+ * per-SKU compatible (ingenic,t30<sku>-ddr-innophy), which selects
+ * the variant table in the shared DDR driver. The matching
+ * <leaf>-u-boot.dtsi pulls in t30-isvp-uboot-common.dtsi (binman
+ * image + SPL bootph).
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include "t30.dtsi"
+
+/ {
+	compatible = "ingenic,isvp-t30", "ingenic,t30";
+	model = "Ingenic ISVP-T30 (SFC NOR)";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T30N) */
+	};
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <50000000>;
+	};
+};
+
+&msc0 {
+	status = "okay";
+	bus-width = <4>;
+	broken-cd;	/* no card-detect line wired on the ISVP board */
+};
+
+&gmac {
+	status = "okay";
+	/* PHY reset GPIO; exact pin varies per board, override per device. */
+	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
+};
+
+&otg {
+	status = "okay";
+};
+
+&aic {
+	status = "okay";
+};
+
+&codec {
+	status = "okay";
+	/* Speaker-amp enable: SDK default PB31, active-high. Override
+	 * here per board if the amp is on a different pin/polarity. */
+	ingenic,spk-gpio = <&gpb 31 GPIO_ACTIVE_HIGH>;
+};
+
+&sound {
+	status = "okay";
+};

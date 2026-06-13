@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Shared U-Boot overlay for the Ingenic ISVP-T30 DFU/USB-boot leaf DTs.
+ * Each per-SKU <leaf>-u-boot.dtsi is a one-line include of this file.
+ *
+ * The USB-boot path uploads spl/u-boot-spl.bin + u-boot-lzma.img via
+ * the mask ROM (the XBurst1-generic t31-usbboot protocol), so the
+ * binman flash image here is not used in the USB-boot flow; it is kept
+ * for a sensible `make` artifact.
+ *
+ * The USB-boot SPL never reads NOR (U-Boot proper arrives over USB, not
+ * from NOR), so only the DDR controller + its clock tree need to
+ * survive into the SPL devicetree for the UCLASS_RAM probe; without
+ * these bootph-all tags the DDR node is stripped and the SPL hangs
+ * before DDR is up.
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t30 {
+		filename = "u-boot-spl-t30.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t30.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};
+
+&exclk { bootph-all; };
+&rtclk { bootph-all; };
+&cgu { bootph-all; };
+&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */

@@ -181,4 +181,13 @@ extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dn;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21n;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21hp;
 
+/*
+ * T30 SKUs (ddr_t30_types.c). Same IP; all run DDR 500 (MPLL 1000/2).
+ * T30N/T30L = 64 MB 4-bank (APLL 864/720); T30X = 128 MB 8-bank
+ * (APLL 864); T30A is param-identical to T30X (alias compatible).
+ */
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30n;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30l;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30x;
+
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T31_H */

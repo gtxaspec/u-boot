@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T21-HP (DDR2 64 MB M14D5121632A, CPU 1200 MHz / DDR 500 profile), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t21-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T21-HP (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t21hp-ddr-innophy";
+};

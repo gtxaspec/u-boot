@@ -1,60 +1,54 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T21 SPL SPI-NOR loader: read U-Boot proper from SFC NOR
- * into DRAM, LZMA-decompress and jump.
+ * Ingenic T21 SPL SFC clock + controller bring-up, plus a minimal
+ * polled NOR read.
  *
- * Faithful transliteration of the lean vendor NOR path (same code
- * base as t31/t23 sfc.c). The SFC block and the SSI cgu entry are
- * identical to T31/T23 (same SFC_BASE, same CPM_SSICDR); only the
- * MPLL source rate differs (T21N MPLL = 900 MHz). DRAM is already
- * up (sdram_init() ran) so the scratch/heap/load addresses are
- * valid.
+ * After PLL + DDR init, the T21 SPL hands U-Boot loading to the
+ * standard SPL_SPI framework (NOR cold-boot, via board_init_r) or
+ * returns to the mask ROM (USB-boot). Both need the SFC clock derived
+ * off MPLL and the controller GLB/DEV_CONF programmed before the DM
+ * SFC driver (drivers/spi/ingenic_sfc.c, compatible ingenic,t31-sfc)
+ * touches the flash.
+ *
+ * T21 clocks the SFC off the SSI clock divider (CPM_SSICDR), exactly
+ * like T31/T23 (same SFC block, same SSICDR). The proven vendor
+ * ssi_clk_set_rate() is kept verbatim (it does not touch the SSIPCS
+ * source-select or the T21 SSISCS bit - the bootrom leaves them
+ * NOR-boot-usable, which is how every boot of this board has run).
+ *
+ * t21_spl_nor_read() is a pre-driver-model polled NOR read (vendor
+ * sfc_read transliteration). The T21 SPL boots cache-as-RAM and must
+ * make itself DRAM-resident once DDR is up; the bootrom-loaded cache
+ * copy of the image is NOT trustworthy by then (cold clean lines may
+ * already have been evicted - discarded - by pre-DDR stack/data cache
+ * pressure), so soc.c re-reads the pristine image straight from NOR
+ * into DRAM instead of copying it out of the cache.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <asm/io.h>
-#include <asm/global_data.h>
-#include <lzma/LzmaTools.h>
-#include <malloc.h>
 #include <mach/t21.h>
 #include <mach/t21-sfc.h>
-
-DECLARE_GLOBAL_DATA_PTR;
-
-/*
- * Flash layout for the isvp_t21 NOR profile (same as T31/T23):
- *   flash 0            : SPL (boot header + SPL code)
- *   flash UBOOT_OFFSET : U-Boot proper image (run at 0x80100000)
- *
- * DRAM scratch/heap addresses fit the 64 MB T21N (load 0x80100000,
- * heap 0x80a00000, scratch 0x81000000).
- */
-#define T21_UBOOT_OFFSET	0x10000		/* CONFIG_UBOOT_OFFSET */
-#define T21_UBOOT_LOAD_ADDR	0x80100000	/* CONFIG_TEXT_BASE */
-#define T21_IH_MAGIC		0x27051956
-#define T21_IH_HDR_LEN		64
-#define T21_UBOOT_SCRATCH	0x81000000	/* compressed image in DRAM */
-#define T21_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
-#define T21_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
-#define T21_UBOOT_MAX		0x00800000	/* decompressed size bound */
-#define T21_DRAM_BASE		0x80000000	/* KSEG0 cached DRAM */
-#define T21_DRAM_MAX		0x08000000	/* 128 MB (covers all variants) */
-
-/* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
-#define T21_SSI_RATE		70000000U
-/* T21N MPLL is 900 MHz (t21/pll.c), the SSI cgu source. */
-#define T21_MPLL_RATE		900000000U
 
 /*
  * SSI cgu entry from the vendor cgu_clk_sel[] table (clk.c):
  *   [SSI] = {1, CPM_SSICDR, 30, MPLL, {APLL, MPLL, VPLL}, 28, 27, 26}
- * off=CPM_SSICDR, sel_src=MPLL, ce=bit 28, busy=bit 27, stop=bit 26.
+ * ce = bit 28, busy = bit 27, stop = bit 26.
  */
-#define CPM_SSICDR		0x74
-#define SSI_CGU_CE		28
-#define SSI_CGU_BUSY		27
-#define SSI_CGU_STOP		26
+#define CPM_SSICDR	0x74
+#define SSI_CGU_CE	28
+#define SSI_CGU_BUSY	27
+#define SSI_CGU_STOP	26
+
+/*
+ * SSI/SFC clock target (vendor sfc_init(): clk_set_rate(SSI, 70M)).
+ * The divider is computed against the LARGEST per-SKU MPLL (HP's
+ * 1000 MHz); on the 900 MHz T21N the same divider just comes out
+ * slightly slower, never faster - safe.
+ */
+#define T21_MPLL_RATE	1000000000U
+#define T21_SSI_RATE	70000000U
 
 static u32 cpm_readl(unsigned int off)
 {
@@ -77,13 +71,9 @@ static void jz_sfc_writel(unsigned int value, unsigned int offset)
 }
 
 /*
- * SSI branch of the vendor clk_set_rate() (clk.c). SSI is not
- * MSC0/MSC1 and not DDR, so:
- *   cdr = (pll_rate/rate - 1) & 0xff
- *   regval &= ~(3 << cgu->stop | 0xff)
- *   regval |= (1 << cgu->ce) | cdr
- *   write; poll while regval & (1 << cgu->busy)
- * pll_rate is rounded to a multiple of rate exactly as the vendor does.
+ * SSI branch of the vendor clk_set_rate() (clk.c). SSI is not MSC0/MSC1
+ * and not DDR, so cdr = (pll_rate/rate - 1) & 0xff, with pll_rate
+ * rounded to a multiple of rate exactly as the vendor does.
  */
 static void ssi_clk_set_rate(void)
 {
@@ -108,29 +98,31 @@ static void ssi_clk_set_rate(void)
 		;
 }
 
-static void sfc_set_mode(int channel, int value)
+/*
+ * Bring up the SFC clock + controller for the DM SPI driver. Called
+ * from board_init_f before board_init_r runs the SPL_SPI load (NOR
+ * cold-boot) or before returning to the mask ROM (USB-boot). The DM SFC
+ * driver expects the clock derived and the GLB threshold / DEV_CONF
+ * line-enable delays already programmed.
+ */
+void t21_spl_sfc_clk_init(void)
 {
-	unsigned int tmp;
+	ssi_clk_set_rate();
 
-	tmp = jz_sfc_readl(SFC_TRAN_CONF(channel));
-	tmp &= ~(TRAN_MODE_MSK);
-	tmp |= (value << TRAN_MODE_OFFSET);
-	jz_sfc_writel(tmp, SFC_TRAN_CONF(channel));
+	jz_sfc_writel(THRESHOLD << THRESHOLD_OFFSET, SFC_GLB);
+	jz_sfc_writel(CEDL | HOLDDL | WPDL, SFC_DEV_CONF);
+
+	/* low power consumption */
+	jz_sfc_writel(0, SFC_CGE);
 }
 
-static void sfc_dev_addr_dummy_bytes(int channel, unsigned int value)
-{
-	unsigned int tmp;
-
-	tmp = jz_sfc_readl(SFC_TRAN_CONF(channel));
-	tmp &= ~TRAN_CONF_DMYBITS_MSK;
-	tmp |= (value << TRAN_CONF_DMYBITS_OFFSET);
-	jz_sfc_writel(tmp, SFC_TRAN_CONF(channel));
-}
-
+/*
+ * Minimal polled NOR read (vendor sfc_read transliteration): basic
+ * 1-1-1 READ (0x03), 3-byte address, FIFO polling, no DMA/IRQ. Word
+ * (u32) granularity.
+ */
 static void sfc_set_read_reg(unsigned int cmd, unsigned int addr,
-		unsigned int addr_plus, unsigned int addr_len,
-		unsigned int data_en)
+			     unsigned int addr_len)
 {
 	unsigned int tmp;
 
@@ -139,180 +131,127 @@ static void sfc_set_read_reg(unsigned int cmd, unsigned int addr,
 	tmp |= (0x1 << PHASE_NUM_OFFSET);
 	jz_sfc_writel(tmp, SFC_GLB);
 
-	if (data_en) {
-		tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN |
-			DATEEN | (cmd << CMD_OFFSET);
-	} else {
-		tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN |
-			(cmd << CMD_OFFSET);
-	}
-
+	tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN | DATEEN |
+	      (cmd << CMD_OFFSET);
 	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
 	jz_sfc_writel(addr, SFC_DEV_ADDR(0));
-	jz_sfc_writel(addr_plus, SFC_DEV_ADDR_PLUS(0));
+	jz_sfc_writel(0, SFC_DEV_ADDR_PLUS(0));
 
-	sfc_dev_addr_dummy_bytes(0, 0);
-	sfc_set_mode(0, 0);
+	/* zero dummy bits, standard single-line SPI mode */
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_CONF_DMYBITS_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_MODE_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
 
 	jz_sfc_writel(START, SFC_TRIG);
 }
 
-static int sfc_read_data(unsigned int *data, unsigned int len)
+static void sfc_read_data(unsigned int *data, unsigned int words)
 {
 	unsigned int tmp_len = 0;
-	unsigned int fifo_num = 0;
+	unsigned int fifo_num;
 	unsigned int i;
 
-	while (1) {
-		if (jz_sfc_readl(SFC_SR) & RECE_REQ) {
-			jz_sfc_writel(CLR_RREQ, SFC_SCR);
-			if ((len - tmp_len) > THRESHOLD)
-				fifo_num = THRESHOLD;
-			else
-				fifo_num = len - tmp_len;
+	while (tmp_len < words) {
+		if (!(jz_sfc_readl(SFC_SR) & RECE_REQ))
+			continue;
 
-			for (i = 0; i < fifo_num; i++) {
-				*data = jz_sfc_readl(SFC_DR);
-				data++;
-				tmp_len++;
-			}
+		jz_sfc_writel(CLR_RREQ, SFC_SCR);
+		if ((words - tmp_len) > THRESHOLD)
+			fifo_num = THRESHOLD;
+		else
+			fifo_num = words - tmp_len;
+
+		for (i = 0; i < fifo_num; i++) {
+			*data = jz_sfc_readl(SFC_DR);
+			data++;
+			tmp_len++;
 		}
-
-		if (tmp_len == len)
-			break;
 	}
 
 	while ((jz_sfc_readl(SFC_SR) & SFC_SR_END) != SFC_SR_END)
 		;
 	jz_sfc_writel(CLR_END, SFC_SCR);
-
-	return 0;
 }
 
-static int sfc_read(unsigned int addr, unsigned int addr_plus,
-		unsigned int addr_len, unsigned int *data, unsigned int len)
+/*
+ * Read `bytes` (rounded up to a whole word) from NOR offset `nor_off`
+ * to `dst`. Self-contained: derives the SFC clock and programs the
+ * controller, so it works before driver model is up. `dst` should be
+ * a KSEG1 (uncached) pointer when the point is to populate DRAM
+ * without disturbing the cache (the cache-as-RAM reload).
+ */
+void t21_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes)
 {
-	unsigned int cmd, ret;
+	unsigned int words = (bytes + 3) / 4;
+
+	t21_spl_sfc_clk_init();
 
 	jz_sfc_writel(STOP, SFC_TRIG);
 	jz_sfc_writel(FLUSH, SFC_TRIG);
 
-	cmd = CMD_READ;
-
-	jz_sfc_writel((len * 4), SFC_TRAN_LEN);
-
-	sfc_set_read_reg(cmd, addr, addr_plus, addr_len, 1);
-
-	ret = sfc_read_data(data, len);
-	if (ret)
-		return ret;
-	else
-		return 0;
-}
-
-static void sfc_init(void)
-{
-	unsigned int tmp;
-
-	ssi_clk_set_rate();		/* vendor: clk_set_rate(SSI, 70000000) */
-
-	tmp = THRESHOLD << THRESHOLD_OFFSET;
-	jz_sfc_writel(tmp, SFC_GLB);
-
-	tmp = CEDL | HOLDDL | WPDL;
-	jz_sfc_writel(tmp, SFC_DEV_CONF);
-
-	/* low power consumption */
-	jz_sfc_writel(0, SFC_CGE);
-}
-
-static void sfc_nor_load(unsigned int src_addr, unsigned int count,
-		unsigned int dst_addr)
-{
-	unsigned int addr_len, words_of_spl;
-
-	/* spi norflash addr len */
-	addr_len = 3;
-
-	/* count word align */
-	words_of_spl = (count + 3) / 4;
-
-	sfc_init();
-
-	sfc_read(src_addr, 0x0, addr_len, (unsigned int *)(dst_addr),
-		 words_of_spl);
-}
-
-extern void t21_spl_puts(const char *s);
-
-static u32 hdr_be32(const u8 *p)
-{
-	return ((u32)p[0] << 24) | ((u32)p[1] << 16) |
-	       ((u32)p[2] << 8) | (u32)p[3];
+	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
+	sfc_set_read_reg(CMD_READ, nor_off, 3);
+	sfc_read_data(dst, words);
 }
 
 /*
- * Entry point used by board_init_f(): read the LZMA-compressed,
- * mkimage-wrapped U-Boot proper from NOR, decompress to its load
- * address and jump (no return). DRAM is already initialised.
+ * The T20-generation mask ROM (which T21 carries, gen 1.5) loads only
+ * the first 0x6800 bytes of the SPL payload from NOR - sized for the
+ * L2-less T20's 32 KB cache - regardless of the header length (proven
+ * on T21N silicon: image bytes beyond 0x80001000+0x6800 read back
+ * zero). The old sub-26 KB imperative SPL fit; the DM-in-SPL image
+ * (with the appended DTB at its very end) does not.
+ *
+ * Complete the load ourselves: read the missing tail from NOR into
+ * CACHED memory at its link address. The bootrom enables the 64 KB L2
+ * at reset on every boot path (Config7 |= 2 at 0xbfc00018), so the
+ * full ~80 KB cache-as-RAM budget is live and the tail's write-
+ * allocated lines fit alongside the resident head. The bootrom's own
+ * SFC clock is still programmed (it just loaded the head with it), so
+ * no clock change is needed - and must not be made, since pll_init()
+ * has not run yet.
+ *
+ * Must run BEFORE anything touches the missing region (fdtdec_setup
+ * reads the appended DTB). This function and everything it calls live
+ * in the loaded head (mach objects link first; asserted at build time
+ * in soc.c via T21_ROM_SPL_LOAD).
  */
-void t21_spl_load_uboot(void)
+void t21_spl_self_complete(unsigned int image_end)
 {
-	u8 *scratch = (u8 *)T21_UBOOT_SCRATCH;
-	u32 ih_magic, ih_size, ih_load;
-	SizeT out_len;
-	int ret;
+	/*
+	 * The 2 KiB boot header is part of the linked image (start.S
+	 * emits it at SPL_TEXT_BASE; entry is at +0x800), so flash file
+	 * offset k maps to memory SPL_TEXT_BASE + k. The mask ROM
+	 * loaded T21_ROM_SPL_LOAD bytes total from file offset 0
+	 * (header included) - proven by the on-target probe: the first
+	 * zero byte is exactly SPL_TEXT_BASE + T21_ROM_SPL_LOAD.
+	 */
+	unsigned int loaded = CONFIG_SPL_TEXT_BASE + T21_ROM_SPL_LOAD;
+	unsigned int words;
 
-	/* Legacy mkimage header (64 bytes, big-endian fields). */
-	sfc_nor_load(T21_UBOOT_OFFSET, T21_IH_HDR_LEN, T21_UBOOT_SCRATCH);
-	ih_magic = hdr_be32(scratch + 0);
-	ih_size  = hdr_be32(scratch + 12);
-	ih_load  = hdr_be32(scratch + 16);
-	if (ih_magic != T21_IH_MAGIC) {
-		t21_spl_puts("SPL: bad U-Boot image magic\n");
+	if (image_end <= loaded)
 		return;
-	}
+
+	words = (image_end - loaded + 3) / 4;
 
 	/*
-	 * The header fields come off NOR - bound them before they drive a
-	 * read length / decompress destination / jump. ih_size caps the
-	 * scratch write; ih_load must land in DRAM.
+	 * Do NOT reprogram GLB/DEV_CONF or the clock here: the bootrom
+	 * just used this controller+clock to load the head, its GLB
+	 * threshold matches the same 31-word drain protocol (verified
+	 * in the bfc014e4 sfc_read disassembly), and reprogramming GLB
+	 * mid-state wedges the next transfer. Just clear stale status
+	 * (the bootrom does the same before each transfer) and go.
 	 */
-	if (ih_size == 0 || ih_size > T21_UBOOT_MAX) {
-		t21_spl_puts("SPL: U-Boot image size out of range\n");
-		return;
-	}
-	if (ih_load < T21_DRAM_BASE ||
-	    ih_load >= T21_DRAM_BASE + T21_DRAM_MAX) {
-		t21_spl_puts("SPL: U-Boot load addr out of range\n");
-		return;
-	}
+	jz_sfc_writel(0x1f, SFC_SCR);
 
-	/* Header + compressed payload into DRAM scratch. */
-	sfc_nor_load(T21_UBOOT_OFFSET, T21_IH_HDR_LEN + ih_size,
-		     T21_UBOOT_SCRATCH);
+	jz_sfc_writel(STOP, SFC_TRIG);
+	jz_sfc_writel(FLUSH, SFC_TRIG);
 
-	/*
-	 * The lean SPL has no heap until here; DRAM is up. This custom
-	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
-	 * ourselves or malloc() stays on the tiny malloc_simple arena
-	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
-	 */
-	mem_malloc_init(T21_SPL_HEAP_BASE, T21_SPL_HEAP_SIZE);
-	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
-
-	out_len = T21_UBOOT_MAX;
-	ret = lzmaBuffToBuffDecompress((unsigned char *)(uintptr_t)ih_load,
-				       &out_len, scratch + T21_IH_HDR_LEN,
-				       (SizeT)ih_size);
-	if (ret) {
-		char m[2] = { (char)('0' + (ret & 7)), 0 };
-		t21_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
-		t21_spl_puts(m);
-		t21_spl_puts("\n");
-		return;
-	}
-
-	/* Jump to the load address (== entry for a -T standalone image). */
-	((void (*)(void))(uintptr_t)ih_load)();
+	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
+	sfc_set_read_reg(CMD_READ, T21_ROM_SPL_LOAD, 3);
+	sfc_read_data((unsigned int *)loaded, words);
 }

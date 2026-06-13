@@ -1,75 +1,12 @@
 if SOC_T30
 
-choice
-	prompt "T30 SoC variant"
-	default T30_VARIANT_T30L
-	help
-	  Specific T30 product variant. T30 is XBurst1/Innophy-DDR2
-	  like T21 (cpm_cpxpcr_t PLL, VPLL). T30N/T30L use the 64 MB
-	  DDR2 M14D5121632A (4-bank); T30X/T30A use the 128 MB
-	  M14D1G1664A (8-bank). All run DDR 500 MHz (MPLL 1000 / 2);
-	  variants differ in the APLL (CPU) clock and the DRAM part.
-	  The CPAPCR M/N/OD encodings are the exact ORIGINAL vendor
-	  isvp_t30.h CONFIG_SYS_APLL_MNOD values (OD0 in the [7:5]
-	  field - do not recompute, vendor-authoritative). NOTE: the
-	  values were corrected from the ingenic-u-boot-xburst1 fork
-	  (which had 900/750) to the original SDK's 864/720; only T30
-	  uses the original isvp_t30.h - other SoCs keep the fork's.
-	  T30A1 (T30A silicon + DDR3-128M) is deferred (DDR3).
-
-config T30_VARIANT_T30A
-	bool "T30A (CPU 864 MHz, DDR 500, 128 MB)"
-
-config T30_VARIANT_T30L
-	bool "T30L / lite (CPU 720 MHz, DDR 500, 64 MB)"
-
-config T30_VARIANT_T30N
-	bool "T30N (CPU 864 MHz, DDR 500, 64 MB)"
-
-config T30_VARIANT_T30X
-	bool "T30X (CPU 864 MHz, DDR 500, 128 MB)"
-
-endchoice
-
-config T30_VARIANT_NAME
-	string
-	default "T30A" if T30_VARIANT_T30A
-	default "T30N" if T30_VARIANT_T30N
-	default "T30X" if T30_VARIANT_T30X
-	default "T30L"
-
-config T30_DRAM_128M
-	bool
-	default y if T30_VARIANT_T30X || T30_VARIANT_T30A
-	help
-	  T30X/T30A populate the 128 MB DDR2 M14D1G1664A (row 13,
-	  col 10, 8-bank); T30N/T30L the 64 MB M14D5121632A (4-bank).
-	  Selects the matching DDRC_CFG/MMAP geometry, the 8-bank
-	  flag and the 128 MB GOLD set in mach/t30-ddr.h. Both run
-	  DDR 500 MHz so the clock is unchanged. T30A1 (DDR3-128M)
-	  is a separate deferred DDR3 effort.
-
-config T30_APLL_MNOD
-	hex
-	default 0x04704840 if T30_VARIANT_T30A
-	default 0x04704840 if T30_VARIANT_T30N
-	default 0x04704840 if T30_VARIANT_T30X
-	default 0x07705040
-	help
-	  CPAPCR value, exact ORIGINAL vendor isvp_t30.h
-	  CONFIG_SYS_APLL_MNOD:
-	  720 = (M=119,N=1,OD1=2<<11,OD0=2<<5) = 0x07705040 (T30L);
-	  864 = (M=71, N=1,OD1=1<<11,OD0=2<<5) = 0x04704840
-	  (T30N/T30X/T30A - the vendor 1200 MHz entry is #if 0).
-
 config SPL_T30_USB_BOOT
 	bool "T30 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL
 	help
 	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
-	  clocks (and DDR once ported), then return to the bootrom
-	  (jr ra) instead of loading U-Boot proper from SPI-NOR -
-	  how the SPL is brought up and tested on the lab rig.
-	  Development only.
+	  clocks and DDR, then return to the bootrom (jr ra) instead
+	  of loading U-Boot proper from SPI-NOR. Used as the loader
+	  stage of the USB flashing flow. Development only.
 
 endif

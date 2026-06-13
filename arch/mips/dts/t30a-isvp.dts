@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T30A (DDR2 128 MB M14D1G1664A, CPU 864 MHz; param-identical to T30X), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t30-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T30A (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t30a-ddr-innophy";
+};
+
+/ {
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x08000000>;	/* 128 MB DDR2 */
+	};
+};

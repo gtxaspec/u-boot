@@ -14,6 +14,27 @@ SECTIONS
 	. = ALIGN(4);
 	.text : {
 		__text_start = .;
+		/*
+		 * T30 NOR boot: the gen-1 mask ROM loads only the first 0x6800
+		 * bytes of the SPL and its L2 cannot be software-initialised
+		 * (unlike T21/T23/T31), so only the 32 KB L1 is usable cache-as-
+		 * RAM. Front-load the whole pre-DRAM bring-up path - start.S, the
+		 * T30 SoC SPL (console/SFC/self_complete), the shared DDR driver,
+		 * the fdt code fdtdec_setup()/pll_setpoints() need, and the mem/
+		 * str helpers that path calls (memset for the BSS clear before
+		 * self_complete(), memcpy/strlen for fdtdec) - into the ROM-
+		 * loaded, L1-resident region. The heavy DM/SFC/LZMA code follows
+		 * and runs DRAM-resident after to_dram()/flush_cache(). start.o
+		 * stays first so its boot header is at image offset 0.
+		 */
+#ifdef CONFIG_SOC_T30
+		*mach-xburst/start.o(.text*)
+		*mach-xburst/t30*(.text*)
+		*ram/ingenic*(.text*)
+		*lib/fdtdec.o(.text*)
+		*lib/libfdt*(.text*)
+		*lib/string.o(.text*)
+#endif
 		*(.text*)
 		__text_end = .;
 	} > .spl_mem

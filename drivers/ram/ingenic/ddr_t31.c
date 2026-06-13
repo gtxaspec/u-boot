@@ -371,6 +371,10 @@ static const struct {
 	{ "ingenic,t23dn-ddr-innophy", &ingenic_t31_ddr_variant_t23dn  },
 	{ "ingenic,t21n-ddr-innophy",  &ingenic_t31_ddr_variant_t21n   },
 	{ "ingenic,t21hp-ddr-innophy", &ingenic_t31_ddr_variant_t21hp  },
+	{ "ingenic,t30n-ddr-innophy",  &ingenic_t31_ddr_variant_t30n   },
+	{ "ingenic,t30l-ddr-innophy",  &ingenic_t31_ddr_variant_t30l   },
+	{ "ingenic,t30x-ddr-innophy",  &ingenic_t31_ddr_variant_t30x   },
+	{ "ingenic,t30a-ddr-innophy",  &ingenic_t31_ddr_variant_t30x   },
 };
 
 int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
@@ -494,6 +498,15 @@ static const struct udevice_id ingenic_t31_ddr_ids[] = {
 	  .data = (ulong)&ingenic_t31_ddr_variant_t21n },
 	{ .compatible = "ingenic,t21hp-ddr-innophy",
 	  .data = (ulong)&ingenic_t31_ddr_variant_t21hp },
+	/* T30: same IP; T30A is param-identical to T30X. */
+	{ .compatible = "ingenic,t30n-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t30n },
+	{ .compatible = "ingenic,t30l-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t30l },
+	{ .compatible = "ingenic,t30x-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t30x },
+	{ .compatible = "ingenic,t30a-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t30x },
 	{ }
 };
 

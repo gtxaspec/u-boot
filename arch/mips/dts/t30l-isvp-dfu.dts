@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T30L, DFU/USB-boot loader variant.
+ */
+
+/dts-v1/;
+
+#include "t30-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T30L (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t30l-ddr-innophy";
+};

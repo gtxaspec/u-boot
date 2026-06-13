@@ -1,59 +1,12 @@
 if SOC_T21
 
-choice
-	prompt "T21 SoC variant"
-	default T21_VARIANT_T21N
-	help
-	  Specific T21 product variant. T21 is XBurst1/Innophy-DDR2
-	  like T23 (same 64 MB DDR2 M14D5121632A, 4-bank) but with a
-	  VPLL. Variants differ in the APLL (CPU) clock and the DDR
-	  rate: T21N = APLL 864 / DDR 450, HIGH_PERF = APLL 1200 /
-	  DDR 500. The CPAPCR M/N/OD encodings are the exact vendor
-	  isvp_common.h CONFIG_SYS_APLL_MNOD values (non-uniform, OD0
-	  in the [7:5] field - do not recompute, vendor-authoritative).
-
-config T21_VARIANT_HP
-	bool "T21 HIGH_PERF (CPU 1200 MHz, DDR 500, 64 MB)"
-
-config T21_VARIANT_T21N
-	bool "T21N (CPU 864 MHz, DDR 450, 64 MB)"
-
-endchoice
-
-config T21_VARIANT_NAME
-	string
-	default "T21-HP" if T21_VARIANT_HP
-	default "T21N"
-
-config T21_APLL_MNOD
-	hex
-	default 0x03100860 if T21_VARIANT_HP
-	default 0x04704840
-	help
-	  CPAPCR value, exact vendor CONFIG_SYS_APLL_MNOD:
-	  864 = (M=71,N=1,OD1=1<<11,OD0=2<<5) = 0x04704840 (T21N);
-	  1200 = (M=49,N=0,OD1=1<<11,OD0=3<<5) = 0x03100860 (HIGH_PERF).
-
-config T21_MPLL_MNOD
-	hex
-	default 0x07c08820 if T21_VARIANT_HP
-	default 0x04a04840
-	help
-	  CPMPCR value, exact vendor CONFIG_SYS_MPLL_MNOD. DDR =
-	  MPLL/2: T21N MPLL 900 / DDR 450 = 0x04a04840; HIGH_PERF
-	  MPLL 1000 / DDR 500 = 0x07c08820. The CPCCR bus dividers
-	  (PCLK 8 / H2 4 / H0 4) are identical for both, so only the
-	  MPLL word and the clock-dependent DDR2 timing set
-	  (mach/t21-ddr.h) differ between the variants.
-
 config SPL_T21_USB_BOOT
 	bool "T21 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL
 	help
 	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
-	  clocks (and DDR once ported), then return to the bootrom
-	  (jr ra) instead of loading U-Boot proper from SPI-NOR -
-	  how the SPL is brought up and tested on the lab rig.
-	  Development only.
+	  clocks and DDR, then return to the bootrom (jr ra) instead
+	  of loading U-Boot proper from SPI-NOR. Used as the loader
+	  stage of the USB flashing flow. Development only.
 
 endif

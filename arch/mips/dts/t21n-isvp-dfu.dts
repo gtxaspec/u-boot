@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T21N, DFU/USB-boot loader variant.
+ */
+
+/dts-v1/;
+
+#include "t21-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T21N (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t21n-ddr-innophy";
+};

@@ -32,7 +32,8 @@ dtb-$(CONFIG_BOARD_VOCORE2) += vocore_vocore2.dtb
 dtb-$(CONFIG_TARGET_JZ4780_CI20) += ci20.dtb
 dtb-$(CONFIG_TARGET_ISVP_T10) += t10-isvp.dtb t10-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T20) += t20-isvp.dtb t20-isvp-dfu.dtb
-dtb-$(CONFIG_TARGET_ISVP_T21) += t21-isvp.dtb t21-isvp-dfu.dtb
+dtb-$(CONFIG_TARGET_ISVP_T21) += t21n-isvp.dtb t21hp-isvp.dtb \
+	t21n-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T23) += t23n-isvp.dtb t23zn-isvp.dtb \
 	t23dl-isvp.dtb t23nhp-isvp.dtb t23nlp-isvp.dtb t23x-isvp.dtb \
 	t23dn-isvp.dtb t23n-isvp-dfu.dtb

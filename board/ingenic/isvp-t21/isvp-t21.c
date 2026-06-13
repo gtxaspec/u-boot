@@ -3,13 +3,17 @@
  * Ingenic ISVP-T21 board (DDR2 64 MB, SFC NOR)
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
- * (mach-xburst/t21) brings up console + PLL + Innophy DDR2 (T21N
- * 64 MB M14D5121632A).
+ * (mach-xburst/t21) brings up console + PLL + Innophy DDR2. The T21
+ * SKU (clock profile) is selected at runtime by the DDR node's
+ * per-SKU compatible (drivers/ram/ingenic/ddr_t21_types.c); both
+ * SKUs are the 64 MB M14D5121632A.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <init.h>
+#include <dm.h>
+#include <ram.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -26,7 +30,20 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	gd->ram_size = 64 << 20;	/* T21N: DDR2 M14D5121632A 64 MB */
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 
@@ -197,10 +214,13 @@ int board_init(void)
 	return 0;
 }
 
-/* Printed right after the "Model:" line; shows the exact T21 SKU. */
+/*
+ * The SKU is identified by the leaf DT's model string (the "Model:"
+ * line); like the other DM-SPL platforms there is no separate
+ * Variant line.
+ */
 int checkboard(void)
 {
-	printf("Variant: %s\n", CONFIG_T21_VARIANT_NAME);
 #ifdef CONFIG_SPL_T21_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

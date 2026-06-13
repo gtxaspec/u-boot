@@ -369,6 +369,8 @@ static const struct {
 	{ "ingenic,t23nlp-ddr-innophy", &ingenic_t31_ddr_variant_t23n_lp },
 	{ "ingenic,t23x-ddr-innophy",  &ingenic_t31_ddr_variant_t23x   },
 	{ "ingenic,t23dn-ddr-innophy", &ingenic_t31_ddr_variant_t23dn  },
+	{ "ingenic,t21n-ddr-innophy",  &ingenic_t31_ddr_variant_t21n   },
+	{ "ingenic,t21hp-ddr-innophy", &ingenic_t31_ddr_variant_t21hp  },
 };
 
 int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
@@ -487,6 +489,11 @@ static const struct udevice_id ingenic_t31_ddr_ids[] = {
 	  .data = (ulong)&ingenic_t31_ddr_variant_t23x },
 	{ .compatible = "ingenic,t23dn-ddr-innophy",
 	  .data = (ulong)&ingenic_t31_ddr_variant_t23dn },
+	/* T21: same IP again; two clock profiles of the 64 MB part. */
+	{ .compatible = "ingenic,t21n-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t21n },
+	{ .compatible = "ingenic,t21hp-ddr-innophy",
+	  .data = (ulong)&ingenic_t31_ddr_variant_t21hp },
 	{ }
 };
 

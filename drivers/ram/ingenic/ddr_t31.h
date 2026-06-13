@@ -173,4 +173,12 @@ extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n_lp;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23x;
 extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dn;
 
+/*
+ * T21 SKUs (ddr_t21_types.c). Same XBurst1 legacy DDRC + Innophy DDR2
+ * IP again; both SKUs are the 64 MB M14D5121632A, differing only in
+ * the APLL/MPLL/DDR clock profile (T21N 864/900/450, HP 1200/1000/500).
+ */
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21n;
+extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21hp;
+
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T31_H */

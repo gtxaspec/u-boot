@@ -1,65 +1,12 @@
 if SOC_T20
 
-choice
-	prompt "T20 SoC variant"
-	default T20_VARIANT_T20N
-	help
-	  Specific T20 product variant. T20 is XBurst1 but uses the
-	  DesignWare (DWC) DDR2 controller/PHY (vendor ddr_dwc.c),
-	  NOT the Innophy core that T21/T23/T30/T31 share - same
-	  64 MB DDR2 M14D5121632A part though, at DDR 500 MHz. The
-	  PLL is the T31/T23-style M/N/OD1/OD0 (T20 cpm_cpxpcr_t has
-	  no PLLRG). Variants differ in the APLL (CPU) clock. The
-	  CPAPCR words are the exact vendor isvp_common.h
-	  CONFIG_SYS_APLL_MNOD (verbatim, vendor-authoritative).
-	  T20N/T20L are 64 MB M14D5121632A; T20X is the 128 MB
-	  M14D1G1664A (8-bank) part. All run DDR 500 MHz - the
-	  clock is identical, only the DRAM geometry differs.
-
-config T20_VARIANT_T20L
-	bool "T20L / lite (CPU 712 MHz, DDR 500, 64 MB)"
-
-config T20_VARIANT_T20N
-	bool "T20N (CPU 860 MHz, DDR 500, 64 MB)"
-
-config T20_VARIANT_T20X
-	bool "T20X (CPU 860 MHz, DDR 500, 128 MB)"
-
-endchoice
-
-config T20_VARIANT_NAME
-	string
-	default "T20L" if T20_VARIANT_T20L
-	default "T20X" if T20_VARIANT_T20X
-	default "T20N"
-
-config T20_DRAM_128M
-	bool
-	default y if T20_VARIANT_T20X
-	help
-	  T20X populates the 128 MB DDR2 M14D1G1664A (row 13, col
-	  10, 8-bank); T20N/T20L the 64 MB M14D5121632A (4-bank).
-	  Selects the matching DWC 128 MB GOLD set + REMMAP in
-	  mach/t20-ddr.h. Same DDR 500 MHz clock - DWC params only.
-
-config T20_APLL_MNOD
-	hex
-	default 0x03b08900 if T20_VARIANT_T20L
-	default 0x04708900
-	help
-	  CPAPCR value, exact vendor CONFIG_SYS_APLL_MNOD (M/N/OD1/
-	  OD0, OD0 in [10:8]):
-	  860 = (M=71,N=2,OD1=1<<11,OD0=1<<8) = 0x04708900 (T20N);
-	  712 = (M=59,N=2,OD1=1<<11,OD0=1<<8) = 0x03b08900 (T20L).
-
 config SPL_T20_USB_BOOT
 	bool "T20 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL
 	help
-	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
-	  clocks (and DDR once ported), then return to the bootrom
-	  (jr ra) instead of loading U-Boot proper from SPI-NOR -
-	  how the SPL is brought up and tested on the lab rig.
-	  Development only.
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the clocks +
+	  DDR, run the DM scan, then return to the bootrom (jr ra) instead of
+	  loading U-Boot proper from SPI-NOR - how the SPL is brought up and
+	  tested on the lab rig. Development only.
 
 endif

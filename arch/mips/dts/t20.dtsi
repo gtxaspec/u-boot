@@ -55,6 +55,17 @@
 	};
 
 	/*
+	 * DDR controller (Synopsys DWC PHY - the only XBurst1 camera SoC
+	 * that is not Innophy). The per-SKU compatible
+	 * (ingenic,t20<sku>-ddr-dwc) is set by the leaf .dts and selects the
+	 * variant table in drivers/ram/ingenic/ddr_t20.c via of_match .data;
+	 * bootph-all is added by the leaf's shared u-boot.dtsi.
+	 */
+	ddr: memory-controller@134f0000 {
+		reg = <0x134f0000 0x1000>;
+	};
+
+	/*
 	 * TCU container; U-Boot only needs the watchdog (for sysreset).
 	 * The generic jz4760-tcu / jz4780-watchdog fallbacks bind on
 	 * T20 (same IP as T31). The watchdog self-clocks from the 32 kHz

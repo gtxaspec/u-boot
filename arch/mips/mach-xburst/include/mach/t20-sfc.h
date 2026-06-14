@@ -73,4 +73,13 @@
 /* NOR fast-read command (vendor spi.h CMD_READ) */
 #define CMD_READ		(0x03)
 
+/*
+ * The T20-generation mask ROM loads only the first 0x6800 bytes of the
+ * SPL payload from NOR (sized for the 32 KB cache-as-RAM), regardless of
+ * the header length - the same cap T21/T30 carry. The old sub-22 KB
+ * imperative SPL fit; the DM-in-SPL image does not, so soc.c re-reads the
+ * missing tail via t20_spl_self_complete().
+ */
+#define T20_ROM_SPL_LOAD	0x6800
+
 #endif /* __T20_SFC_H__ */

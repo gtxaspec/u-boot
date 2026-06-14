@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T20X (DDR2 128 MB M14D1G1664A, 8-bank, CPU 860 MHz),
+ * SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t20-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T20X (SFC NOR)";
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x08000000>;	/* 128 MB DDR2 (T20X) */
+	};
+};
+
+&ddr {
+	compatible = "ingenic,t20x-ddr-dwc";
+};

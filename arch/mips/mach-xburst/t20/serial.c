@@ -50,15 +50,13 @@ static u8 u_rb(unsigned int off)
 /*
  * Mux UART1 (PB23 TX, PB24 RX) to device function 0.
  *
- * The XBurst1 GPIO port stride is 0x100 (NOT 0x1000): port B is at
- * GPIO_BASE + 1 * 0x100 (vendor jz_gpio_common GPIO_PX*(n) =
- * GPIO_BASE + reg + n * 0x100). The exact vendor gpio_set_func()
- * FUNC_0 sequence is: write the pin mask to PXINTC, PXMSKC,
- * PXPAT1C, PXPAT0C (it does NOT touch the pull registers). The
- * previous code used a 0x1000 stride and bogus pull offsets, so
- * PB23/PB24 were never actually routed to UART1 - TX still worked
- * because the mask ROM happens to leave UART1 TX usable, but RX was
- * dead (the mask ROM does not route the console RX pin on T20).
+ * The first-gen XBurst1 (T10/T20) GPIO bank stride is 0x100, NOT the 0x1000
+ * of T21+ (see drivers/pinctrl/pinctrl-ingenic.c BANK_STRIDE_LEGACY): port B
+ * is at GPIO_BASE + 1 * 0x100. Vendor gpio_set_func() FUNC_0 = clear INT,
+ * MASK, PAT1, PAT0 (UART1 = function 0 on PB23/PB24, per the shared T10-T33
+ * group table). Required for NOR cold boot: the mask ROM's USB-boot path
+ * happens to leave UART1 TX routed (so the 0x1000 no-op "worked" on USB), but
+ * the NOR-boot path does not - without this the SPL runs but is silent.
  */
 #define GPIO_PORTB_BASE	(GPIO_BASE + 1 * 0x100)	/* port B, 0x100 stride */
 #define G_PXINTC	0x18
@@ -72,9 +70,9 @@ static void t20_uart1_pinmux(void)
 	void __iomem *b = (void __iomem *)GPIO_PORTB_BASE;
 
 	writel(UART1_PINS, b + G_PXINTC);	/* clear INT  */
-	writel(UART1_PINS, b + G_PXMSKC);	/* clear MASK -> device fn */
-	writel(UART1_PINS, b + G_PXPAT1C);	/* PAT1 = 0 \ func 0     */
-	writel(UART1_PINS, b + G_PXPAT0C);	/* PAT0 = 0 /            */
+	writel(UART1_PINS, b + G_PXMSKC);	/* MASK=0 -> device function */
+	writel(UART1_PINS, b + G_PXPAT1C);	/* PAT1=0 \ function 0 */
+	writel(UART1_PINS, b + G_PXPAT0C);	/* PAT0=0 / */
 }
 
 void t20_spl_serial_init(void)

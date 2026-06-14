@@ -15,6 +15,7 @@ obj-$(CONFIG_ARCH_BMIPS) += bmips_ram.o
 obj-$(CONFIG_RAM_INGENIC_DDR_INNOPHY) += ingenic/
 obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ingenic/
 obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ingenic/
+obj-$(CONFIG_RAM_INGENIC_DDR_T20) += ingenic/
 
 obj-$(CONFIG_ARCH_ROCKCHIP) += rockchip/
 

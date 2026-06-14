@@ -10,6 +10,8 @@
  */
 
 #include <init.h>
+#include <dm.h>
+#include <ram.h>
 #include <stdio.h>
 #include <asm/global_data.h>
 #include <mach/t20.h>
@@ -26,9 +28,21 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-	/* T20N/T20L 64 MB M14D5121632A; T20X 128 MB M14D1G1664A */
-	gd->ram_size = IS_ENABLED(CONFIG_T20_DRAM_128M) ?
-		       (128 << 20) : (64 << 20);
+	struct ram_info ram;
+	struct udevice *dev;
+	int ret;
+
+	/* Size comes from the DT-selected ddr_t20 UCLASS_RAM variant. */
+	ret = uclass_first_device_err(UCLASS_RAM, &dev);
+	if (ret)
+		return ret;
+
+	ret = ram_get_info(dev, &ram);
+	if (ret)
+		return ret;
+
+	gd->ram_size = ram.size;
+
 	return 0;
 }
 
@@ -145,10 +159,12 @@ int board_init(void)
 }
 #endif
 
-/* Printed right after the "Model:" line; shows the exact T20 SKU. */
 int checkboard(void)
 {
-	printf("Variant: %s\n", CONFIG_T20_VARIANT_NAME);
+	/*
+	 * The per-SKU leaf DT's "Model:" line carries the SKU now (T20 is
+	 * DM-in-SPL, DT-selected), so no "Variant:" line here.
+	 */
 #ifdef CONFIG_SPL_T20_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

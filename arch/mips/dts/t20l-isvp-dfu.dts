@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T20L, DFU/USB-boot loader variant (lowest T20 SKU; all T20
+ * are DDR2, so the one loader flashes every T20 SKU).
+ */
+
+/dts-v1/;
+
+#include "t20-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T20L (DFU loader)";
+};
+
+&ddr {
+	compatible = "ingenic,t20l-ddr-dwc";
+};

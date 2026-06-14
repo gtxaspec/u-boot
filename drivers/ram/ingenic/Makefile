@@ -20,3 +20,8 @@ obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ddr_t30_types.o
 # T32 (PRJ007) uMCTL2 + Innophy DDR - sibling driver, distinct IP.
 obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32.o
 obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32_types.o
+
+# T20 (XBurst1) DDR2 + Synopsys DWC PHY - the only non-Innophy XBurst1
+# camera SoC, so its own driver/struct (hardware ZQ cal + DQS training).
+obj-$(CONFIG_RAM_INGENIC_DDR_T20) += ddr_t20.o
+obj-$(CONFIG_RAM_INGENIC_DDR_T20) += ddr_t20_types.o

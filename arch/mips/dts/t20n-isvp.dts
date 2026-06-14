@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T20N (DDR2 64 MB M14D5121632A, CPU 860 MHz), SFC-NOR.
+ */
+
+/dts-v1/;
+
+#include "t20-isvp.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T20N (SFC NOR)";
+};
+
+&ddr {
+	compatible = "ingenic,t20n-ddr-dwc";
+};

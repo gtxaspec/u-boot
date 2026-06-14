@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0+
-
-/dts-v1/;
+/*
+ * Ingenic ISVP-T20 shared board body (SFC-NOR, USB host).
+ *
+ * The per-SKU leaf .dts files (t20n-isvp.dts, t20l-isvp.dts,
+ * t20x-isvp.dts) include this and set the DDR node's per-SKU compatible
+ * (ingenic,t20<sku>-ddr-dwc), which selects the variant table in the DWC
+ * DDR driver. The matching <leaf>-u-boot.dtsi pulls in
+ * t20-isvp-uboot-common.dtsi (binman image + SPL bootph).
+ */
 
 #include <dt-bindings/gpio/gpio.h>
 #include "t20.dtsi"
 
 / {
 	compatible = "ingenic,isvp-t20", "ingenic,t20";
-	/* One DT serves T20N/T20L (64M) and T20X (128M); the real
-	 * DRAM size is reported by dram_init, the SKU by checkboard. */
 	model = "Ingenic ISVP-T20 (SFC NOR)";
 
 	aliases {
@@ -21,7 +26,7 @@
 
 	memory {
 		device_type = "memory";
-		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T20N) */
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T20N); real size from dram_init */
 	};
 };
 

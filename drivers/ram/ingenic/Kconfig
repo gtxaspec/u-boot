@@ -53,3 +53,21 @@ config RAM_INGENIC_DDR_T32
 
 	  Ported from the vendor U-Boot 2022.10 PRJ ddr_innophy.c (formerly
 	  the inline arch/mips/mach-xburst/t32/sdram.c).
+
+config RAM_INGENIC_DDR_T20
+	bool "Ingenic T20 (XBurst1) DDR2 controller + Synopsys DWC PHY"
+	depends on RAM
+	depends on ARCH_XBURST
+	select SPL_RAM if SPL
+	help
+	  Driver for the Ingenic T20 (XBurst1) DDR2 memory controller paired
+	  with the Synopsys DesignWare (DWC) DDR PHY. T20 is the only XBurst1
+	  camera SoC that is NOT Innophy - the DWC PHY has hardware ZQ
+	  impedance calibration and a hardware DQS training engine, a distinct
+	  init sequence - so it has its own driver rather than reusing
+	  RAM_INGENIC_DDR_T31. The per-SKU register/clock tables are selected
+	  at runtime from the DT node's compatible via the driver of_match
+	  .data, so one driver covers every T20 SKU (T20N, T20L, T20X).
+
+	  Ported from the vendor XBurst1 DWC sdram_init path (formerly the
+	  inline arch/mips/mach-xburst/t20/sdram.c).

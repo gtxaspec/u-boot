@@ -70,6 +70,7 @@ void t30_spl_self_complete(unsigned int image_end);
 struct ingenic_t31_ddr_variant;
 const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void);
 int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg);
+void ingenic_t31_ddr_set_done(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -195,6 +196,28 @@ static int dram_verify(u32 size)
 
 gd_t gdata __section(".bss");
 
+/*
+ * Called by the SPL framework right before it jumps to U-Boot proper. The
+ * cached board_init_r left U-Boot's decompressed image plus the SPL working
+ * set in dirty cache lines, so write it all back to DRAM, then hand off
+ * UNCACHED (Config0.K0 = 2). U-Boot proper's start.S runs mips_cache_reset
+ * (CONFIG_MIPS_CACHE_SETUP), which invalidates the caches and re-enables K0
+ * cachable cleanly - so U-Boot proper + the kernel still run cached. Entering
+ * U-Boot proper CACHED hangs before that reset (it inherits the SPL's live
+ * cache state); the uncached hand-off is the proven-good path (same as the
+ * baseline). The SPL itself already ran cached (fast LZMA decompress).
+ */
+void spl_board_prepare_for_boot(void)
+{
+	unsigned int c0;
+
+	flush_cache(0x80000000, 0x00c00000);
+
+	__asm__ __volatile__("mfc0 %0, $16, 0" : "=r" (c0));
+	c0 = (c0 & ~7u) | 2u;		/* K0 = 2 (uncached) */
+	__asm__ __volatile__("mtc0 %0, $16, 0; ehb" : : "r" (c0));
+}
+
 void board_init_f(ulong dummy)
 {
 	/*
@@ -245,28 +268,16 @@ void board_init_f(ulong dummy)
 	/* Bring DDR up imperatively (shared ddr_t31 driver, DT-selected SKU). */
 	ingenic_t31_ddr_sdram_init(ingenic_t31_ddr_get_variant());
 
-	/*
-	 * Make the SPL DRAM-resident, then invalidate the cache so all further
-	 * execution refills from DRAM - the bootrom's cache-as-RAM has no
-	 * backing store (clean lines vanish on eviction). flush_cache's
-	 * I-invalidate is only safe now: before the reload it would kill the
-	 * running instruction stream. Both modes do this so the DM scan runs
-	 * DRAM-backed and the flow matches T21/T23 - only the final hand-off
-	 * differs (USB returns to the ROM; NOR loads U-Boot from SPI-NOR).
-	 */
+	/* Make the cache-resident SPL DRAM-resident before the cache hand-off. */
 	t30_spl_to_dram();
-	flush_cache(0x80000000, 0x100000);
 
+#ifdef CONFIG_SPL_T30_USB_BOOT
 	/*
-	 * Run the post-DRAM stage uncached. The gen-1 T30 ROM left the L2
-	 * enabled but uninitialised and it cannot be software-(re)init'd, so
-	 * its garbage-tagged lines would corrupt cached fetches/loads now that
-	 * execution is DRAM-backed. Set Config.K0 [2:0] = 2 (uncached) so every
-	 * access bypasses the L1 and the dead L2 straight to DRAM. T23/T31 keep
-	 * caching here; only T30's broken L2 forces it. (USB returns to the
-	 * mask ROM still uncached - U-Boot proper re-inits its own caches, the
-	 * same state the NOR path hands to board_init_r.)
+	 * USB boot returns into the mask ROM, which then uploads and runs U-Boot
+	 * proper. Flush the cache-as-RAM back and hand the ROM an uncached K0
+	 * (the validated USB path); U-Boot proper re-inits its own caches.
 	 */
+	flush_cache(0x80000000, 0x100000);
 	{
 		unsigned int c0;
 
@@ -274,6 +285,74 @@ void board_init_f(ulong dummy)
 		c0 = (c0 & ~7u) | 2u;		/* K0 = 2 (uncached) */
 		__asm__ __volatile__("mtc0 %0, $16, 0; nop; nop" : : "r" (c0));
 	}
+#else
+	/*
+	 * NOR cold boot runs the rest of the SPL CACHED so the LZMA decompress in
+	 * board_init_r - and U-Boot proper + the kernel, which all inherit
+	 * Config0.K0 - run at full speed. Unlike T23 (whose ~80 KB cache-as-RAM
+	 * L2 is a normal initialised cache), the gen-1 T30 ROM left the 128 KB L2
+	 * enabled but un-init'd: its stale tags corrupt cached DRAM fetches and a
+	 * plain flush_cache + cached run HANGS in spl_init. XBurst1 has no L2
+	 * invalidate/disable op, but the L2 is a normal set-associative cache, so
+	 * evict the stale lines the ordinary way:
+	 *   1. drop the L1 with Index-Store-Tag (no writeback - a writeback would
+	 *      push the stale cache-as-RAM lines into the L2 and re-poison it; the
+	 *      live data was already copied to DRAM by t30_spl_to_dram());
+	 *   2. "cache-wash": stream ~4 MB of clean, untouched high DRAM through
+	 *      L1+L2 so every set/way is refilled and the stale low-address lines
+	 *      are pushed out.
+	 * After this, cached access to the SPL's low addresses misses and refills
+	 * from the pristine to_dram() image in DRAM, and K0 is left cachable.
+	 */
+	{
+		unsigned long a;
+		unsigned long p = 0x82000000UL, e = 0x82400000UL;
+
+		__asm__ __volatile__("mtc0 $0, $28, 0");	/* TagLo = 0 */
+		for (a = 0x80000000UL; a != 0x80008000UL; a += 0x20)
+			__asm__ __volatile__(".set push; .set noreorder;"
+					     "cache 0x08, 0(%0);"	/* Index-Store-Tag I */
+					     "cache 0x09, 0(%0);"	/* Index-Store-Tag D */
+					     ".set pop" : : "r" (a) : "memory");
+		__asm__ __volatile__("sync");
+
+		/*
+		 * Register-only wash (load to $zero, counter in a register, no stack
+		 * touch) so its own loop state is never evicted mid-stream.
+		 */
+		__asm__ __volatile__(
+			".set push; .set noreorder;"
+			"1: lw $0, 0(%0);"
+			"   bne %0, %1, 1b;"
+			"   addiu %0, %0, 0x20;"
+			".set pop"
+			: "+r" (p) : "r" (e) : "memory");
+		__asm__ __volatile__("sync");
+	}
+
+	/*
+	 * Run the rest of the SPL write-through (Config0.K0 = 1, cacheable
+	 * write-allocate write-through): reads are cached/fast, but every store
+	 * goes straight to DRAM, so no dirty L1 line ever evicts into the gen-1
+	 * ROM's un-init'd L2. board_init_f survives cached write-back, but
+	 * board_init_r's heavier working set corrupts on the broken L2's dirty
+	 * write-backs; write-through avoids that path entirely.
+	 */
+	{
+		unsigned int c0;
+
+		__asm__ __volatile__("mfc0 %0, $16, 0" : "=r" (c0));
+		c0 = (c0 & ~7u) | 1u;		/* K0 = 1 (cacheable write-through) */
+		__asm__ __volatile__("mtc0 %0, $16, 0; ehb" : : "r" (c0));
+	}
+#endif
+
+	/*
+	 * Re-assert the DDR one-shot guard (a .bss byte that did not survive the
+	 * cache-as-RAM hand-off) so the UCLASS_RAM SPL probe records the size
+	 * instead of re-running the init on the live, cached controller.
+	 */
+	ingenic_t31_ddr_set_done();
 
 	/*
 	 * Bring driver model up and probe the UCLASS_RAM driver. With DDR

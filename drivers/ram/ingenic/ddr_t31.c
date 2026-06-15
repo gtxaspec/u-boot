@@ -310,11 +310,24 @@ static void ddr_inno_phy_init(const struct ingenic_t31_ddr_variant *cfg)
 	}
 }
 
+/* One-shot guard; file-scope so a board can re-assert it (see set_done). */
+static bool ddr_done;
+
+/*
+ * Re-assert the guard without touching the controller. T30 runs the SPL cached
+ * after DDR is up; the guard flag is a .bss byte that may not survive the
+ * cache-as-RAM hand-off, so T30 re-asserts it before the DM scan - DDR is
+ * alive, so the UCLASS_RAM probe must NOT re-run the init on the live
+ * controller (that hangs cached). Other XBurst1 SoCs never call this.
+ */
+void ingenic_t31_ddr_set_done(void)
+{
+	ddr_done = true;
+}
+
 /* Top-level DDR2/DDR3 init (innophy path of the vendor sdram_init()). */
 int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg)
 {
-	static bool ddr_done;
-
 	/*
 	 * One-shot: DDR may be brought up imperatively from board_init_f
 	 * (before spl_init, so the DM scan's heap/stack land in real DRAM

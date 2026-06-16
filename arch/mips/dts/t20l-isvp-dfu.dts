@@ -13,5 +13,15 @@
 };
 
 &ddr {
-	compatible = "ingenic,t20l-ddr-dwc";
+	/* T20L: DDR2 64 MB M14D5121632A (4-bank), CPU 712 / DDR 500 MHz. */
+	ingenic,sdram-params = <
+		0x03b08900 0x07d0c900 0x9a073310	/* APLL712 MPLL1000 CPCCR */
+		0x04000000				/* 64 MB */
+		0x0a688a40 0x000020fc 0x00002400	/* CFG MMAP0 MMAP1 */
+		0x040e0806 0x02170707 0x2007051e	/* TIMING1..3 */
+		0x1a240031 0xff060505 0x32170505	/* TIMING4..6 */
+		0x00000002 0x3cb7779a 0x003500b8	/* DCR DTPR0 DTPR1 */
+		0x03020d0c 0x07060504 0x0b0a0908	/* REMAP1..3 */
+		0x0f0e0100 0x13121110			/* REMAP4..5 */
+	>;
 };

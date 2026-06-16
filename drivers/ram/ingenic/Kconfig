@@ -65,9 +65,10 @@ config RAM_INGENIC_DDR_T20
 	  camera SoC that is NOT Innophy - the DWC PHY has hardware ZQ
 	  impedance calibration and a hardware DQS training engine, a distinct
 	  init sequence - so it has its own driver rather than reusing
-	  RAM_INGENIC_DDR_T31. The per-SKU register/clock tables are selected
-	  at runtime from the DT node's compatible via the driver of_match
-	  .data, so one driver covers every T20 SKU (T20N, T20L, T20X).
+	  RAM_INGENIC_DDR_T31. The per-SKU register/clock values come from the
+	  &ddr node's "ingenic,sdram-params" devicetree array (the mainline
+	  rk3328 DMC idiom), so one driver/binding covers every T20 SKU (T20N,
+	  T20L, T20X).
 
 	  Ported from the vendor XBurst1 DWC sdram_init path (formerly the
 	  inline arch/mips/mach-xburst/t20/sdram.c).

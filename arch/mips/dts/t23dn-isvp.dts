@@ -12,5 +12,16 @@
 };
 
 &ddr {
-	compatible = "ingenic,t23dn-ddr-innophy";
+	/* T23DN: DDR2 32 MB M14D2561616A (4-bank), CPU 1000 / DDR 500 MHz. */
+	ingenic,sdram-params = <
+		0x07d05900 0x07d05900 0x9a073310	/* APLL1000 MPLL1000 CPCCR */
+		0 0					/* ddr_cdr (MPLL/2); DDR2 */
+		13 9 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
+		0x02000000				/* 32 MB */
+		0x09288940 0x0000d91e			/* DDRC_CFG DDRC_CTRL */
+		0x000020fe 0x00002200 0x00f20001	/* MMAP0 MMAP1 REFCNT */
+		0x040e0806 0x02170707 0x2007041e	/* TIMING1..3 */
+		0x12240031 0xff060405 0x32170505	/* TIMING4..6 */
+		0x00000f73				/* MR0 */
+	>;
 };

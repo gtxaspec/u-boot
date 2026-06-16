@@ -2,24 +2,18 @@
 /*
  * Ingenic T23 PLL and clock setup (SPL)
  *
- * T23 has APLL (CPU) and MPLL (DDR/peripheral); no VPLL. The per-SKU
- * APLL/MPLL setpoints (exact vendor CONFIG_SYS_*_MNOD words, non-uniform
- * N/OD) and the CPCCR divider word live in the DDR variant struct
- * (drivers/ram/ingenic/ddr_t23_types.c) and are selected at runtime by
- * matching the &ddr node's per-SKU compatible (ingenic,t23<sku>-ddr-
- * innophy) - the same of_match table the RAM driver uses. soc.c calls
- * fdtdec_setup() before pll_init() so the FDT blob is available here,
- * before driver model is up. T23 reuses the shared XBurst1 DDR driver
- * (ddr_t31.c), hence the ingenic_t31_ddr_pll_setpoints() helper name.
+ * T23 has APLL (CPU) and MPLL (DDR/peripheral); no VPLL. The per-SKU APLL/MPLL
+ * setpoints (exact vendor CONFIG_SYS_*_MNOD words, non-uniform N/OD) and the
+ * CPCCR divider word are elements [0..2] of the &ddr node's
+ * "ingenic,sdram-params" array; T23's imperative board_init_f bring-up
+ * (drivers/ram/ingenic/ddr_t31.c) reads them and calls pll_init_params() before
+ * driver model is up. Uses the T31/T23-style M/N/OD1/OD0 PLL encoding.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <asm/io.h>
-#include <hang.h>
 #include <mach/t23.h>
-
-int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -55,16 +49,14 @@ static void cpccr_init(u32 cpccr_cfg)
 	cpm_writel(cpccr, CPM_CPCCR);
 }
 
-void pll_init(void)
+/*
+ * Bring up APLL/MPLL + the CPCCR dividers from explicit setpoints, before DDR
+ * is brought up. T23 has no VPLL, so CPM_CPVPCR is left untouched.
+ */
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr)
 {
-	u32 apll, mpll, cpccr;
-
-	if (ingenic_t31_ddr_pll_setpoints(&apll, &mpll, &cpccr))
-		hang();
-
 	pll_set(CPM_CPAPCR, apll);
 	pll_set(CPM_CPMPCR, mpll);
-	/* T23 has no VPLL; do not touch CPM_CPVPCR. */
 	cpccr_init(cpccr);
 }
 

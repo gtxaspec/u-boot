@@ -2,16 +2,17 @@
 /*
  * Ingenic T20 (XBurst1) DDR2 controller + Synopsys DWC PHY init.
  *
- * UCLASS_RAM driver. T20 is the only XBurst1 camera SoC that is NOT
- * Innophy: it uses the Synopsys DesignWare (DWC) DDR PHY with hardware ZQ
- * impedance calibration and a hardware DQS training engine, so it has its
- * own driver rather than reusing ddr_t31.c. Faithful transliteration of
- * the vendor known-good DWC DDR2 path (arch/mips/cpu/xburst/ddr_dwc.c +
- * t20/ddr_set_dll.c + the DDR branch of t20/clk.c), formerly
- * arch/mips/mach-xburst/t20/sdram.c. The per-SKU register/clock values now
- * come from the &ddr node's "ingenic,sdram-params" devicetree array
- * (struct ingenic_t20_ddr_params) instead of compile-time
- * CONFIG_T20_VARIANT_* / #if branches - the mainline rk3328 DMC idiom.
+ * UCLASS_RAM driver shared by the two XBurst1 DWC SoCs, T20 and T10 (the
+ * others - T21/T23/T30/T31 - are Innophy and share ddr_t31.c). They use the
+ * Synopsys DesignWare (DWC) DDR PHY with hardware ZQ impedance calibration and
+ * a hardware DQS training engine - a different IP from Innophy, so its own
+ * driver. The bring-up sequence is identical for T20 and T10; only the per-SKU
+ * register/clock values differ, and they all come from the &ddr node's
+ * "ingenic,sdram-params" devicetree array (struct ingenic_t20_ddr_params)
+ * instead of compile-time #if branches - the mainline rk3328 DMC idiom.
+ * Faithful transliteration of the vendor known-good DWC DDR2 path
+ * (arch/mips/cpu/xburst/ddr_dwc.c + ddr_set_dll.c + the DDR branch of clk.c),
+ * formerly arch/mips/mach-xburst/{t20,t10}/sdram.c.
  *
  * Probes off DT in both SPL (DDR bring-up) and U-Boot proper (just records
  * DRAM size for ram_get_info()). The register write order, PIR/PGSR poll
@@ -62,32 +63,31 @@ static void cpm_writel(u32 val, unsigned int off)
 
 static void ddr_die(const char *what)
 {
-#ifdef CONFIG_XPL_BUILD
-	t20_spl_puts("T20 SPL: DDR FAIL ");
-	t20_spl_puts(what);
-	t20_spl_puts("\n");
-#else
+	/*
+	 * Fatal DWC DDR init failure (ZQ cal / DQS training / PHY timeout). The
+	 * bring-up runs in the TPL before any console exists, and this driver is
+	 * shared across SoCs (T20 and T10) with no common SPL console symbol, so
+	 * there is nothing to print to - just hang. (`what` documents the call
+	 * sites; a failure shows up as the TPL never reaching "DDR up".)
+	 */
 	(void)what;
-#endif
 	for (;;)
 		;
 }
 
 /*
- * DDR clock divider: the DDR branch of the vendor clk_set_rate(). Source
- * MPLL (1000 MHz), target 500 MHz, so cdr = 1. Leave the PLL-select bits
- * [31:30] as the mask ROM set them (DDR already runs off a PLL to have
- * reached here); only clear the divider field and set CE (bit 29) + cdr,
- * then poll BUSY (bit 28). Same on every T20 SKU (all DDR 500).
+ * DDR clock divider: the DDR branch of the vendor clk_set_rate(). cfg->ddr_cdr
+ * is the CPM_DDRCDR divider (DDR = MPLL/(cdr+1)): T20 cdr 1 (MPLL 1000 / 500),
+ * T10 cdr 2 (MPLL 1200 / 400). Leave the PLL-select bits [31:30] as the mask ROM
+ * set them (DDR already runs off a PLL to have reached here); only clear the
+ * divider field and set CE (bit 29) + cdr, then poll BUSY (bit 28).
  */
-static void ddr_clk_set_rate(void)
+static void ddr_clk_set_rate(const struct ingenic_t20_ddr_params *cfg)
 {
-	unsigned int cdr = ((DDR_MPLL_RATE + DDR_TARGET_RATE - 1) /
-			    DDR_TARGET_RATE - 1) & 0xff;
 	u32 regval = cpm_readl(CPM_DDRCDR);
 
 	regval &= ~(0xf | (0x3f << 24));
-	regval |= ((1 << 29) | cdr);		/* ce = bit 29 */
+	regval |= ((1 << 29) | (cfg->ddr_cdr & 0xff));	/* ce = bit 29 */
 	cpm_writel(regval, CPM_DDRCDR);
 	while (cpm_readl(CPM_DDRCDR) & (1 << 28))	/* busy = bit 28 */
 		;
@@ -138,7 +138,7 @@ static void ddr_controller_init(const struct ingenic_t20_ddr_params *cfg)
 	ddr_writel(cfg->ddrc_mmap0, DDRC_MMAP0);
 	ddr_writel(cfg->ddrc_mmap1, DDRC_MMAP1);
 	ddr_writel(DDRC_CTRL_CKE | DDRC_CTRL_ALH, DDRC_CTRL);
-	ddr_writel(DDRC_REFCNT_VALUE, DDRC_REFCNT);
+	ddr_writel(cfg->ddrc_refcnt, DDRC_REFCNT);
 	ddr_writel(DDRC_CTRL_VALUE, DDRC_CTRL);
 
 	mem_remap(cfg);
@@ -153,8 +153,8 @@ static void ddr_phy_param_config(const struct ingenic_t20_ddr_params *cfg)
 {
 	phy_writel(cfg->ddrp_dcr, DDRP_DCR);
 	/* vendor leaves ODTCR commented out */
-	phy_writel(DDRP_PTR0_VALUE, DDRP_PTR0);
-	phy_writel(DDRP_PTR1_VALUE, DDRP_PTR1);
+	phy_writel(cfg->ddrp_ptr0, DDRP_PTR0);
+	phy_writel(cfg->ddrp_ptr1, DDRP_PTR1);
 	phy_writel(DDRP_PTR2_VALUE, DDRP_PTR2);
 	phy_writel(cfg->ddrp_dtpr0, DDRP_DTPR0);
 	phy_writel(cfg->ddrp_dtpr1, DDRP_DTPR1);
@@ -169,7 +169,7 @@ static void ddr_phy_param_config(const struct ingenic_t20_ddr_params *cfg)
 
 	/* DDR2: DQS pull config, MR0, MR1 */
 	phy_writel(0x910, DDRP_DXCCR);
-	phy_writel(DDRP_MR0_VALUE, DDRP_MR0);
+	phy_writel(cfg->ddrp_mr0, DDRP_MR0);
 	phy_writel(DDRP_MR1_VALUE, DDRP_MR1);
 }
 
@@ -286,7 +286,7 @@ static void controller_reset_phy(const struct ingenic_t20_ddr_params *cfg)
 static int __maybe_unused
 ingenic_t20_ddr_sdram_init_params(const struct ingenic_t20_ddr_params *cfg)
 {
-	ddr_clk_set_rate();
+	ddr_clk_set_rate(cfg);
 	reset_dllA();			/* prev_ddr_init hook */
 	controller_reset_phy(cfg);
 	ddr_phy_init(cfg);

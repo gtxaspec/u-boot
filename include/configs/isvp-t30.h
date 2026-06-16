@@ -16,25 +16,24 @@
 #define CFG_SYS_NS16550_CLK	24000000
 
 /*
- * SPL memory layout. T30 boots cache-as-RAM (32 KB I + 32 KB D +
- * 128 KB L2): there is NO backed memory until the SPL itself brings
- * DDR up - only the cache-resident footprint exists. board_init_f()
- * self-completes the bootrom's truncated NOR load, inits DDR
- * imperatively and makes the SPL DRAM-resident (image re-read from
- * NOR, live data copied from the cache) before spl_init(), so by the
- * time anything allocates from the malloc-f arena these are real DRAM
- * addresses:
- *   0x80001000-0x80012000 : SPL image  (SPL_MAX_SIZE = 0x13000 ceiling)
- *   0x80012000-0x80014000 : SPL BSS     (SPL_BSS_MAX_SIZE = 0x2000)
- *   0x80014000-0x80024000 : SYS_MALLOC_F arena (SPL_SYS_MALLOC_F_LEN 64 KB)
- *   0x80080000            : SPL stack top (grows down; far above the heap)
+ * SYS_MALLOC_F arena base for the DRAM-resident SPL's DM malloc_simple() heap.
+ * The TPL brings up DDR in cache-as-RAM and loads this SPL into real DRAM, so
+ * by board_init_f() these are real DRAM addresses (image at SPL_TEXT_BASE, BSS
+ * at SPL_BSS_START_ADDR, this arena, stack at SPL_STACK).
  *
- * board_init_f() reassigns gd = &gdata (a clean BSS gd) for DM-in-SPL,
- * which drops the malloc base the framework reserved below the stack.
- * spl_common_init() restores it from CFG_MALLOC_F_ADDR; without this
- * malloc_simple() allocates from address 0 and the board_init_f DM scan
- * fails with -ENOMEM.
+ * The XBurst start.S sets up neither the stack (it keeps the mask-ROM sp) nor
+ * gd; board_init_f() reassigns gd = &gdata (a clean BSS gd), dropping the
+ * malloc base the SPL framework reserved below the stack, so spl_common_init()
+ * restores gd->malloc_base from CFG_MALLOC_F_ADDR. Without it malloc_simple()
+ * allocates from address 0 and the DM scan hangs. Same value as T20/T21/T23.
+ *
+ * The TPL must NOT define it: it runs cache-as-RAM before any DRAM, so its
+ * board_init_f() points gd->malloc_base at a cache-window BSS pool instead -
+ * leaving CFG_MALLOC_F_ADDR unset keeps spl_common_init() from re-pointing the
+ * heap into (phantom) pre-DDR DRAM.
  */
+#ifndef CONFIG_TPL_BUILD
 #define CFG_MALLOC_F_ADDR	0x80014000
+#endif
 
 #endif /* __CONFIG_ISVP_T30_H__ */

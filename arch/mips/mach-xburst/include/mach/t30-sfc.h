@@ -73,14 +73,4 @@
 /* NOR fast-read command (vendor spi.h CMD_READ) */
 #define CMD_READ		(0x03)
 
-/*
- * The T20-generation mask ROM loads only this many bytes of the SPL
- * file (2 KiB header included) from NOR, regardless of the header
- * length field (measured on T21N, which carries the same generation-1
- * ROM; everything the SPL runs before t30_spl_self_complete()
- * finishes must link below SPL_TEXT_BASE + this). The self-completion
- * read is idempotent, so a ROM that loads more is also fine.
- */
-#define T30_ROM_SPL_LOAD	0x6800
-
 #endif /* __T30_SFC_H__ */

@@ -9,8 +9,9 @@
  * the vendor known-good DWC DDR2 path (arch/mips/cpu/xburst/ddr_dwc.c +
  * t20/ddr_set_dll.c + the DDR branch of t20/clk.c), formerly
  * arch/mips/mach-xburst/t20/sdram.c. The per-SKU register/clock values now
- * come from the DT-selected struct ingenic_t20_ddr_variant (of_match
- * .data) instead of compile-time CONFIG_T20_VARIANT_* / #if branches.
+ * come from the &ddr node's "ingenic,sdram-params" devicetree array
+ * (struct ingenic_t20_ddr_params) instead of compile-time
+ * CONFIG_T20_VARIANT_* / #if branches - the mainline rk3328 DMC idiom.
  *
  * Probes off DT in both SPL (DDR bring-up) and U-Boot proper (just records
  * DRAM size for ram_get_info()). The register write order, PIR/PGSR poll
@@ -24,6 +25,7 @@
 #define LOG_CATEGORY UCLASS_RAM
 
 #include <dm.h>
+#include <dt-structs.h>
 #include <log.h>
 #include <ram.h>
 #include <fdtdec.h>
@@ -115,7 +117,7 @@ static void wait_ddrp_pgsr(unsigned int wait_val, int timeout, const char *what)
 		ddr_die(what);
 }
 
-static void mem_remap(const struct ingenic_t20_ddr_variant *cfg)
+static void mem_remap(const struct ingenic_t20_ddr_params *cfg)
 {
 	int i;
 
@@ -123,7 +125,7 @@ static void mem_remap(const struct ingenic_t20_ddr_variant *cfg)
 		ddr_writel(cfg->remap[i], DDRC_REMAP(i + 1));
 }
 
-static void ddr_controller_init(const struct ingenic_t20_ddr_variant *cfg)
+static void ddr_controller_init(const struct ingenic_t20_ddr_params *cfg)
 {
 	ddr_writel(0, DDRC_CTRL);
 
@@ -150,7 +152,7 @@ static void ddr_controller_init(const struct ingenic_t20_ddr_variant *cfg)
 }
 
 /* DDR2 path of the vendor ddr_phy_param_config(). */
-static void ddr_phy_param_config(const struct ingenic_t20_ddr_variant *cfg)
+static void ddr_phy_param_config(const struct ingenic_t20_ddr_params *cfg)
 {
 	phy_writel(cfg->ddrp_dcr, DDRP_DCR);
 	/* vendor leaves ODTCR commented out */
@@ -249,7 +251,7 @@ static void ddr_training_hardware(void)
 		ddr_die("dqs train err");
 }
 
-static void ddr_phy_init(const struct ingenic_t20_ddr_variant *cfg)
+static void ddr_phy_init(const struct ingenic_t20_ddr_params *cfg)
 {
 	phy_writel(0x150000, DDRP_DTAR);	/* training address */
 	ddr_phy_param_config(cfg);
@@ -257,7 +259,7 @@ static void ddr_phy_init(const struct ingenic_t20_ddr_variant *cfg)
 	ddr_training_hardware();
 }
 
-static void controller_reset_phy(const struct ingenic_t20_ddr_variant *cfg)
+static void controller_reset_phy(const struct ingenic_t20_ddr_params *cfg)
 {
 	ddr_writel(0xf << 20, DDRC_CTRL);
 	mdelay(1);
@@ -269,20 +271,64 @@ static void controller_reset_phy(const struct ingenic_t20_ddr_variant *cfg)
 }
 
 /*
+ * DT compatible for the T20 DWC DDR node - one binding for every T20 SKU
+ * (the board DT picks the part via "ingenic,sdram-params"). Shared by the
+ * pre-DM fdt parse below and the driver of_match.
+ */
+#define INGENIC_T20_DDR_COMPATIBLE	"ingenic,t20-ddr-dwc"
+
+/*
+ * Deserialize the &ddr node's "ingenic,sdram-params" u32 array straight out
+ * of @blob into @out. Gd-free / libfdt-only so it can run in the pre-DM
+ * board_init_f bring-up (before DDR, before driver model). The struct is
+ * all-u32 in the array's order, so this is a flat fdt32->cpu copy (the
+ * rk3328 (u32 *)&params idiom). Returns 0 on success, negative on error.
+ */
+static int ingenic_t20_ddr_get_params(const void *blob,
+				      struct ingenic_t20_ddr_params *out)
+{
+	const fdt32_t *arr;
+	u32 *w = (u32 *)out;
+	int node, len, i;
+
+	if (!blob)
+		return -ENODEV;
+
+	node = fdt_node_offset_by_compatible(blob, -1,
+					     INGENIC_T20_DDR_COMPATIBLE);
+	if (node < 0)
+		return -ENODEV;
+
+	arr = fdt_getprop(blob, node, "ingenic,sdram-params", &len);
+	if (!arr || len != (int)sizeof(*out))
+		return -EINVAL;
+
+	for (i = 0; i < (int)(sizeof(*out) / sizeof(u32)); i++)
+		w[i] = fdt32_to_cpu(arr[i]);
+
+	return 0;
+}
+
+/*
  * Top-level DDR2 init (the DWC path of the vendor sdram_init()). Called ONCE,
  * imperatively, from board_init_f BEFORE driver model - and critically before
  * the (far, standard-map) BSS exists, since T20's DWC controller hangs on any
- * pre-DDR DRAM access. So there is deliberately NO `static` one-shot guard
- * here (a static lives in BSS = far DRAM that isn't up yet); the UCLASS_RAM
- * probe does NOT re-call this, it only records the size.
+ * pre-DDR DRAM access. The params are parsed onto the (cache-as-RAM) stack
+ * here, NOT into a BSS static (BSS is far DRAM that isn't up yet); the
+ * UCLASS_RAM probe does NOT re-run this, it only records the size.
  */
-int ingenic_t20_ddr_sdram_init(const struct ingenic_t20_ddr_variant *cfg)
+int ingenic_t20_ddr_sdram_init(const void *blob)
 {
+	struct ingenic_t20_ddr_params cfg;
+
+	if (ingenic_t20_ddr_get_params(blob, &cfg))
+		ddr_die("no sdram-params");
+
 	ddr_clk_set_rate();
 	reset_dllA();			/* prev_ddr_init hook */
-	controller_reset_phy(cfg);
-	ddr_phy_init(cfg);
-	ddr_controller_init(cfg);
+	controller_reset_phy(&cfg);
+	ddr_phy_init(&cfg);
+	ddr_controller_init(&cfg);
 
 	/*
 	 * Vendor T20 soc.c does a dummy DRAM write immediately after
@@ -295,80 +341,79 @@ int ingenic_t20_ddr_sdram_init(const struct ingenic_t20_ddr_variant *cfg)
 }
 
 /*
- * SPL helper for t20/pll.c and the imperative board_init_f bring-up: find
- * the T20 DDR node in the FDT by trying each known per-SKU compatible.
- * Shares the variant table; runs before driver model is up.
+ * SPL helper for t20/pll.c: the PLL setpoints are array elements [0..2] of
+ * the same "ingenic,sdram-params" property. Runs before driver model is up.
  */
-static const struct {
-	const char *compatible;
-	const struct ingenic_t20_ddr_variant *cfg;
-} t20_ddr_variants[] = {
-	{ "ingenic,t20n-ddr-dwc", &ingenic_t20_ddr_variant_t20n },
-	{ "ingenic,t20l-ddr-dwc", &ingenic_t20_ddr_variant_t20l },
-	{ "ingenic,t20x-ddr-dwc", &ingenic_t20_ddr_variant_t20x },
-};
-
 int ingenic_t20_ddr_pll_setpoints(const void *blob, u32 *apll_mnod,
 				  u32 *mpll_mnod, u32 *cpccr)
 {
-	int node, i;
+	struct ingenic_t20_ddr_params cfg;
+	int ret;
 
-	if (!blob)
-		return -ENODEV;
+	ret = ingenic_t20_ddr_get_params(blob, &cfg);
+	if (ret)
+		return ret;
 
-	for (i = 0; i < ARRAY_SIZE(t20_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     t20_ddr_variants[i].compatible);
-		if (node >= 0) {
-			*apll_mnod = t20_ddr_variants[i].cfg->apll_mnod;
-			*mpll_mnod = t20_ddr_variants[i].cfg->mpll_mnod;
-			*cpccr = t20_ddr_variants[i].cfg->cpccr;
-			return 0;
-		}
-	}
-	return -ENODEV;
-}
-
-const struct ingenic_t20_ddr_variant *ingenic_t20_ddr_get_variant(const void *blob)
-{
-	int node, i;
-
-	if (!blob)
-		return NULL;
-
-	for (i = 0; i < ARRAY_SIZE(t20_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     t20_ddr_variants[i].compatible);
-		if (node >= 0)
-			return t20_ddr_variants[i].cfg;
-	}
-	return NULL;
+	*apll_mnod = cfg.apll_mnod;
+	*mpll_mnod = cfg.mpll_mnod;
+	*cpccr = cfg.cpccr;
+	return 0;
 }
 
 /* ------------------------------------------------------------------
- * UCLASS_RAM driver. SPL probe brings DRAM up; U-Boot-proper probe just
- * records the size (DRAM is already alive). The per-SKU variant struct
- * comes from of_match .data (the node's compatible IS the selector).
+ * UCLASS_RAM driver. DDR is brought up imperatively in board_init_f (before
+ * driver model, so the DM heap lands in real DRAM and to dodge T20's DWC
+ * pre-DDR hang); the probe does NOT touch the controller, it only records
+ * the DRAM size for ram_get_info(). The per-SKU params come from the &ddr
+ * node's "ingenic,sdram-params" array, read into platdata by of_to_plat -
+ * the mainline rk3328 DMC shape, so the same driver also works under
+ * OF_PLATDATA in a future TPL. Unlike rk3328 (which detects size from a HW
+ * register and so only needs platdata in TPL), T20 has no size-detect, so
+ * of_to_plat / plat_auto are present in every phase that probes RAM.
  * ------------------------------------------------------------------ */
+
+struct ingenic_t20_ddr_plat {
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	struct dtd_ingenic_t20_ddr_dwc dtplat;
+#else
+	struct ingenic_t20_ddr_params params;
+#endif
+};
+
+struct ingenic_t20_ddr_priv {
+	u32 ram_size;			/* total bytes, for ram_get_info() */
+};
+
+static int ingenic_t20_ddr_of_to_plat(struct udevice *dev)
+{
+#if CONFIG_IS_ENABLED(OF_REAL)
+	struct ingenic_t20_ddr_plat *plat = dev_get_plat(dev);
+	int ret;
+
+	ret = dev_read_u32_array(dev, "ingenic,sdram-params",
+				 (u32 *)&plat->params,
+				 sizeof(plat->params) / sizeof(u32));
+	if (ret) {
+		dev_err(dev, "Cannot read ingenic,sdram-params %d\n", ret);
+		return ret;
+	}
+#endif
+	return 0;
+}
 
 static int ingenic_t20_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_t20_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_t20_ddr_variant *v;
+	struct ingenic_t20_ddr_plat *plat = dev_get_plat(dev);
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	const struct ingenic_t20_ddr_params *params =
+		(const struct ingenic_t20_ddr_params *)
+			plat->dtplat.ingenic_sdram_params;
+#else
+	const struct ingenic_t20_ddr_params *params = &plat->params;
+#endif
 
-	v = (const struct ingenic_t20_ddr_variant *)dev_get_driver_data(dev);
-	if (!v) {
-		dev_err(dev, "no variant data for compatible\n");
-		return -ENODEV;
-	}
-	p->cfg = v;
-	p->ram_size = v->chip0_size;
-
-	/*
-	 * DDR is brought up imperatively in board_init_f (before driver model,
-	 * so the DM heap lands in real DRAM and to dodge T20's DWC pre-DDR hang).
-	 * The probe must NOT re-run the init sequence - it only records the size.
-	 */
+	p->ram_size = params->chip0_size;
 	return 0;
 }
 
@@ -386,12 +431,7 @@ static const struct ram_ops ingenic_t20_ddr_ops = {
 };
 
 static const struct udevice_id ingenic_t20_ddr_ids[] = {
-	{ .compatible = "ingenic,t20n-ddr-dwc",
-	  .data = (ulong)&ingenic_t20_ddr_variant_t20n },
-	{ .compatible = "ingenic,t20l-ddr-dwc",
-	  .data = (ulong)&ingenic_t20_ddr_variant_t20l },
-	{ .compatible = "ingenic,t20x-ddr-dwc",
-	  .data = (ulong)&ingenic_t20_ddr_variant_t20x },
+	{ .compatible = INGENIC_T20_DDR_COMPATIBLE },
 	{ }
 };
 
@@ -399,7 +439,9 @@ U_BOOT_DRIVER(ingenic_t20_ddr) = {
 	.name		= "ingenic_t20_ddr",
 	.id		= UCLASS_RAM,
 	.of_match	= ingenic_t20_ddr_ids,
+	.of_to_plat	= ingenic_t20_ddr_of_to_plat,
 	.ops		= &ingenic_t20_ddr_ops,
 	.probe		= ingenic_t20_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_t20_ddr_priv),
+	.plat_auto	= sizeof(struct ingenic_t20_ddr_plat),
 };

@@ -3,11 +3,10 @@
  * Ingenic ISVP-T30 shared board body (SFC-NOR, USB host).
  *
  * The per-SKU leaf .dts files (t30n-isvp.dts, t30l-isvp.dts,
- * t30x-isvp.dts, t30a-isvp.dts) include this and set the DDR node's
- * per-SKU compatible (ingenic,t30<sku>-ddr-innophy), which selects
- * the variant table in the shared DDR driver. The matching
- * <leaf>-u-boot.dtsi pulls in t30-isvp-uboot-common.dtsi (binman
- * image + SPL bootph).
+ * t30x-isvp.dts, t30a-isvp.dts) include this and supply the DDR node's
+ * per-SKU "ingenic,sdram-params" u32 array, consumed by the shared DDR
+ * driver. The matching <leaf>-u-boot.dtsi pulls in
+ * t30-isvp-uboot-common.dtsi (binman image + SPL/TPL bootph).
  */
 
 #include <dt-bindings/gpio/gpio.h>

@@ -17,12 +17,9 @@
  * NOR-boot-usable, which is how every boot of this board has run).
  *
  * t30_spl_nor_read() is a pre-driver-model polled NOR read (vendor
- * sfc_read transliteration). The T30 SPL boots cache-as-RAM and must
- * make itself DRAM-resident once DDR is up; the bootrom-loaded cache
- * copy of the image is NOT trustworthy by then (cold clean lines may
- * already have been evicted - discarded - by pre-DDR stack/data cache
- * pressure), so soc.c re-reads the pristine image straight from NOR
- * into DRAM instead of copying it out of the cache.
+ * sfc_read transliteration), used by the TPL (tpl.c) to load the
+ * DRAM-resident SPL from SPI-NOR after the UCLASS_RAM probe has brought
+ * DDR up.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -194,62 +191,4 @@ void t30_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
 	sfc_set_read_reg(CMD_READ, nor_off, 3);
 	sfc_read_data(dst, words);
-}
-
-/*
- * The T20-generation mask ROM (which T30 carries, gen 1.5) loads only
- * the first 0x6800 bytes of the SPL payload from NOR - sized for the
- * L2-less T20's 32 KB cache - regardless of the header length (proven
- * on T30N silicon: image bytes beyond 0x80001000+0x6800 read back
- * zero). The old sub-26 KB imperative SPL fit; the DM-in-SPL image
- * (with the appended DTB at its very end) does not.
- *
- * Complete the load ourselves: read the missing tail from NOR into
- * CACHED memory at its link address. The bootrom enables the 64 KB L2
- * at reset on every boot path (Config7 |= 2 at 0xbfc00018), so the
- * full ~80 KB cache-as-RAM budget is live and the tail's write-
- * allocated lines fit alongside the resident head. The bootrom's own
- * SFC clock is still programmed (it just loaded the head with it), so
- * no clock change is needed - and must not be made, since pll_init()
- * has not run yet.
- *
- * Must run BEFORE anything touches the missing region (fdtdec_setup
- * reads the appended DTB). This function and everything it calls live
- * in the loaded head (mach objects link first; asserted at build time
- * in soc.c via T30_ROM_SPL_LOAD).
- */
-void t30_spl_self_complete(unsigned int image_end)
-{
-	/*
-	 * The 2 KiB boot header is part of the linked image (start.S
-	 * emits it at SPL_TEXT_BASE; entry is at +0x800), so flash file
-	 * offset k maps to memory SPL_TEXT_BASE + k. The mask ROM
-	 * loaded T30_ROM_SPL_LOAD bytes total from file offset 0
-	 * (header included) - proven by the on-target probe: the first
-	 * zero byte is exactly SPL_TEXT_BASE + T30_ROM_SPL_LOAD.
-	 */
-	unsigned int loaded = CONFIG_SPL_TEXT_BASE + T30_ROM_SPL_LOAD;
-	unsigned int words;
-
-	if (image_end <= loaded)
-		return;
-
-	words = (image_end - loaded + 3) / 4;
-
-	/*
-	 * Do NOT reprogram GLB/DEV_CONF or the clock here: the bootrom
-	 * just used this controller+clock to load the head, its GLB
-	 * threshold matches the same 31-word drain protocol (verified
-	 * in the bfc014e4 sfc_read disassembly), and reprogramming GLB
-	 * mid-state wedges the next transfer. Just clear stale status
-	 * (the bootrom does the same before each transfer) and go.
-	 */
-	jz_sfc_writel(0x1f, SFC_SCR);
-
-	jz_sfc_writel(STOP, SFC_TRIG);
-	jz_sfc_writel(FLUSH, SFC_TRIG);
-
-	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
-	sfc_set_read_reg(CMD_READ, T30_ROM_SPL_LOAD, 3);
-	sfc_read_data((unsigned int *)loaded, words);
 }

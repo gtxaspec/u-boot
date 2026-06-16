@@ -14,6 +14,8 @@
 #ifndef __T30_H__
 #define __T30_H__
 
+#include <linux/types.h>
+
 /* APB bus peripherals */
 #define CPM_BASE	0xb0000000
 #define INTC_BASE	0xb0001000
@@ -135,5 +137,21 @@
 #define GPIO_PXPAT0(n)	(0x40 + (n) * 0x100)
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
+
+/*
+ * SPL/TPL bring-up helpers, defined across t30/{pll,serial,sfc}.c and shared by
+ * t30/{soc,tpl}.c and the DDR driver. Declared here so the definitions are
+ * prototype-checked rather than re-declared extern in each user.
+ * pll_init_params() sets APLL/MPLL + the CPCCR dividers from the per-SKU
+ * setpoints (the UCLASS_RAM probe feeds it the DT params; VPLL left at reset).
+ */
+void clk_ungate_uart(unsigned int idx);
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr);
+void t30_spl_serial_init(void);
+void t30_spl_putc(char c);
+void t30_spl_puts(const char *s);
+void t30_spl_sfc_clk_init(void);
+void t30_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
 
 #endif /* __T30_H__ */

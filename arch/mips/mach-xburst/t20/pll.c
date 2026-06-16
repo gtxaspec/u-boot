@@ -9,20 +9,15 @@
  * bit0, PLL_ON bit3 - NO PLLRG). The per-SKU APLL/MPLL setpoints (exact
  * vendor CONFIG_SYS_*_MNOD words, verbatim) and the CPCCR divider word are
  * elements [0..2] of the &ddr node's "ingenic,sdram-params" devicetree
- * array, read here via ingenic_t20_ddr_pll_setpoints() before driver model
- * is up. soc.c parses the appended DTB gd-free (T20's DWC controller hangs
- * on any pre-DDR DRAM access, so pll+DDR are brought up first, from the
- * in-image DTB) and passes that blob in.
+ * array; the TPL's UCLASS_RAM probe reads them from the dtoc-baked platdata
+ * and calls pll_init_params() before driver model / DDR are up (T20's DWC
+ * controller hangs on any pre-DDR DRAM access, so PLL + DDR come up first).
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <asm/io.h>
-#include <hang.h>
 #include <mach/t20.h>
-
-int ingenic_t20_ddr_pll_setpoints(const void *blob, u32 *apll_mnod,
-				  u32 *mpll_mnod, u32 *cpccr);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -58,13 +53,12 @@ static void cpccr_init(u32 cpccr_cfg)
 	cpm_writel(cpccr, CPM_CPCCR);
 }
 
-void pll_init(const void *blob)
+/*
+ * Bring up APLL/MPLL + the CPCCR dividers from explicit setpoints. The TPL
+ * calls this from its UCLASS_RAM probe (dtoc platdata, no libfdt).
+ */
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr)
 {
-	u32 apll, mpll, cpccr;
-
-	if (ingenic_t20_ddr_pll_setpoints(blob, &apll, &mpll, &cpccr))
-		hang();
-
 	pll_set(CPM_CPAPCR, apll);
 	pll_set(CPM_CPMPCR, mpll);
 	/* VPLL left at reset; not needed for SPL console/DDR. */

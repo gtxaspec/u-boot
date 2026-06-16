@@ -46,9 +46,6 @@ DECLARE_GLOBAL_DATA_PTR;
 #define phy_writel(v, reg)	writel((v), (void __iomem *)(DDR_PHY_BASE + (reg)))
 #define phy_readl(reg)		readl((void __iomem *)(DDR_PHY_BASE + (reg)))
 
-/* SPL raw console (mach-xburst/t20/serial.c); SPL-only, see ddr_die(). */
-void t20_spl_puts(const char *s);
-
 static const u32 out_imp_table[] = DDRP_IMPANDCE_ARRAY;
 static const u32 odt_imp_table[] = DDRP_ODT_IMPANDCE_ARRAY;
 static const u8  rzq_table[]     = DDRP_RZQ_TABLE;
@@ -278,57 +275,22 @@ static void controller_reset_phy(const struct ingenic_t20_ddr_params *cfg)
 #define INGENIC_T20_DDR_COMPATIBLE	"ingenic,t20-ddr-dwc"
 
 /*
- * Deserialize the &ddr node's "ingenic,sdram-params" u32 array straight out
- * of @blob into @out. Gd-free / libfdt-only so it can run in the pre-DM
- * board_init_f bring-up (before DDR, before driver model). The struct is
- * all-u32 in the array's order, so this is a flat fdt32->cpu copy (the
- * rk3328 (u32 *)&params idiom). Returns 0 on success, negative on error.
+ * The DWC bring-up sequence proper, driven from a parsed params struct. The
+ * TPL's UCLASS_RAM probe calls this (with dtoc-baked platdata) before driver
+ * model / DDR are up; the SPL/U-Boot probe does NOT re-run it, it only records
+ * the size (T20's DWC controller hangs on any pre-DDR DRAM access). Only the
+ * TPL phase calls it - __maybe_unused so the SPL/U-Boot build (where the probe
+ * just records the size) does not warn; the linker drops the whole DWC chain
+ * it heads in those phases.
  */
-static int ingenic_t20_ddr_get_params(const void *blob,
-				      struct ingenic_t20_ddr_params *out)
+static int __maybe_unused
+ingenic_t20_ddr_sdram_init_params(const struct ingenic_t20_ddr_params *cfg)
 {
-	const fdt32_t *arr;
-	u32 *w = (u32 *)out;
-	int node, len, i;
-
-	if (!blob)
-		return -ENODEV;
-
-	node = fdt_node_offset_by_compatible(blob, -1,
-					     INGENIC_T20_DDR_COMPATIBLE);
-	if (node < 0)
-		return -ENODEV;
-
-	arr = fdt_getprop(blob, node, "ingenic,sdram-params", &len);
-	if (!arr || len != (int)sizeof(*out))
-		return -EINVAL;
-
-	for (i = 0; i < (int)(sizeof(*out) / sizeof(u32)); i++)
-		w[i] = fdt32_to_cpu(arr[i]);
-
-	return 0;
-}
-
-/*
- * Top-level DDR2 init (the DWC path of the vendor sdram_init()). Called ONCE,
- * imperatively, from board_init_f BEFORE driver model - and critically before
- * the (far, standard-map) BSS exists, since T20's DWC controller hangs on any
- * pre-DDR DRAM access. The params are parsed onto the (cache-as-RAM) stack
- * here, NOT into a BSS static (BSS is far DRAM that isn't up yet); the
- * UCLASS_RAM probe does NOT re-run this, it only records the size.
- */
-int ingenic_t20_ddr_sdram_init(const void *blob)
-{
-	struct ingenic_t20_ddr_params cfg;
-
-	if (ingenic_t20_ddr_get_params(blob, &cfg))
-		ddr_die("no sdram-params");
-
 	ddr_clk_set_rate();
 	reset_dllA();			/* prev_ddr_init hook */
-	controller_reset_phy(&cfg);
-	ddr_phy_init(&cfg);
-	ddr_controller_init(&cfg);
+	controller_reset_phy(cfg);
+	ddr_phy_init(cfg);
+	ddr_controller_init(cfg);
 
 	/*
 	 * Vendor T20 soc.c does a dummy DRAM write immediately after
@@ -337,26 +299,6 @@ int ingenic_t20_ddr_sdram_init(const void *blob)
 	 */
 	*(volatile u32 *)0xa3fffffc = 0x12345678;
 
-	return 0;
-}
-
-/*
- * SPL helper for t20/pll.c: the PLL setpoints are array elements [0..2] of
- * the same "ingenic,sdram-params" property. Runs before driver model is up.
- */
-int ingenic_t20_ddr_pll_setpoints(const void *blob, u32 *apll_mnod,
-				  u32 *mpll_mnod, u32 *cpccr)
-{
-	struct ingenic_t20_ddr_params cfg;
-	int ret;
-
-	ret = ingenic_t20_ddr_get_params(blob, &cfg);
-	if (ret)
-		return ret;
-
-	*apll_mnod = cfg.apll_mnod;
-	*mpll_mnod = cfg.mpll_mnod;
-	*cpccr = cfg.cpccr;
 	return 0;
 }
 
@@ -413,6 +355,17 @@ static int ingenic_t20_ddr_probe(struct udevice *dev)
 	const struct ingenic_t20_ddr_params *params = &plat->params;
 #endif
 
+#ifdef CONFIG_TPL_BUILD
+	/*
+	 * In the TPL this probe IS the DDR bring-up: the TPL runs cache-as-RAM
+	 * with dtoc-baked platdata (no libfdt), brings up PLL + DDR from the
+	 * params, then loads the DRAM-resident SPL. (rk3328 DMC pattern; in the
+	 * SPL/U-Boot phases the probe only records the size, DDR is already up.)
+	 */
+	pll_init_params(params->apll_mnod, params->mpll_mnod, params->cpccr);
+	ingenic_t20_ddr_sdram_init_params(params);
+#endif
+
 	p->ram_size = params->chip0_size;
 	return 0;
 }
@@ -435,8 +388,16 @@ static const struct udevice_id ingenic_t20_ddr_ids[] = {
 	{ }
 };
 
-U_BOOT_DRIVER(ingenic_t20_ddr) = {
-	.name		= "ingenic_t20_ddr",
+/*
+ * Name the driver after its compatible ("ingenic,t20-ddr-dwc" ->
+ * "ingenic_t20_ddr_dwc"). dtoc, which generates the TPL OF_PLATDATA, derives a
+ * node's driver name from its compatible and binds by that name; a mismatched
+ * driver name would leave the TPL DDR device unbound (UCLASS_RAM probe returns
+ * -ENODEV). Matching the convention also keeps the generated platdata struct
+ * named dtd_ingenic_t20_ddr_dwc (see struct ingenic_t20_ddr_plat).
+ */
+U_BOOT_DRIVER(ingenic_t20_ddr_dwc) = {
+	.name		= "ingenic_t20_ddr_dwc",
 	.id		= UCLASS_RAM,
 	.of_match	= ingenic_t20_ddr_ids,
 	.of_to_plat	= ingenic_t20_ddr_of_to_plat,

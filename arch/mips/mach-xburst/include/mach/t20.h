@@ -14,6 +14,8 @@
 #ifndef __T20_H__
 #define __T20_H__
 
+#include <linux/types.h>
+
 /* APB bus peripherals */
 #define CPM_BASE	0xb0000000
 #define INTC_BASE	0xb0001000
@@ -135,5 +137,20 @@
 #define GPIO_PXPAT0(n)	(0x40 + (n) * 0x100)
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
+
+/*
+ * SPL/TPL bring-up helpers, defined across t20/{pll,serial,sfc}.c and shared
+ * by t20/{soc,tpl}.c and the DDR driver (drivers/ram/ingenic/ddr_t20.c).
+ * Declared here so the definitions are prototype-checked, rather than
+ * re-declared extern in each user.
+ */
+void clk_ungate_uart(unsigned int idx);
+void pll_init_params(u32 apll_mnod, u32 mpll_mnod, u32 cpccr);
+void t20_spl_serial_init(void);
+void t20_spl_putc(char c);
+void t20_spl_puts(const char *s);
+void t20_spl_sfc_clk_init(void);
+void t20_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
 
 #endif /* __T20_H__ */

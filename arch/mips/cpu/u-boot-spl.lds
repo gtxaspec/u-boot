@@ -16,9 +16,9 @@ SECTIONS
 		__text_start = .;
 		/*
 		 * start.o must link first so its boot header is at image offset 0
-		 * (the mask ROM / TPL jump to base+0x800). T20 is a TPL chain now -
-		 * the DRAM-resident SPL has no ROM load cap and the TPL is small
-		 * enough to load whole - so it needs nothing more than that.
+		 * (the mask ROM / TPL jump to base+0x800). T20 and T21 are TPL
+		 * chains now - the DRAM-resident SPL has no ROM load cap and the TPL
+		 * is small enough to load whole - so they need nothing more than that.
 		 *
 		 * T30 is still a single-stage cache-as-RAM SPL: the gen-1 mask ROM
 		 * loads only the first 0x6800 bytes and its L2 cannot be software-
@@ -26,10 +26,10 @@ SECTIONS
 		 * SPL, the DDR driver, the fdt code + mem/str helpers) must be
 		 * front-loaded into the ROM-loaded, L1-resident head; the heavy
 		 * DM/SFC/LZMA tail follows and runs DRAM-resident after to_dram().
-		 * (T21/T23 - and now T20 - don't need this: start.o links first
-		 * naturally and the rest runs from DRAM.)
+		 * (T23/T31 don't need this: start.o links first naturally and the
+		 * rest runs from DRAM.)
 		 */
-#if defined(CONFIG_SOC_T20) || defined(CONFIG_SOC_T30)
+#if defined(CONFIG_SOC_T20) || defined(CONFIG_SOC_T21) || defined(CONFIG_SOC_T30)
 		*mach-xburst/start.o(.text*)
 #ifdef CONFIG_SOC_T30
 		*mach-xburst/t30*(.text*)

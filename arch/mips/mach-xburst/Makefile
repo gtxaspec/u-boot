@@ -4,6 +4,11 @@ extra-$(CONFIG_XPL_BUILD)	:= start.o
 
 obj-y				+= cpu.o
 
+# Shared cache-as-RAM TPL board_init_f for the capped SoCs (T10/T20/T21/T30);
+# each SoC's t<soc>/tpl.c supplies the xburst_tpl_soc hook table. Only built in
+# the TPL phase, which only those SoCs have (SUPPORT_TPL).
+obj-$(CONFIG_TPL_BUILD)		+= tpl.o
+
 # U-Boot proper only (these hook misc_init_r / board_late_init, not the SPL).
 ifndef CONFIG_XPL_BUILD
 obj-$(CONFIG_SET_DFU_ALT_INFO)	+= dfu.o

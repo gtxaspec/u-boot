@@ -310,6 +310,22 @@ cmd_cat = cat $(filter-out $(PHONY), $^) > $@
 quiet_cmd_copy = COPY    $@
       cmd_copy = cp $< $@
 
+# Ingenic XBurst1 gen-1 mask ROMs (T10/T20/T21/T30) stage the USB-boot SPL into
+# cache-as-RAM and prime the I-cache with a fill bounded, word-granularly, by
+# the image length. A non-word-aligned SPL image leaves that fill mis-bounded
+# and corrupts the loaded SPL, so it hangs before its first instruction. Round
+# u-boot-spl.bin up to a 32-byte cache line; the trailing zeros land past the
+# image in unused cache-as-RAM and are never executed (and the appended FDT's
+# totalsize is unchanged, so DT parsers ignore them).
+quiet_cmd_copy_xburst = COPY    $@
+      cmd_copy_xburst = cp $< $@ && truncate -s %32 $@
+
+ifeq ($(CONFIG_ARCH_XBURST),y)
+SPL_BIN_CMD := copy_xburst
+else
+SPL_BIN_CMD := copy
+endif
+
 ifneq ($(CONFIG_SPL_MULTI_DTB_FIT),y)
 FINAL_DTB_CONTAINER = $(obj)/$(SPL_BIN).dtb
 else ifeq ($(CONFIG_SPL_MULTI_DTB_FIT_LZO),y)
@@ -337,10 +353,10 @@ $(obj)/$(SPL_BIN)-dtb.bin: $(obj)/$(SPL_BIN)-nodtb.bin \
 	$(call if_changed,cat)
 
 $(obj)/$(SPL_BIN).bin: $(obj)/$(SPL_BIN)-dtb.bin FORCE
-	$(call if_changed,copy)
+	$(call if_changed,$(SPL_BIN_CMD))
 else
 $(obj)/$(SPL_BIN).bin: $(obj)/$(SPL_BIN)-nodtb.bin FORCE
-	$(call if_changed,copy)
+	$(call if_changed,$(SPL_BIN_CMD))
 endif
 
 # Create a file that pads from the end of u-boot-spl-nodtb.bin to bss_end

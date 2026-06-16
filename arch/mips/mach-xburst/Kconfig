@@ -60,6 +60,7 @@ config SOC_T20
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
 	select BINMAN
+	select SUPPORT_TPL
 	help
 	  Ingenic T20 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
 	  DesignWare (DWC) DDR2 PHY, 64 MB M14D5121632A, SFC SPI-flash

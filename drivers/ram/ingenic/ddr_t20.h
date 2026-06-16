@@ -156,11 +156,10 @@
  * values are carried here, plus the SPL PLL setpoints.
  *
  * [0..2] are the SPL PLL setpoints (CPAPCR/CPMPCR M/N/OD1/OD0 + the CPCCR
- * divider), consumed by t20/pll.c via ingenic_t20_ddr_pll_setpoints()
- * BEFORE the DDR probe: on T20 the DWC controller hangs on any pre-DDR DRAM
- * access, so pll+DDR are brought up first, gd-free, straight from the
- * in-image DTB. MPLL (1000) + CPCCR are the same on every T20 SKU; APLL and
- * the 64M-vs-128M geometry/timing differ.
+ * divider): the TPL's UCLASS_RAM probe feeds them to t20/pll.c
+ * pll_init_params() before bringing DDR up (T20's DWC controller hangs on any
+ * pre-DDR DRAM access, so PLL + DDR come up first). MPLL (1000) + CPCCR are
+ * the same on every T20 SKU; APLL and the 64M-vs-128M geometry/timing differ.
  */
 struct ingenic_t20_ddr_params {
 	u32 apll_mnod;			/* [0]  CPAPCR M/N/OD1/OD0 (CPU/APLL) */
@@ -176,21 +175,5 @@ struct ingenic_t20_ddr_params {
 	u32 ddrp_dtpr1;			/* [15] DWC PHY DTPR1 */
 	u32 remap[5];			/* [16..20] DDRC_REMAP1..5 */
 };
-
-/*
- * Top-level DDR bring-up (ddr_t20.c), run once imperatively from
- * board_init_f BEFORE driver model. Parses the params out of @blob (the
- * in-image DTB) itself and brings DDR up, so the caller stays opaque to the
- * params layout. Returns 0 on success, negative on error.
- */
-int ingenic_t20_ddr_sdram_init(const void *blob);
-
-/*
- * SPL helper for t20/pll.c: read the SPL PLL setpoints ([0..2] of the
- * params array) from the T20 DDR node in @blob. Gd-free - runs before DDR
- * is up (see above). Returns 0 on success, negative on error.
- */
-int ingenic_t20_ddr_pll_setpoints(const void *blob, u32 *apll_mnod,
-				  u32 *mpll_mnod, u32 *cpccr);
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T20_H */

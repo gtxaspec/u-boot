@@ -8,8 +8,8 @@
  * t30-isvp.dtsi (dr_mode="host").
  *
  * The per-SKU leaf .dts files (t30l-isvp-dfu.dts, ...) include this
- * and set the DDR node's per-SKU compatible; the matching
- * <leaf>-u-boot.dtsi pulls in t30-isvp-dfu-uboot-common.dtsi.
+ * and supply the DDR node's per-SKU "ingenic,sdram-params" array; the
+ * matching <leaf>-u-boot.dtsi pulls in t30-isvp-dfu-uboot-common.dtsi.
  */
 
 #include <dt-bindings/gpio/gpio.h>

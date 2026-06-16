@@ -143,10 +143,12 @@ int board_init(void)
 }
 #endif
 
-/* Printed right after the "Model:" line; shows the exact T10 SKU. */
 int checkboard(void)
 {
-	printf("Variant: %s\n", CONFIG_T10_VARIANT_NAME);
+	/*
+	 * No "Variant:" line: the SKU is carried by the leaf-DT Model: string
+	 * (params-in-DT, no compile-time variant). DM-SPL boards do not re-add it.
+	 */
 #ifdef CONFIG_SPL_T10_USB_BOOT
 	puts("Loader: USB-boot\n");
 #endif

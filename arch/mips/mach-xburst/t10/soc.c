@@ -2,31 +2,33 @@
 /*
  * Ingenic T10 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM with no driver model: minimal
- * console, PLLs, Synopsys DWC DDR2, then load U-Boot proper. With
- * CONFIG_SPL_T10_USB_BOOT it brings up console + PLL + DDR and
- * returns to the mask ROM (SFC NOR-boot lands next). Full U-Boot
- * uses driver model.
+ * This SPL is DRAM-resident: the TPL (tpl.c) runs first in the 32 KB L1
+ * cache-as-RAM window, brings up PLL + DDR (the shared Synopsys-DWC driver
+ * ddr_t20.c via the UCLASS_RAM probe), then loads this SPL from SPI-NOR into
+ * real DRAM and jumps to it. So none of the cache-as-RAM gymnastics the old
+ * non-DM single-stage SPL needed (imperative pre-DM DDR init, the hand-rolled
+ * LZMA U-Boot loader) apply here - the flow is the plain T20/T21/T23/T31 one:
+ * fdtdec + the DM scan, the UCLASS_RAM probe records the (already-up) DRAM
+ * size, and board_init_r() reads U-Boot proper from SPI-NOR via the DM SFC
+ * driver, LZMA-decompresses it and jumps.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <config.h>
+#include <cpu_func.h>
+#include <dm.h>
+#include <fdtdec.h>
+#include <hang.h>
+#include <init.h>
+#include <ram.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t10.h>
-#include <mach/t10-ddr.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-void pll_init(void);
-void clk_ungate_uart(unsigned int idx);
-void t10_spl_serial_init(void);
-void t10_spl_puts(const char *s);
-void t10_spl_putc(char c);
-void t10_spl_load_uboot(void);
-void __weak sdram_init(void) { }
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -40,21 +42,24 @@ static void spl_put_hex(u32 v)
 }
 
 /*
- * Verify DRAM up to the configured size. Two passes: a stuck-bit
- * pattern walk at both the KSEG1 (uncached) and KSEG0 (cached)
- * windows, then an alias pass (unique marker per offset across
- * [0, SIZE), all read back) so "DDR OK" actually proves the
- * geometry/size rather than passing on an aliased part.
+ * Verify DRAM up to the DT-selected SKU size (T10 is 64 MB). Two passes:
+ *
+ *  1. Stuck-bit: walk patterns at offsets within [0, size) at both the
+ *     KSEG1 (uncached) and KSEG0 (cached) windows.
+ *  2. Alias: write a unique marker per offset across [0, size) via KSEG1,
+ *     then read them all back. If the DDR controller is configured larger
+ *     than the populated part (the classic wrong-geometry bug) the high
+ *     offsets wrap onto the low ones and the markers collide - so "DDR OK"
+ *     actually proves the size/geometry.
  */
-static int dram_verify(void)
+static int dram_verify(u32 size)
 {
 	static const u32 pat[] = {
 		0x00000000, 0xffffffff, 0xa5a5a5a5, 0x5a5a5a5a,
 		0xdeadbeef, 0x12345678,
 	};
 	const u32 offs[] = {
-		0x0, 0x4, 0x100000, T10_DRAM_SIZE / 4,
-		T10_DRAM_SIZE / 2, T10_DRAM_SIZE - 4,
+		0x0, 0x4, 0x100000, size / 4, size / 2, size - 4,
 	};
 	const u32 bases[] = { 0xa0000000, 0x80000000 };
 	int b, o, p;
@@ -101,45 +106,41 @@ gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
-	gd = &gdata;
-	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	struct udevice *dev;
+	struct ram_info ram;
 
 	/*
-	 * The mask ROM leaves a usable EXTAL-based clock, so the console
-	 * works before pll_init() - bring it up first so any later hang
-	 * still produces output.
+	 * The TPL has already brought up PLL + DDR (cache-as-RAM) and loaded this
+	 * SPL into real DRAM, then jumped here, so everything runs DRAM-resident:
+	 * no cache-as-RAM staging, no hand-rolled loader. The flow now matches
+	 * T20/T21/T23/T31 - fdtdec + the DM scan, the UCLASS_RAM probe records the
+	 * (already-up) DRAM size, and board_init_r() reads U-Boot proper from
+	 * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps.
 	 */
 	clk_ungate_uart(T10_CONSOLE_UART);
 	t10_spl_serial_init();
-	t10_spl_puts("\nT10 SPL: alive (pre-PLL)\n");
 
-	pll_init();
-	t10_spl_puts("T10 SPL: PLL configured\n");
+	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	gd = &gdata;
 
-	sdram_init();
-	/* Vendor t10/soc.c requires this access right after sdram_init. */
-	*(volatile u32 *)0xa3fffffc = 0x12345678;
-	if (dram_verify() == 0) {
-		t10_spl_puts("T10 SPL: DDR OK ");
-		spl_put_hex(T10_DRAM_SIZE);
-		t10_spl_puts(" (alias-checked)\n");
-	}
+	if (fdtdec_setup())
+		hang();
+	if (spl_init())
+		hang();
+	if (uclass_first_device_err(UCLASS_RAM, &dev))
+		hang();
+	if (ram_get_info(dev, &ram))
+		hang();
+	dram_verify((u32)ram.size);
 
-#ifdef CONFIG_SPL_T10_USB_BOOT
-	/*
-	 * USB-boot stage1: clocks and DDR are up. Return to the mask
-	 * ROM (start.S branches in, so $ra still holds the bootrom
-	 * return address and this epilogue jr's back into the bootrom
-	 * USB loop). The host then uploads U-Boot proper over USB.
-	 */
-	t10_spl_puts("T10 SPL: DDR up; returning to mask ROM (USB boot)\n");
-	return;
-#else
-	/* Load U-Boot proper from SPI-NOR into DRAM and jump. */
-	t10_spl_puts("T10 SPL: loading U-Boot...\n");
-	t10_spl_load_uboot();
-	for (;;)
-		;
-#endif
+	preloader_console_init();
+	t10_spl_sfc_clk_init();
+	board_init_r(NULL, 0);
+	__builtin_unreachable();
+}
+
+u32 spl_boot_device(void)
+{
+	return BOOT_DEVICE_SPI;
 }
 #endif /* CONFIG_XPL_BUILD */

@@ -3,12 +3,15 @@
  * Ingenic T20 (XBurst1) DDR2 controller + Synopsys DWC PHY register map
  * and per-SKU variant table.
  *
- * T20 is the ODD ONE OUT of the XBurst1 camera SoCs: it does NOT use the
- * Innophy DDR2 core that T21/T23/T30/T31 share through ddr_t31.c. T20 has
+ * T20 and T10 are the odd ones out of the XBurst1 camera SoCs: they do NOT use
+ * the Innophy DDR2 core that T21/T23/T30/T31 share through ddr_t31.c. They have
  * the Synopsys DesignWare (DWC) DDR PHY (JZ4775/JZ4780 generation, vendor
- * arch/mips/cpu/xburst/ddr_dwc.c + t20/ddr_set_dll.c) with hardware ZQ
- * impedance calibration and a hardware DQS training engine - a materially
- * different (and longer) init sequence, so this is its own driver/struct.
+ * arch/mips/cpu/xburst/ddr_dwc.c + ddr_set_dll.c) with hardware ZQ impedance
+ * calibration and a hardware DQS training engine - a materially different (and
+ * longer) init sequence, so the DWC SoCs share this driver/struct (named after
+ * the representative T20, the same way the Innophy four share ddr_t31.c) rather
+ * than the Innophy one. The bring-up sequence is identical for T10 and T20; only
+ * the per-SKU parameter values differ, and they all come from the DT.
  *
  * The per-SKU values (geometry, clock setpoints, ddr_params_creator GOLD
  * register words) come from the devicetree: the &ddr node carries an
@@ -108,19 +111,17 @@
 #define DDRP_DXGCR_DXEN		(1 << 0)
 
 /*
- * Clock-invariant DWC GOLD values - identical for every T20 SKU (both #if
- * branches of the old t20-ddr.h). Kept as driver constants; only the
- * values that differ between the 64 MB and 128 MB parts go in the variant.
+ * DWC GOLD values that are identical across every SKU served by this driver
+ * (T20 64M/128M and T10) - kept as driver constants. Values that differ between
+ * SKUs (geometry/timing, plus REFCNT/MR0/PTR0/PTR1 and the DDR clock divider,
+ * which differ on T10's 400 MHz part vs T20's 500 MHz) live in the per-SKU
+ * "ingenic,sdram-params" array instead.
  */
 #define DDRC_CTRL_VALUE		0x0000d91e
-#define DDRC_REFCNT_VALUE	0x00f20001
 #define DDRC_AUTOSR_EN_VALUE	0x00000000
-#define DDRP_MR0_VALUE		0x00000e73
 #define DDRP_MR1_VALUE		0x00000002
 #define DDRP_MR2_VALUE		0x00000000
 #define DDRP_MR3_VALUE		0x00000000
-#define DDRP_PTR0_VALUE		0x00228019
-#define DDRP_PTR1_VALUE		0x064186a0
 #define DDRP_PTR2_VALUE		0x00000000
 #define DDRP_DTPR2_VALUE	0x1001a8c8
 #define DDRP_PGCR_VALUE		0x01842e02
@@ -140,10 +141,6 @@
 	  0x18, 0x19, 0x1a, 0x1b, 0x1e, 0x1f, 0x1c, 0x1d, \
 	  0x14, 0x15, 0x16, 0x17, 0x12, 0x13, 0x10, 0x11 }
 
-/* Clock targets: MPLL 1000 MHz, DDR 500 MHz - same for 64M/128M. */
-#define DDR_MPLL_RATE		1000000000U
-#define DDR_TARGET_RATE		500000000U
-
 /*
  * Per-SKU DDR configuration, deserialized from the &ddr node's
  * "ingenic,sdram-params" devicetree property (a flat u32 array). The field
@@ -156,10 +153,11 @@
  * values are carried here, plus the SPL PLL setpoints.
  *
  * [0..2] are the SPL PLL setpoints (CPAPCR/CPMPCR M/N/OD1/OD0 + the CPCCR
- * divider): the TPL's UCLASS_RAM probe feeds them to t20/pll.c
- * pll_init_params() before bringing DDR up (T20's DWC controller hangs on any
- * pre-DDR DRAM access, so PLL + DDR come up first). MPLL (1000) + CPCCR are
- * the same on every T20 SKU; APLL and the 64M-vs-128M geometry/timing differ.
+ * divider): the TPL's UCLASS_RAM probe feeds them to the SoC's pll_init_params()
+ * (t20/pll.c or t10/pll.c) before bringing DDR up (the DWC controller hangs on
+ * any pre-DDR DRAM access, so PLL + DDR come up first). T20 runs MPLL 1000 /
+ * DDR 500 (cdr 1); T10 runs MPLL 1200 / DDR 400 (cdr 2); the geometry/timing and
+ * the REFCNT/MR0/PTR0/PTR1 words differ per part - all carried in the array.
  */
 struct ingenic_t20_ddr_params {
 	u32 apll_mnod;			/* [0]  CPAPCR M/N/OD1/OD0 (CPU/APLL) */
@@ -174,6 +172,11 @@ struct ingenic_t20_ddr_params {
 	u32 ddrp_dtpr0;			/* [14] DWC PHY DTPR0 */
 	u32 ddrp_dtpr1;			/* [15] DWC PHY DTPR1 */
 	u32 remap[5];			/* [16..20] DDRC_REMAP1..5 */
+	u32 ddr_cdr;			/* [21] CPM_DDRCDR divider (DDR = MPLL/(cdr+1)) */
+	u32 ddrc_refcnt;		/* [22] DDRC_REFCNT */
+	u32 ddrp_mr0;			/* [23] DWC PHY MR0 */
+	u32 ddrp_ptr0;			/* [24] DWC PHY PTR0 */
+	u32 ddrp_ptr1;			/* [25] DWC PHY PTR1 */
 };
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T20_H */

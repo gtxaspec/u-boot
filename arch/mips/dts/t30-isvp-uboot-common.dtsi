@@ -3,19 +3,21 @@
  * Shared U-Boot overlay for the Ingenic ISVP-T30 SFC-NOR leaf DTs.
  * Each per-SKU <leaf>-u-boot.dtsi is a one-line include of this file.
  *
- * Provides the binman image description for the SFC-NOR boot. The T30
- * mask ROM SFC-NOR boot path is the common XBurst1 one (the 2 KiB
- * header CRC7+length finalized by the ingenic-t31-spl binman etype -
- * that header format is family-generic, emitted by the shared
- * start.S, not T31-specific):
+ * T30 is a capped SoC (the T20-generation mask ROM loads only 0x6800 of the
+ * first stage from NOR), so it boots a TPL chain: the mask ROM loads the
+ * headered TPL at offset 0; the TPL brings up DDR in cache-as-RAM and reads the
+ * DRAM-resident SPL from 0x8000 (= T30_TPL_SPL_NOR_OFFS); the SPL reads U-Boot
+ * from 0x18000 (= CONFIG_SYS_SPI_U_BOOT_OFFS). The 2 KiB header CRC7+length is
+ * finalized by the family-generic ingenic-t31-spl binman etype.
  *
- *   u-boot-spl-t30.bin       : SPL with the finalized boot header.
- *   u-boot-with-spl-lzma.bin : headered SPL at offset 0 and LZMA
- *                              U-Boot at the SPL-loader offset.
- *
- * Also tags the SPL-needed nodes bootph-all so they survive into the
- * SPL devicetree: the SPL probes the DDR node (UCLASS_RAM) and loads
- * U-Boot proper from NOR via the DM SFC driver.
+ * Phase tags: the SPL/TPL devicetrees are fdtgrep-filtered out of the single
+ * dt.dtb by bootph tags (TPL keeps bootph-all + bootph-pre-sram; SPL keeps
+ * bootph-all + bootph-pre-ram), NOT re-preprocessed per phase - so the split is
+ * in the tags, not #ifdef. The TPL's only DM device is &ddr (its probe brings
+ * up PLL + DDR, then it hand-loads the SPL with bare-metal SFC/serial helpers),
+ * so only &ddr is tagged for all phases; every other node is bootph-pre-ram +
+ * bootph-some-ram (present in the SPL DM NOR boot and U-Boot pre-reloc, absent
+ * from the minimal TPL).
  */
 
 / {
@@ -25,6 +27,38 @@
 };
 
 &binman {
+#ifdef CONFIG_TPL
+	u-boot-tpl-t30 {
+		filename = "u-boot-tpl-t30.bin";
+
+		ingenic-t31-spl {
+			filename = "tpl/u-boot-tpl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-tpl.bin";
+		pad-byte = <0xff>;
+
+		tpl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-tpl-t30.bin";
+		};
+
+		spl {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x18000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	u-boot-spl-t30 {
 		filename = "u-boot-spl-t30.bin";
 
@@ -49,22 +83,25 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };
 
-&exclk { bootph-all; };
-&rtclk { bootph-all; };
-&cgu { bootph-all; };
-&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
-&pinctrl { bootph-all; };
-&gpa { bootph-all; };
-&gpb { bootph-all; };
-&gpc { bootph-all; };
-&gpd { bootph-all; };
-&pins_sfc { bootph-all; };
-&uart1 { bootph-all; };
+&exclk { bootph-pre-ram; bootph-some-ram; };
+&rtclk { bootph-pre-ram; bootph-some-ram; };
+&cgu { bootph-pre-ram; bootph-some-ram; };
+&ddr { bootph-all; };		/* the TPL's only DM device */
+&pinctrl { bootph-pre-ram; bootph-some-ram; };
+&gpa { bootph-pre-ram; bootph-some-ram; };
+&gpb { bootph-pre-ram; bootph-some-ram; };
+&gpc { bootph-pre-ram; bootph-some-ram; };
+&gpd { bootph-pre-ram; bootph-some-ram; };
+&pins_sfc { bootph-pre-ram; bootph-some-ram; };
+&uart1 { bootph-pre-ram; bootph-some-ram; };
 &sfc {
-	bootph-all;
+	bootph-pre-ram;
+	bootph-some-ram;
 	flash@0 {
-		bootph-all;
+		bootph-pre-ram;
+		bootph-some-ram;
 	};
 };

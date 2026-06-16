@@ -25,6 +25,45 @@
 };
 
 &binman {
+#ifdef CONFIG_TPL
+	/*
+	 * TPL boot chain (all within the 320 KiB / 0x50000 bootloader budget
+	 * before the environment): the mask ROM loads the headered TPL at
+	 * offset 0; the TPL brings up DDR and reads the DRAM-resident SPL from
+	 * 0x8000 (= T20_TPL_SPL_NOR_OFFS); the SPL reads U-Boot from 0x18000
+	 * (= CONFIG_SYS_SPI_U_BOOT_OFFS). Env stays at 0x50000.
+	 */
+	u-boot-tpl-t20 {
+		filename = "u-boot-tpl-t20.bin";
+
+		ingenic-t31-spl {
+			filename = "tpl/u-boot-tpl.bin";
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-tpl.bin";
+		pad-byte = <0xff>;
+
+		tpl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-tpl-t20.bin";
+		};
+
+		spl {
+			type = "blob";
+			offset = <0x8000>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x18000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	u-boot-spl-t20 {
 		filename = "u-boot-spl-t20.bin";
 
@@ -49,21 +88,42 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };
 
-&exclk { bootph-all; };
-&rtclk { bootph-all; };
-&cgu { bootph-all; };
+/*
+ * Phase tags. The SPL/TPL devicetrees are fdtgrep-filtered out of the single
+ * U-Boot dt.dtb by these bootph tags (TPL keeps bootph-all + bootph-pre-sram;
+ * SPL keeps bootph-all + bootph-pre-ram) - they are NOT re-preprocessed per
+ * phase, so the split must be expressed in the tags, not with #ifdef.
+ *
+ * The TPL is a cache-as-RAM DDR loader whose ONLY DM device is the DDR
+ * controller: its probe brings up PLL + DDR, then it hand-loads the SPL with
+ * bare-metal SFC/serial helpers (no DM SFC/pinctrl/gpio/uart). So &ddr is the
+ * only node tagged for all phases; tagging the full NOR/console set for the
+ * TPL would pull in uclasses the minimal TPL doesn't build and fail the
+ * OF_PLATDATA scan with -EINVAL.
+ *
+ * Every other node is tagged bootph-pre-ram + bootph-some-ram (= bootph-all
+ * minus the TPL/pre-sram phase): present in the SPL DM NOR boot and bound
+ * pre-relocation in U-Boot proper exactly as before, absent from the TPL.
+ */
 &ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
-&pinctrl { bootph-all; };
-&gpa { bootph-all; };
-&gpb { bootph-all; };
-&gpc { bootph-all; };
-&pins_sfc { bootph-all; };
-&uart1 { bootph-all; };
+
+&exclk { bootph-pre-ram; bootph-some-ram; };
+&rtclk { bootph-pre-ram; bootph-some-ram; };
+&cgu { bootph-pre-ram; bootph-some-ram; };
+&pinctrl { bootph-pre-ram; bootph-some-ram; };
+&gpa { bootph-pre-ram; bootph-some-ram; };
+&gpb { bootph-pre-ram; bootph-some-ram; };
+&gpc { bootph-pre-ram; bootph-some-ram; };
+&pins_sfc { bootph-pre-ram; bootph-some-ram; };
+&uart1 { bootph-pre-ram; bootph-some-ram; };
 &sfc {
-	bootph-all;
+	bootph-pre-ram;
+	bootph-some-ram;
 	flash@0 {
-		bootph-all;
+		bootph-pre-ram;
+		bootph-some-ram;
 	};
 };

@@ -1,42 +1,10 @@
 if SOC_T10
 
-choice
-	prompt "T10 SoC variant"
-	default T10_VARIANT_T10N
-	help
-	  Specific T10 product variant. T10 is XBurst1 but uses the
-	  DesignWare (DWC) DDR2 controller/PHY (vendor ddr_dwc.c),
-	  NOT the Innophy core that T21/T23/T30/T31 share - same
-	  64 MB DDR2 M14D5121632A part though, at DDR 500 MHz. The
-	  PLL is the T31/T23-style M/N/OD1/OD0 (T10 cpm_cpxpcr_t has
-	  no PLLRG). Variants differ in the APLL (CPU) clock. The
-	  CPAPCR words are the exact vendor isvp_common.h
-	  CONFIG_SYS_APLL_MNOD (verbatim, vendor-authoritative).
-	  T10X (DDR2 128 MB) is a future variant - not in this
-	  64 MB choice.
-
-config T10_VARIANT_T10L
-	bool "T10L / lite (CPU 712 MHz, DDR 500, 64 MB)"
-
-config T10_VARIANT_T10N
-	bool "T10N (CPU 860 MHz, DDR 500, 64 MB)"
-
-endchoice
-
-config T10_VARIANT_NAME
-	string
-	default "T10L" if T10_VARIANT_T10L
-	default "T10N"
-
-config T10_APLL_MNOD
-	hex
-	default 0x03b08900 if T10_VARIANT_T10L
-	default 0x04708900
-	help
-	  CPAPCR value, exact vendor CONFIG_SYS_APLL_MNOD (M/N/OD1/
-	  OD0, OD0 in [10:8]):
-	  860 = (M=71,N=2,OD1=1<<11,OD0=1<<8) = 0x04708900 (T10N);
-	  712 = (M=59,N=2,OD1=1<<11,OD0=1<<8) = 0x03b08900 (T10L).
+# T10 has the DesignWare (DWC) DDR2 PHY (same family as T20, not the Innophy
+# core of T21/T23/T30/T31) and reuses drivers/ram/ingenic/ddr_t20.c. The per-SKU
+# PLL setpoints (the APLL/CPU clock differs between T10N 860 and T10L 712) and
+# the DDR parameters come from the &ddr node's "ingenic,sdram-params" array in
+# the leaf .dts, so there is no compile-time variant choice.
 
 config SPL_T10_USB_BOOT
 	bool "T10 SPL: return to mask ROM for USB boot (dev loop)"

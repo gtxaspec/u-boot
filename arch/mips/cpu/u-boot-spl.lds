@@ -16,13 +16,14 @@ SECTIONS
 		__text_start = .;
 		/*
 		 * start.o must link first so its boot header is at image offset 0
-		 * (the mask ROM / TPL jump to base+0x800). T20, T21 and T30 are TPL
-		 * chains now - the DRAM-resident SPL has no ROM load cap and the TPL
-		 * is small enough to load whole - so they need nothing more than that.
-		 * (T23/T31 don't need this either: start.o links first naturally and
-		 * the rest runs from DRAM.)
+		 * (the mask ROM / TPL jump to base+0x800). The capped SoCs T10, T20,
+		 * T21 and T30 are TPL chains - the DRAM-resident SPL has no ROM load
+		 * cap and the TPL is small enough to load whole - so they need nothing
+		 * more than that. (T23/T31 don't need this either: start.o links first
+		 * naturally and the rest runs from DRAM.)
 		 */
-#if defined(CONFIG_SOC_T20) || defined(CONFIG_SOC_T21) || defined(CONFIG_SOC_T30)
+#if defined(CONFIG_SOC_T10) || defined(CONFIG_SOC_T20) || \
+	defined(CONFIG_SOC_T21) || defined(CONFIG_SOC_T30)
 		*mach-xburst/start.o(.text*)
 #endif
 		*(.text*)

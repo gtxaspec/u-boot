@@ -1,64 +1,47 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T10 SPL SPI-NOR loader: read U-Boot proper from SFC NOR
- * into DRAM, LZMA-decompress and jump.
+ * Ingenic T10 SPL SFC clock + controller bring-up, plus a minimal polled
+ * NOR read.
  *
- * Faithful transliteration of the lean vendor NOR path (same code
- * base as t31/t23 sfc.c). The SFC block and the SSI cgu entry are
- * identical to T31/T23 (same SFC_BASE, same CPM_SSICDR); only the
- * MPLL source rate differs (T10N MPLL = 900 MHz). DRAM is already
- * up (sdram_init() ran) so the scratch/heap/load addresses are
- * valid.
+ * After PLL + DDR init the T10 SPL hands U-Boot loading to the standard
+ * SPL_SPI framework (NOR cold-boot, via board_init_r) or returns to the
+ * mask ROM (USB-boot). Both need the SFC clock derived off MPLL and the
+ * controller GLB/DEV_CONF programmed before the DM SFC driver
+ * (drivers/spi/ingenic_sfc.c, compatible ingenic,t31-sfc) touches flash.
+ *
+ * The SFC block is the same as T31/T23 (same SFC_BASE, same SFC regs);
+ * the SSI cgu entry matches T20 (the other DWC SoC): T10's CPM_SSICDR uses
+ * a single-bit PLL select at bit 31 (0=APLL, 1=MPLL) and ce=29/busy=28/
+ * stop=27, NOT the [31:30] 2-bit select + 28/27/26 of T31/T23.
+ *
+ * t10_spl_nor_read() is a pre-driver-model polled NOR read used by the TPL
+ * (tpl.c) to load the DRAM-resident SPL from SPI-NOR after the UCLASS_RAM
+ * probe has brought PLL + DDR up.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
 
 #include <asm/io.h>
-#include <asm/global_data.h>
-#include <lzma/LzmaTools.h>
-#include <malloc.h>
 #include <mach/t10.h>
 #include <mach/t10-sfc.h>
 
-DECLARE_GLOBAL_DATA_PTR;
-
 /*
- * Flash layout for the isvp_t10 NOR profile (same as T31/T23):
- *   flash 0            : SPL (boot header + SPL code)
- *   flash UBOOT_OFFSET : U-Boot proper image (run at 0x80100000)
- *
- * DRAM scratch/heap addresses fit the 64 MB T10N (load 0x80100000,
- * heap 0x80a00000, scratch 0x81000000).
- */
-#define T10_UBOOT_OFFSET	0x10000		/* CONFIG_UBOOT_OFFSET */
-#define T10_UBOOT_LOAD_ADDR	0x80100000	/* CONFIG_TEXT_BASE */
-#define T10_IH_MAGIC		0x27051956
-#define T10_IH_HDR_LEN		64
-#define T10_UBOOT_SCRATCH	0x81000000	/* compressed image in DRAM */
-#define T10_SPL_HEAP_BASE	0x80a00000	/* LZMA decoder malloc pool */
-#define T10_SPL_HEAP_SIZE	0x00200000	/* 2 MiB (1 MiB dict + state) */
-#define T10_UBOOT_MAX		0x00800000	/* decompressed size bound */
-#define T10_DRAM_BASE		0x80000000	/* KSEG0 cached DRAM */
-#define T10_DRAM_MAX		0x08000000	/* 128 MB (covers all variants) */
-
-/* SSI/SFC clock target, from vendor sfc_init(): clk_set_rate(SSI, 70M) */
-#define T10_SSI_RATE		70000000U
-/* T10L MPLL is 1000 MHz (t10/pll.c), the SSI cgu source. */
-#define T10_MPLL_RATE		1000000000U
-
-/*
- * SSI cgu entry from the vendor T10 cgu_clk_sel[] table (clk.c) -
- * NOTE the T10 layout differs from T31/T23/T30:
+ * SSI cgu entry from the vendor T10 cgu_clk_sel[] table (clk.c):
  *   [SSI] = {1, CPM_SSICDR, 31, {APLL, MPLL, -1, -1}, 29, 28, 27}
- * off=CPM_SSICDR, PLL-select = single bit 31 (0=APLL, 1=MPLL),
- * ce=bit 29, busy=bit 28, stop=bit 27 (T31/T23 SSICDR is 28/27/26
- * with a [31:30] 2-bit select - do not reuse that here).
+ * single-bit PLL select at 31 (0=APLL, 1=MPLL), ce=29, busy=28, stop=27.
  */
-#define CPM_SSICDR		0x74
-#define SSI_CGU_CE		29
-#define SSI_CGU_BUSY		28
-#define SSI_CGU_STOP		27
-#define SSI_SRC_MPLL		(1u << 31)	/* select MPLL (sel = 1) */
+#define CPM_SSICDR	0x74
+#define SSI_CGU_CE	29
+#define SSI_CGU_BUSY	28
+#define SSI_CGU_STOP	27
+#define SSI_SRC_MPLL	(1u << 31)	/* select MPLL (sel = 1) */
+
+/*
+ * SSI/SFC clock target (vendor sfc_init(): clk_set_rate(SSI, 70M)).
+ * T10 MPLL is 1200 MHz (t10/pll.c) - the SSI cgu source.
+ */
+#define T10_MPLL_RATE	1200000000U
+#define T10_SSI_RATE	70000000U
 
 static u32 cpm_readl(unsigned int off)
 {
@@ -81,13 +64,9 @@ static void jz_sfc_writel(unsigned int value, unsigned int offset)
 }
 
 /*
- * SSI branch of the vendor clk_set_rate() (clk.c). SSI is not
- * MSC0/MSC1 and not DDR, so:
- *   cdr = (pll_rate/rate - 1) & 0xff
- *   regval &= ~(3 << cgu->stop | 0xff)
- *   regval |= (1 << cgu->ce) | cdr
- *   write; poll while regval & (1 << cgu->busy)
- * pll_rate is rounded to a multiple of rate exactly as the vendor does.
+ * SSI branch of the vendor clk_set_rate() (clk.c). SSI is not MSC0/MSC1
+ * and not DDR, so cdr = (pll_rate/rate - 1) & 0xff, with pll_rate rounded
+ * to a multiple of rate exactly as the vendor does.
  */
 static void ssi_clk_set_rate(void)
 {
@@ -112,29 +91,31 @@ static void ssi_clk_set_rate(void)
 		;
 }
 
-static void sfc_set_mode(int channel, int value)
+/*
+ * Bring up the SFC clock + controller for the DM SPI driver. Called from
+ * board_init_f before board_init_r runs the SPL_SPI load (NOR cold-boot)
+ * or before returning to the mask ROM (USB-boot). The DM SFC driver
+ * expects the clock derived and the GLB threshold / DEV_CONF line-enable
+ * delays already programmed.
+ */
+void t10_spl_sfc_clk_init(void)
 {
-	unsigned int tmp;
+	ssi_clk_set_rate();
 
-	tmp = jz_sfc_readl(SFC_TRAN_CONF(channel));
-	tmp &= ~(TRAN_MODE_MSK);
-	tmp |= (value << TRAN_MODE_OFFSET);
-	jz_sfc_writel(tmp, SFC_TRAN_CONF(channel));
+	jz_sfc_writel(THRESHOLD << THRESHOLD_OFFSET, SFC_GLB);
+	jz_sfc_writel(CEDL | HOLDDL | WPDL, SFC_DEV_CONF);
+
+	/* low power consumption */
+	jz_sfc_writel(0, SFC_CGE);
 }
 
-static void sfc_dev_addr_dummy_bytes(int channel, unsigned int value)
-{
-	unsigned int tmp;
-
-	tmp = jz_sfc_readl(SFC_TRAN_CONF(channel));
-	tmp &= ~TRAN_CONF_DMYBITS_MSK;
-	tmp |= (value << TRAN_CONF_DMYBITS_OFFSET);
-	jz_sfc_writel(tmp, SFC_TRAN_CONF(channel));
-}
-
+/*
+ * Minimal polled NOR read (vendor sfc_read transliteration): basic 1-1-1
+ * READ (0x03), 3-byte address, FIFO polling, no DMA/IRQ. Word (u32)
+ * granularity.
+ */
 static void sfc_set_read_reg(unsigned int cmd, unsigned int addr,
-		unsigned int addr_plus, unsigned int addr_len,
-		unsigned int data_en)
+			     unsigned int addr_len)
 {
 	unsigned int tmp;
 
@@ -143,180 +124,69 @@ static void sfc_set_read_reg(unsigned int cmd, unsigned int addr,
 	tmp |= (0x1 << PHASE_NUM_OFFSET);
 	jz_sfc_writel(tmp, SFC_GLB);
 
-	if (data_en) {
-		tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN |
-			DATEEN | (cmd << CMD_OFFSET);
-	} else {
-		tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN |
-			(cmd << CMD_OFFSET);
-	}
-
+	tmp = (addr_len << ADDR_WIDTH_OFFSET) | CMD_EN | DATEEN |
+	      (cmd << CMD_OFFSET);
 	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
 	jz_sfc_writel(addr, SFC_DEV_ADDR(0));
-	jz_sfc_writel(addr_plus, SFC_DEV_ADDR_PLUS(0));
+	jz_sfc_writel(0, SFC_DEV_ADDR_PLUS(0));
 
-	sfc_dev_addr_dummy_bytes(0, 0);
-	sfc_set_mode(0, 0);
+	/* zero dummy bits, standard single-line SPI mode */
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_CONF_DMYBITS_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
+	tmp = jz_sfc_readl(SFC_TRAN_CONF(0));
+	tmp &= ~TRAN_MODE_MSK;
+	jz_sfc_writel(tmp, SFC_TRAN_CONF(0));
 
 	jz_sfc_writel(START, SFC_TRIG);
 }
 
-static int sfc_read_data(unsigned int *data, unsigned int len)
+static void sfc_read_data(unsigned int *data, unsigned int words)
 {
 	unsigned int tmp_len = 0;
-	unsigned int fifo_num = 0;
+	unsigned int fifo_num;
 	unsigned int i;
 
-	while (1) {
-		if (jz_sfc_readl(SFC_SR) & RECE_REQ) {
-			jz_sfc_writel(CLR_RREQ, SFC_SCR);
-			if ((len - tmp_len) > THRESHOLD)
-				fifo_num = THRESHOLD;
-			else
-				fifo_num = len - tmp_len;
+	while (tmp_len < words) {
+		if (!(jz_sfc_readl(SFC_SR) & RECE_REQ))
+			continue;
 
-			for (i = 0; i < fifo_num; i++) {
-				*data = jz_sfc_readl(SFC_DR);
-				data++;
-				tmp_len++;
-			}
+		jz_sfc_writel(CLR_RREQ, SFC_SCR);
+		if ((words - tmp_len) > THRESHOLD)
+			fifo_num = THRESHOLD;
+		else
+			fifo_num = words - tmp_len;
+
+		for (i = 0; i < fifo_num; i++) {
+			*data = jz_sfc_readl(SFC_DR);
+			data++;
+			tmp_len++;
 		}
-
-		if (tmp_len == len)
-			break;
 	}
 
 	while ((jz_sfc_readl(SFC_SR) & SFC_SR_END) != SFC_SR_END)
 		;
 	jz_sfc_writel(CLR_END, SFC_SCR);
-
-	return 0;
-}
-
-static int sfc_read(unsigned int addr, unsigned int addr_plus,
-		unsigned int addr_len, unsigned int *data, unsigned int len)
-{
-	unsigned int cmd, ret;
-
-	jz_sfc_writel(STOP, SFC_TRIG);
-	jz_sfc_writel(FLUSH, SFC_TRIG);
-
-	cmd = CMD_READ;
-
-	jz_sfc_writel((len * 4), SFC_TRAN_LEN);
-
-	sfc_set_read_reg(cmd, addr, addr_plus, addr_len, 1);
-
-	ret = sfc_read_data(data, len);
-	if (ret)
-		return ret;
-	else
-		return 0;
-}
-
-static void sfc_init(void)
-{
-	unsigned int tmp;
-
-	ssi_clk_set_rate();		/* vendor: clk_set_rate(SSI, 70000000) */
-
-	tmp = THRESHOLD << THRESHOLD_OFFSET;
-	jz_sfc_writel(tmp, SFC_GLB);
-
-	tmp = CEDL | HOLDDL | WPDL;
-	jz_sfc_writel(tmp, SFC_DEV_CONF);
-
-	/* low power consumption */
-	jz_sfc_writel(0, SFC_CGE);
-}
-
-static void sfc_nor_load(unsigned int src_addr, unsigned int count,
-		unsigned int dst_addr)
-{
-	unsigned int addr_len, words_of_spl;
-
-	/* spi norflash addr len */
-	addr_len = 3;
-
-	/* count word align */
-	words_of_spl = (count + 3) / 4;
-
-	sfc_init();
-
-	sfc_read(src_addr, 0x0, addr_len, (unsigned int *)(dst_addr),
-		 words_of_spl);
-}
-
-extern void t10_spl_puts(const char *s);
-
-static u32 hdr_be32(const u8 *p)
-{
-	return ((u32)p[0] << 24) | ((u32)p[1] << 16) |
-	       ((u32)p[2] << 8) | (u32)p[3];
 }
 
 /*
- * Entry point used by board_init_f(): read the LZMA-compressed,
- * mkimage-wrapped U-Boot proper from NOR, decompress to its load
- * address and jump (no return). DRAM is already initialised.
+ * Read `bytes` (rounded up to a whole word) from NOR offset `nor_off` to
+ * `dst`. Self-contained: derives the SFC clock off MPLL and programs the
+ * controller, so it works before driver model is up. Used by the TPL to load
+ * the DRAM-resident SPL from NOR (after pll_init_params() has brought MPLL up).
  */
-void t10_spl_load_uboot(void)
+void t10_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes)
 {
-	u8 *scratch = (u8 *)T10_UBOOT_SCRATCH;
-	u32 ih_magic, ih_size, ih_load;
-	SizeT out_len;
-	int ret;
+	unsigned int words = (bytes + 3) / 4;
 
-	/* Legacy mkimage header (64 bytes, big-endian fields). */
-	sfc_nor_load(T10_UBOOT_OFFSET, T10_IH_HDR_LEN, T10_UBOOT_SCRATCH);
-	ih_magic = hdr_be32(scratch + 0);
-	ih_size  = hdr_be32(scratch + 12);
-	ih_load  = hdr_be32(scratch + 16);
-	if (ih_magic != T10_IH_MAGIC) {
-		t10_spl_puts("SPL: bad U-Boot image magic\n");
-		return;
-	}
+	t10_spl_sfc_clk_init();
 
-	/*
-	 * The header fields come off NOR - bound them before they drive a
-	 * read length / decompress destination / jump. ih_size caps the
-	 * scratch write; ih_load must land in DRAM.
-	 */
-	if (ih_size == 0 || ih_size > T10_UBOOT_MAX) {
-		t10_spl_puts("SPL: U-Boot image size out of range\n");
-		return;
-	}
-	if (ih_load < T10_DRAM_BASE ||
-	    ih_load >= T10_DRAM_BASE + T10_DRAM_MAX) {
-		t10_spl_puts("SPL: U-Boot load addr out of range\n");
-		return;
-	}
+	jz_sfc_writel(0x1f, SFC_SCR);		/* clear stale status */
+	jz_sfc_writel(STOP, SFC_TRIG);
+	jz_sfc_writel(FLUSH, SFC_TRIG);
 
-	/* Header + compressed payload into DRAM scratch. */
-	sfc_nor_load(T10_UBOOT_OFFSET, T10_IH_HDR_LEN + ih_size,
-		     T10_UBOOT_SCRATCH);
-
-	/*
-	 * The lean SPL has no heap until here; DRAM is up. This custom
-	 * SPL never calls spl_init(), so set GD_FLG_FULL_MALLOC_INIT
-	 * ourselves or malloc() stays on the tiny malloc_simple arena
-	 * and the LZMA dictionary allocation fails (SZ_ERROR_MEM).
-	 */
-	mem_malloc_init(T10_SPL_HEAP_BASE, T10_SPL_HEAP_SIZE);
-	gd->flags |= GD_FLG_FULL_MALLOC_INIT;
-
-	out_len = T10_UBOOT_MAX;
-	ret = lzmaBuffToBuffDecompress((unsigned char *)(uintptr_t)ih_load,
-				       &out_len, scratch + T10_IH_HDR_LEN,
-				       (SizeT)ih_size);
-	if (ret) {
-		char m[2] = { (char)('0' + (ret & 7)), 0 };
-		t10_spl_puts("SPL: U-Boot LZMA decompress failed, SZ_ERROR=");
-		t10_spl_puts(m);
-		t10_spl_puts("\n");
-		return;
-	}
-
-	/* Jump to the load address (== entry for a -T standalone image). */
-	((void (*)(void))(uintptr_t)ih_load)();
+	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
+	sfc_set_read_reg(CMD_READ, nor_off, 3);
+	sfc_read_data(dst, words);
 }

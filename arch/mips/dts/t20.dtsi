@@ -58,14 +58,16 @@
 	 * DDR controller (Synopsys DWC PHY - the only XBurst1 camera SoC
 	 * that is not Innophy). One compatible for every T20 SKU; the board
 	 * leaf .dts supplies the per-SKU "ingenic,sdram-params" u32 array
-	 * (21 cells = struct ingenic_t20_ddr_params, drivers/ram/ingenic/
-	 * ddr_t20.h), serialized in this order:
+	 * (26 cells = struct ingenic_t20_ddr_params, drivers/ram/ingenic/
+	 * ddr_t20.h; shared with T10), serialized in this order:
 	 *   [0..2]   SPL PLL setpoints: CPAPCR, CPMPCR, CPCCR
 	 *   [3]      total DRAM size in bytes
 	 *   [4..6]   DDRC_CFG, DDRC_MMAP0, DDRC_MMAP1
 	 *   [7..12]  DDRC_TIMING1..6
 	 *   [13..15] DWC PHY DCR, DTPR0, DTPR1
 	 *   [16..20] DDRC_REMAP1..5
+	 *   [21]     CPM_DDRCDR divider (DDR = MPLL/(cdr+1))
+	 *   [22..25] DDRC_REFCNT, DWC PHY MR0, PTR0, PTR1
 	 * bootph-all is added by the leaf's shared u-boot.dtsi.
 	 */
 	ddr: memory-controller@134f0000 {

@@ -11,10 +11,14 @@
  * different (and longer) init sequence, so this is its own driver/struct.
  *
  * The per-SKU values (geometry, clock setpoints, ddr_params_creator GOLD
- * register words) live in struct ingenic_t20_ddr_variant and are selected
- * at runtime from the devicetree via the node's compatible + the driver
- * of_match .data - no compile-time CONFIG_T20_VARIANT_*. Register map and
- * GOLD values ported verbatim from the former
+ * register words) come from the devicetree: the &ddr node carries an
+ * "ingenic,sdram-params" u32 array (struct ingenic_t20_ddr_params,
+ * serialized) under a single compatible "ingenic,t20-ddr-dwc". No
+ * compile-time CONFIG_T20_VARIANT_*, no per-SKU compatible/.data - one
+ * binding per SoC, and the board DT picks the part. This mirrors the
+ * mainline rk3328 DMC (rockchip,sdram-params) so the same driver works
+ * under OF_CONTROL and, later, OF_PLATDATA (TPL). Register map and the
+ * clock-invariant GOLD words ported verbatim from the former
  * arch/mips/mach-xburst/include/mach/t20-ddr.h.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
@@ -141,71 +145,52 @@
 #define DDR_TARGET_RATE		500000000U
 
 /*
- * Per-SKU DDR configuration. One const instance per T20 variant
- * (ddr_t20_types.c), selected at probe time from the DT node compatible
- * via the driver of_match .data. The DWC GOLD words are direct vendor
- * ddr_params_creator output; only the fields that differ between the
- * 64 MB (T20N/T20L) and 128 MB (T20X) parts are carried here, plus the
- * SPL clock setpoints.
+ * Per-SKU DDR configuration, deserialized from the &ddr node's
+ * "ingenic,sdram-params" devicetree property (a flat u32 array). The field
+ * order below IS the array order, and the struct is all-u32 so it can be
+ * filled in one shot by casting it to (u32 *) - the mainline rk3328
+ * rockchip,sdram-params idiom (dev_read_u32_array for OF_CONTROL, an
+ * fdt32 parse for the pre-DM bring-up, dtoc-baked platdata for OF_PLATDATA).
+ * The DWC GOLD words are direct vendor ddr_params_creator output; the words
+ * shared by every SKU stay as driver constants above, only the per-part
+ * values are carried here, plus the SPL PLL setpoints.
+ *
+ * [0..2] are the SPL PLL setpoints (CPAPCR/CPMPCR M/N/OD1/OD0 + the CPCCR
+ * divider), consumed by t20/pll.c via ingenic_t20_ddr_pll_setpoints()
+ * BEFORE the DDR probe: on T20 the DWC controller hangs on any pre-DDR DRAM
+ * access, so pll+DDR are brought up first, gd-free, straight from the
+ * in-image DTB. MPLL (1000) + CPCCR are the same on every T20 SKU; APLL and
+ * the 64M-vs-128M geometry/timing differ.
  */
-struct ingenic_t20_ddr_variant {
-	const char *name;		/* "T20N" - boot banner */
-	const char *chip;		/* "M14D5121632A" - log only */
-	unsigned int cpu_mhz;		/* APLL/CPU clock, for the banner */
-
-	u8 bank8;			/* 1 = 8-bank (128M), 0 = 4-bank */
-	u32 chip0_size;			/* bytes */
-
-	/*
-	 * SPL PLL setpoints: CPAPCR/CPMPCR M/N/OD1/OD0 words + the CPCCR
-	 * divider word. Consumed by t20/pll.c in SPL via
-	 * ingenic_t20_ddr_pll_setpoints() before driver model is up.
-	 * MPLL (1000) + CPCCR are the same on every T20 SKU; APLL differs.
-	 */
-	u32 apll_mnod;
-	u32 mpll_mnod;
-	u32 cpccr;
-
-	/* DDR controller GOLD values that differ per part. */
-	u32 ddrc_cfg;
-	u32 ddrc_mmap0;
-	u32 ddrc_mmap1;
-	u32 ddrc_timing[6];		/* TIMING1..6 (1/5/6 same, 2/3/4 differ) */
-
-	/* DWC PHY GOLD values that differ per part. */
-	u32 ddrp_dcr;
-	u32 ddrp_dtpr0;
-	u32 ddrp_dtpr1;
-
-	/* Address-remap table written straight to DDRC_REMAP(1..5). */
-	u32 remap[5];
+struct ingenic_t20_ddr_params {
+	u32 apll_mnod;			/* [0]  CPAPCR M/N/OD1/OD0 (CPU/APLL) */
+	u32 mpll_mnod;			/* [1]  CPMPCR M/N/OD1/OD0 (DDR/MPLL) */
+	u32 cpccr;			/* [2]  CPCCR clock-divider word */
+	u32 chip0_size;			/* [3]  total DRAM bytes */
+	u32 ddrc_cfg;			/* [4]  DDRC_CFG */
+	u32 ddrc_mmap0;			/* [5]  DDRC_MMAP0 */
+	u32 ddrc_mmap1;			/* [6]  DDRC_MMAP1 */
+	u32 ddrc_timing[6];		/* [7..12]  DDRC_TIMING1..6 */
+	u32 ddrp_dcr;			/* [13] DWC PHY DCR */
+	u32 ddrp_dtpr0;			/* [14] DWC PHY DTPR0 */
+	u32 ddrp_dtpr1;			/* [15] DWC PHY DTPR1 */
+	u32 remap[5];			/* [16..20] DDRC_REMAP1..5 */
 };
-
-struct ingenic_t20_ddr_priv {
-	const struct ingenic_t20_ddr_variant *cfg;
-	u32 ram_size;			/* total bytes */
-};
-
-/* Top-level DDR bring-up (ddr_t20.c), run once from the SPL probe. */
-int ingenic_t20_ddr_sdram_init(const struct ingenic_t20_ddr_variant *cfg);
 
 /*
- * SPL helper for t20/pll.c: find the T20 DDR node in the FDT (by trying
- * each known per-SKU compatible) and return that SKU's PLL setpoints.
- * Takes the FDT blob explicitly (gd-free) so it can run BEFORE DDR is up -
- * on T20 the DWC controller hangs on any pre-DDR DRAM access, so pll/DDR are
- * brought up first from the in-image DTB (_image_binary_end), before the
- * far standard-map gd/BSS is touched. Returns 0 on success, negative on error.
+ * Top-level DDR bring-up (ddr_t20.c), run once imperatively from
+ * board_init_f BEFORE driver model. Parses the params out of @blob (the
+ * in-image DTB) itself and brings DDR up, so the caller stays opaque to the
+ * params layout. Returns 0 on success, negative on error.
+ */
+int ingenic_t20_ddr_sdram_init(const void *blob);
+
+/*
+ * SPL helper for t20/pll.c: read the SPL PLL setpoints ([0..2] of the
+ * params array) from the T20 DDR node in @blob. Gd-free - runs before DDR
+ * is up (see above). Returns 0 on success, negative on error.
  */
 int ingenic_t20_ddr_pll_setpoints(const void *blob, u32 *apll_mnod,
 				  u32 *mpll_mnod, u32 *cpccr);
-
-/* Pre-DM, gd-free variant lookup for an imperative board_init_f DDR bring-up. */
-const struct ingenic_t20_ddr_variant *ingenic_t20_ddr_get_variant(const void *blob);
-
-/* Per-SKU variant configs (ddr_t20_types.c). */
-extern const struct ingenic_t20_ddr_variant ingenic_t20_ddr_variant_t20n;
-extern const struct ingenic_t20_ddr_variant ingenic_t20_ddr_variant_t20l;
-extern const struct ingenic_t20_ddr_variant ingenic_t20_ddr_variant_t20x;
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T20_H */

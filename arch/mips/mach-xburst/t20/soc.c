@@ -49,10 +49,12 @@ void t20_spl_nor_read_noclk(unsigned int nor_off, unsigned int *dst,
 			    unsigned int bytes);
 void t20_spl_self_complete(unsigned int image_end);
 
-/* ddr_t20.c: imperative DDR bring-up before driver model (cache-as-RAM). */
-struct ingenic_t20_ddr_variant;
-const struct ingenic_t20_ddr_variant *ingenic_t20_ddr_get_variant(const void *blob);
-int ingenic_t20_ddr_sdram_init(const struct ingenic_t20_ddr_variant *cfg);
+/*
+ * ddr_t20.c: imperative DDR bring-up before driver model (cache-as-RAM). It
+ * parses the &ddr node's "ingenic,sdram-params" array out of @blob itself,
+ * so soc.c stays opaque to the params layout.
+ */
+int ingenic_t20_ddr_sdram_init(const void *blob);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -234,7 +236,7 @@ void board_init_f(ulong dummy)
 
 	pll_init(blob);
 
-	ingenic_t20_ddr_sdram_init(ingenic_t20_ddr_get_variant(blob));
+	ingenic_t20_ddr_sdram_init(blob);
 
 #ifndef CONFIG_SPL_T20_USB_BOOT
 	/*

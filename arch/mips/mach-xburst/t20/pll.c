@@ -7,12 +7,12 @@
  * driver in U-Boot proper). T20 uses the T31/T23-style M/N/OD1/OD0 PLL
  * encoding (PLLM[31:20] PLLN[19:14] PLLOD1[13:11] PLLOD0[10:8], enable
  * bit0, PLL_ON bit3 - NO PLLRG). The per-SKU APLL/MPLL setpoints (exact
- * vendor CONFIG_SYS_*_MNOD words, verbatim) and the CPCCR divider word
- * live in the DDR variant struct (drivers/ram/ingenic/ddr_t20_types.c)
- * and are selected at runtime by matching the &ddr node's per-SKU
- * compatible (ingenic,t20<sku>-ddr-dwc) - the same of_match table the RAM
- * driver uses. soc.c calls fdtdec_setup() before pll_init() so the FDT
- * blob is available here, before driver model is up.
+ * vendor CONFIG_SYS_*_MNOD words, verbatim) and the CPCCR divider word are
+ * elements [0..2] of the &ddr node's "ingenic,sdram-params" devicetree
+ * array, read here via ingenic_t20_ddr_pll_setpoints() before driver model
+ * is up. soc.c parses the appended DTB gd-free (T20's DWC controller hangs
+ * on any pre-DDR DRAM access, so pll+DDR are brought up first, from the
+ * in-image DTB) and passes that blob in.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */

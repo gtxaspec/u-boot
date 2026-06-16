@@ -187,71 +187,13 @@ static void sfc_raw_read(unsigned int nor_off, unsigned int *dst,
 
 /*
  * Read `bytes` (rounded up to a whole word) from NOR offset `nor_off` to
- * `dst`. Self-contained: derives the SFC clock and programs the
- * controller, so it works before driver model is up. `dst` should be a
- * KSEG1 (uncached) pointer when the point is to populate DRAM without
- * disturbing the cache (the cache-as-RAM reload).
- *
- * Derives the SFC clock off MPLL, so it MUST only be called after
- * pll_init() - use t20_spl_nor_read_noclk() before the PLLs are up.
+ * `dst`. Self-contained: derives the SFC clock off MPLL and programs the
+ * controller, so it works before driver model is up. Used by the TPL to load
+ * the DRAM-resident SPL from NOR (after pll_init_params() has brought MPLL up).
  */
 void t20_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 		      unsigned int bytes)
 {
 	t20_spl_sfc_clk_init();
 	sfc_raw_read(nor_off, dst, bytes);
-}
-
-/*
- * Pre-PLL NOR read: same as t20_spl_nor_read() but does NOT touch the SFC
- * clock. ssi_clk_set_rate() would point the SFC cgu at MPLL, which is not
- * up until pll_init() - selecting a dead PLL stalls the controller and the
- * read polls forever. The bootrom just used this controller+clock to load
- * the SPL head, so its (EXTAL/APLL-derived) SFC clock is still live: reuse
- * it verbatim. Used to stage the appended DTB so get_variant() can pick the
- * per-SKU DDR setpoints before pll_init()/sdram_init().
- */
-void t20_spl_nor_read_noclk(unsigned int nor_off, unsigned int *dst,
-			    unsigned int bytes)
-{
-	sfc_raw_read(nor_off, dst, bytes);
-}
-
-/*
- * The T20-generation mask ROM loads only the first T20_ROM_SPL_LOAD
- * (0x6800) bytes of the SPL payload from NOR - sized for the 32 KB cache-
- * as-RAM - regardless of the header length. The old sub-22 KB imperative
- * SPL fit; the DM-in-SPL image (with the appended DTB at its very end)
- * does not. Complete the load ourselves: read the missing tail from NOR
- * into CACHED memory at its link address.
- *
- * The bootrom's own SFC clock is still programmed (it just loaded the head
- * with it), so no clock change is needed - and must not be made, since
- * pll_init() has not run yet. Must run BEFORE anything touches the missing
- * region (fdtdec_setup reads the appended DTB). This function and
- * everything it calls live in the loaded head (mach objects link first).
- */
-void t20_spl_self_complete(unsigned int image_end)
-{
-	unsigned int loaded = CONFIG_SPL_TEXT_BASE + T20_ROM_SPL_LOAD;
-	unsigned int words;
-
-	if (image_end <= loaded)
-		return;
-
-	words = (image_end - loaded + 3) / 4;
-
-	/*
-	 * Do NOT reprogram GLB/DEV_CONF or the clock here: the bootrom just
-	 * used this controller+clock to load the head. Just clear stale
-	 * status (the bootrom does the same before each transfer) and go.
-	 */
-	jz_sfc_writel(0x1f, SFC_SCR);
-
-	jz_sfc_writel(STOP, SFC_TRIG);
-	jz_sfc_writel(FLUSH, SFC_TRIG);
-
-	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
-	sfc_set_read_reg(CMD_READ, T20_ROM_SPL_LOAD, 3);
-	sfc_read_data((unsigned int *)loaded, words);
 }

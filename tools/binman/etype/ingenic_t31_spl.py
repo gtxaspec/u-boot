@@ -165,6 +165,10 @@ class Entry_ingenic_t31_spl(Entry_blob):
             self._node, 'ingenic,min-spl-length', 0)
 
     def GetDefaultFilename(self):
+        # Honour an explicit `filename` property (e.g. to header a TPL image,
+        # tpl/u-boot-tpl.bin); fall back to the SPL when none is given.
+        if self._filename and self._filename != self.etype:
+            return self._filename
         return 'spl/u-boot-spl.bin'
 
     def ReadBlobContents(self):

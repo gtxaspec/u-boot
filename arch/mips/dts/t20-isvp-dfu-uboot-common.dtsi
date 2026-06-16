@@ -8,10 +8,13 @@
  * flash image here is not used in the USB-boot flow; it is kept for a
  * sensible `make` artifact.
  *
- * The USB-boot SPL never reads NOR (U-Boot proper arrives over USB), so
- * only the DDR controller + its clock tree need to survive into the SPL
- * devicetree for the UCLASS_RAM probe; without these bootph-all tags the
- * DDR node is stripped and the SPL hangs before DDR is up.
+ * USB-boot is a TPL chain: the mask ROM uploads the cache-as-RAM TPL, whose
+ * only DM device is the DDR controller (its probe brings up PLL + DDR), then
+ * the TPL returns into the ROM's USB loop and the ROM uploads U-Boot proper to
+ * DRAM. So &ddr is the only node tagged for the TPL phase (bootph-all);
+ * everything else is bootph-pre-ram + bootph-some-ram (present pre-relocation
+ * in U-Boot proper, absent from the minimal TPL). See the matching note in
+ * t20-isvp-uboot-common.dtsi.
  */
 
 / {
@@ -47,7 +50,8 @@
 	};
 };
 
-&exclk { bootph-all; };
-&rtclk { bootph-all; };
-&cgu { bootph-all; };
 &ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
+
+&exclk { bootph-pre-ram; bootph-some-ram; };
+&rtclk { bootph-pre-ram; bootph-some-ram; };
+&cgu { bootph-pre-ram; bootph-some-ram; };

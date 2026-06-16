@@ -15,39 +15,22 @@ SECTIONS
 	.text : {
 		__text_start = .;
 		/*
-		 * T20/T30 NOR boot: the gen-1 mask ROM loads only the first
-		 * 0x6800 bytes of the SPL, and its L2 cannot be software-
-		 * initialised (T30) / only the 32 KB L1 is reliably usable, so
-		 * the cache-as-RAM budget is tight. Front-load the whole
-		 * pre-DRAM bring-up path - start.S, the SoC SPL (console/SFC/
-		 * self_complete), the DDR driver, the fdt code fdtdec_setup()/
-		 * pll_setpoints() need, and the mem/str helpers that path calls
-		 * (memset for the BSS clear before self_complete(), memcpy/strlen
-		 * for fdtdec) - into the ROM-loaded, L1-resident region. The
-		 * heavy DM/SFC/LZMA code follows and runs DRAM-resident after
-		 * to_dram()/flush_cache(). start.o stays first so its boot header
-		 * is at image offset 0. (T21/T23 don't need this - their natural
-		 * link order already lands the bring-up path in the head.)
+		 * start.o must link first so its boot header is at image offset 0
+		 * (the mask ROM / TPL jump to base+0x800). T20 is a TPL chain now -
+		 * the DRAM-resident SPL has no ROM load cap and the TPL is small
+		 * enough to load whole - so it needs nothing more than that.
+		 *
+		 * T30 is still a single-stage cache-as-RAM SPL: the gen-1 mask ROM
+		 * loads only the first 0x6800 bytes and its L2 cannot be software-
+		 * initialised, so its whole pre-DRAM bring-up path (start.S, the SoC
+		 * SPL, the DDR driver, the fdt code + mem/str helpers) must be
+		 * front-loaded into the ROM-loaded, L1-resident head; the heavy
+		 * DM/SFC/LZMA tail follows and runs DRAM-resident after to_dram().
+		 * (T21/T23 - and now T20 - don't need this: start.o links first
+		 * naturally and the rest runs from DRAM.)
 		 */
 #if defined(CONFIG_SOC_T20) || defined(CONFIG_SOC_T30)
 		*mach-xburst/start.o(.text*)
-#ifdef CONFIG_SOC_T20
-		/*
-		 * T20's Synopsys-DWC DDR controller HANGS on any access to the
-		 * un-loaded image tail before DDR is up (T30's Innophy core only
-		 * returns garbage, so T30 needs only its .text front-loaded). So
-		 * for T20 the pre-DDR path's .rodata - the DDR variant tables and
-		 * per-SKU compatible strings (ddr_t20*), the pll setpoints, the
-		 * console marker strings, and the fdt/libfdt read-only data
-		 * get_variant() walks - must ALSO live in the ROM-loaded head,
-		 * not after all .text at 0x8000b780 (well past the 0x6800 load).
-		 */
-		*mach-xburst/t20*(.text* .rodata*)
-		*ram/ingenic*(.text* .rodata*)
-		*lib/fdtdec.o(.text* .rodata*)
-		*lib/libfdt*(.text* .rodata*)
-		*lib/string.o(.text*)
-#endif
 #ifdef CONFIG_SOC_T30
 		*mach-xburst/t30*(.text*)
 		*ram/ingenic*(.text*)
@@ -85,6 +68,7 @@ SECTIONS
 
 	_image_binary_end = .;
 
+#if CONFIG_IS_ENABLED(SEPARATE_BSS)
 	.bss (NOLOAD) : {
 		__bss_start = .;
 		*(.bss*)
@@ -93,6 +77,24 @@ SECTIONS
 		. = ALIGN(4);
 		__bss_end = .;
 	} > .bss_mem
+#else
+	/*
+	 * No separate BSS region: place BSS in the image address space (it is
+	 * still NOLOAD - no file bytes). Used by the cache-as-RAM TPL, whose BSS
+	 * must live in the mask-ROM cache window, not the far DRAM .bss_mem. Safe
+	 * because that phase has no appended devicetree (OF_PLATDATA) to collide
+	 * with at _image_binary_end.
+	 */
+	.bss (NOLOAD) : {
+		. = ALIGN(8);
+		__bss_start = .;
+		*(.bss*)
+		*(.sbss*)
+		*(COMMON)
+		. = ALIGN(4);
+		__bss_end = .;
+	} > .spl_mem
+#endif
 
 	/* These mark the ABI of U-Boot for debuggers. */
 	.mdebug.abi32 : {

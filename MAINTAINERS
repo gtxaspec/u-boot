@@ -1459,6 +1459,16 @@ F:	include/dt-bindings/mscc/
 F:	drivers/pinctrl/mscc/
 F:	drivers/net/mscc_eswitch/
 
+MIPS INGENIC XBURST
+M:	gtxaspec <gtxent@gmail.com>
+S:	Maintained
+F:	arch/mips/dts/*isvp*
+F:	arch/mips/mach-xburst/
+F:	board/ingenic/
+F:	configs/isvp_*_defconfig
+F:	drivers/ram/ingenic/
+F:	include/configs/isvp-*.h
+
 MIPS JZ4780
 M:	Ezequiel Garcia <ezequiel@collabora.com>
 S:	Maintained

@@ -55,13 +55,24 @@
 	};
 
 	/*
-	 * DDR2/DDR3 controller + Innophy PHY. The per-SKU compatible
-	 * (ingenic,t31<sku>-ddr-innophy) is set by the leaf .dts and
-	 * selects the variant table in drivers/ram/ingenic/ddr_t31.c
-	 * (of_match .data). bootph-all is added by the leaf's shared
-	 * U-Boot overlay so the node survives into the SPL devicetree.
+	 * DDR2/DDR3 controller + Innophy PHY. One compatible for every SKU
+	 * (the shared drivers/ram/ingenic/ddr_t31.c also serves T23/T21/T30);
+	 * the board leaf .dts supplies the per-SKU "ingenic,sdram-params" u32
+	 * array (struct ingenic_t31_ddr_params, drivers/ram/ingenic/ddr_t31.h),
+	 * serialized in this order:
+	 *   [0..2]   SPL PLL setpoints: CPAPCR, CPMPCR, CPCCR
+	 *   [3]      CPM_DDRCDR divider (0 = MPLL/2)
+	 *   [4]      DDR type (0 = DDR2, 1 = DDR3)
+	 *   [5..10]  row, col, bank8, cs0, cs1, dw32
+	 *   [11]     total DRAM size in bytes
+	 *   [12..16] DDRC_CFG, CTRL, MMAP0, MMAP1, REFCNT
+	 *   [17..22] DDRC_TIMING1..6
+	 *   [23]     MR0
+	 * bootph-all is added by the leaf's shared U-Boot overlay so the node
+	 * survives into the SPL devicetree.
 	 */
 	ddr: memory-controller@134f0000 {
+		compatible = "ingenic,t31-ddr-innophy";
 		reg = <0x134f0000 0x1000>;
 	};
 

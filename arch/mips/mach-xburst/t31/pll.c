@@ -4,28 +4,20 @@
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  *
- * T31 has three PLLs: APLL (CPU), MPLL (DDR/peripheral) and VPLL.
- * The CPCCR register selects clock sources and the core/L2/AHB/APB
- * dividers. The per-SKU APLL/MPLL setpoints and the CPCCR divider word
- * live in the DDR variant struct (drivers/ram/ingenic/ddr_t31_types.c)
- * and are selected at runtime from the DT node's compatible. soc.c calls
- * fdtdec_setup() before pll_init() so the FDT blob is available here,
- * before driver model is up. VPLL is fixed at 1200 MHz on every variant.
+ * T31 has three PLLs: APLL (CPU), MPLL (DDR/peripheral) and VPLL. The CPCCR
+ * register selects the clock sources and the core/L2/AHB/APB dividers. The
+ * per-SKU APLL/MPLL setpoints and the CPCCR divider word are elements [0..2] of
+ * the &ddr node's "ingenic,sdram-params" devicetree array; the UCLASS_RAM probe
+ * (drivers/ram/ingenic/ddr_t31.c) reads them and calls pll_init_params() before
+ * bringing DDR up, in the first loader stage. VPLL is fixed at 1200 MHz on
+ * every variant. Uses the T31/T23-style M/N/OD1/OD0 PLL encoding.
  */
 
 #include <asm/io.h>
-#include <hang.h>
 #include <mach/t31.h>
 
 /* CPVPCR encoding: (M<<20)|(N<<14)|(OD1<<11)|(OD0<<8). VPLL 1200 = 12*100. */
 #define T31_VPLL_MNOD	((100 << 20) | (1 << 14) | (2 << 11) | (1 << 8))
-
-/*
- * SPL helper from the T31 DDR driver: find the DDR node in the FDT (by
- * its per-SKU compatible) and return that SKU's APLL/MPLL setpoints and
- * the CPCCR divider word. Runs before driver model is up.
- */
-int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr);
 
 static void cpm_writel(u32 val, unsigned int off)
 {
@@ -61,13 +53,12 @@ static void cpccr_init(u32 cpccr_cfg)
 	cpm_writel(cpccr, CPM_CPCCR);
 }
 
-void pll_init(void)
+/*
+ * Bring up APLL/MPLL/VPLL + the CPCCR dividers from explicit setpoints. Called
+ * from the UCLASS_RAM probe (DT params) before DDR is brought up.
+ */
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr)
 {
-	u32 apll, mpll, cpccr;
-
-	if (ingenic_t31_ddr_pll_setpoints(&apll, &mpll, &cpccr))
-		hang();
-
 	pll_set(CPM_CPAPCR, apll);
 	pll_set(CPM_CPMPCR, mpll);
 	pll_set(CPM_CPVPCR, T31_VPLL_MNOD);

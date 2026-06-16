@@ -21,12 +21,14 @@
 #define LOG_CATEGORY UCLASS_RAM
 
 #include <dm.h>
+#include <dt-structs.h>
 #include <log.h>
 #include <ram.h>
 #include <fdtdec.h>
 #include <dm/device_compat.h>
 #include <linux/delay.h>
 #include <linux/libfdt.h>
+#include <linux/kernel.h>
 #include <linux/types.h>
 #include <asm/io.h>
 #include <asm/global_data.h>
@@ -69,7 +71,7 @@ static void reset_dll(void)
  * if it left the source on APLL the cdr=1 divider would overclock the
  * DDR and randomly corrupt memory.
  */
-static void ddr_clk_set_rate(const struct ingenic_t31_ddr_variant *cfg)
+static void ddr_clk_set_rate(const struct ingenic_t31_ddr_params *cfg)
 {
 	u32 cdr = cfg->ddr_cdr ? cfg->ddr_cdr : 1;	/* 0 = default MPLL/2 */
 	u32 regval = cpm_readl(CPM_DDRCDR);
@@ -112,7 +114,7 @@ static void remap_swap(int a, int b)
 #undef MASK_OF
 }
 
-static void mem_remap(const struct ingenic_t31_ddr_variant *cfg)
+static void mem_remap(const struct ingenic_t31_ddr_params *cfg)
 {
 	u32 start = 0, num = 0;
 	int row, col, dw32, bank8, cs0, cs1;
@@ -139,7 +141,7 @@ static void mem_remap(const struct ingenic_t31_ddr_variant *cfg)
 		remap_swap(0 + num - 1, start + num - 1);
 }
 
-static void ddr_controller_init(const struct ingenic_t31_ddr_variant *cfg)
+static void ddr_controller_init(const struct ingenic_t31_ddr_params *cfg)
 {
 	ddr_writel(DDRC_CTRL_CKE | DDRC_CTRL_ALH, DDRC_CTRL);
 	ddr_writel(0, DDRC_CTRL);
@@ -176,7 +178,7 @@ static void phy_calibration(void)
 	phy_writel(0xa0, INNO_TRAINING_CTRL);
 }
 
-static void ddr_inno_phy_init(const struct ingenic_t31_ddr_variant *cfg)
+static void ddr_inno_phy_init(const struct ingenic_t31_ddr_params *cfg)
 {
 	bool ddr3 = (cfg->type == T31_DDR_TYPE_DDR3);
 	u32 reg = 0;
@@ -326,7 +328,7 @@ void ingenic_t31_ddr_set_done(void)
 }
 
 /* Top-level DDR2/DDR3 init (innophy path of the vendor sdram_init()). */
-int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg)
+static int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_params *cfg)
 {
 	/*
 	 * One-shot: DDR may be brought up imperatively from board_init_f
@@ -360,101 +362,123 @@ int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg)
 }
 
 /*
- * SPL helper for t31/pll.c: find the T31 DDR node in the FDT by trying
- * each known per-SKU compatible, and hand back that SKU's PLL setpoints.
- * Shares the variant table below; runs before driver model is up.
+ * DT compatible for the Innophy DDR node - one binding for every XBurst1
+ * legacy-DDRC SoC (T31/T23/T21/T30); the board leaf .dts supplies the per-SKU
+ * "ingenic,sdram-params" u32 array. Shared by the pre-DM FDT read below and the
+ * driver of_match - no per-SKU compatible, no of_match .data variant table.
  */
-static const struct {
-	const char *compatible;
-	const struct ingenic_t31_ddr_variant *cfg;
-} t31_ddr_variants[] = {
-	{ "ingenic,t31x-ddr-innophy",  &ingenic_t31_ddr_variant_t31x   },
-	{ "ingenic,t31n-ddr-innophy",  &ingenic_t31_ddr_variant_t31n   },
-	{ "ingenic,t31l-ddr-innophy",  &ingenic_t31_ddr_variant_t31l   },
-	{ "ingenic,t31lc-ddr-innophy", &ingenic_t31_ddr_variant_t31lc  },
-	{ "ingenic,t31al-ddr-innophy", &ingenic_t31_ddr_variant_t31al  },
-	{ "ingenic,t31a-ddr-innophy",  &ingenic_t31_ddr_variant_t31a   },
-	{ "ingenic,c100-ddr-innophy",  &ingenic_t31_ddr_variant_c100   },
-	{ "ingenic,t23n-ddr-innophy",  &ingenic_t31_ddr_variant_t23n   },
-	{ "ingenic,t23zn-ddr-innophy", &ingenic_t31_ddr_variant_t23n   },
-	{ "ingenic,t23dl-ddr-innophy", &ingenic_t31_ddr_variant_t23dl  },
-	{ "ingenic,t23nhp-ddr-innophy", &ingenic_t31_ddr_variant_t23n_hp },
-	{ "ingenic,t23nlp-ddr-innophy", &ingenic_t31_ddr_variant_t23n_lp },
-	{ "ingenic,t23x-ddr-innophy",  &ingenic_t31_ddr_variant_t23x   },
-	{ "ingenic,t23dn-ddr-innophy", &ingenic_t31_ddr_variant_t23dn  },
-	{ "ingenic,t21n-ddr-innophy",  &ingenic_t31_ddr_variant_t21n   },
-	{ "ingenic,t21hp-ddr-innophy", &ingenic_t31_ddr_variant_t21hp  },
-	{ "ingenic,t30n-ddr-innophy",  &ingenic_t31_ddr_variant_t30n   },
-	{ "ingenic,t30l-ddr-innophy",  &ingenic_t31_ddr_variant_t30l   },
-	{ "ingenic,t30x-ddr-innophy",  &ingenic_t31_ddr_variant_t30x   },
-	{ "ingenic,t30a-ddr-innophy",  &ingenic_t31_ddr_variant_t30x   },
-};
+#define INGENIC_T31_DDR_COMPATIBLE	"ingenic,t31-ddr-innophy"
 
-int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr)
+/*
+ * Read the per-SKU params from the &ddr node's "ingenic,sdram-params" array in
+ * the live FDT, before driver model is up. The struct is all-u32 and the
+ * property order IS the field order, so it deserializes in one shot.
+ */
+static int ddr_params_from_fdt(struct ingenic_t31_ddr_params *out)
 {
 	const void *blob = gd->fdt_blob;
-	int node, i;
+	int node;
 
 	if (!blob)
 		return -ENODEV;
 
-	for (i = 0; i < ARRAY_SIZE(t31_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     t31_ddr_variants[i].compatible);
-		if (node >= 0) {
-			*apll_mnod = t31_ddr_variants[i].cfg->apll_mnod;
-			*mpll_mnod = t31_ddr_variants[i].cfg->mpll_mnod;
-			*cpccr = t31_ddr_variants[i].cfg->cpccr;
-			return 0;
-		}
-	}
-	return -ENODEV;
+	node = fdt_node_offset_by_compatible(blob, -1,
+					     INGENIC_T31_DDR_COMPATIBLE);
+	if (node < 0)
+		return -ENODEV;
+
+	return fdtdec_get_int_array(blob, node, "ingenic,sdram-params",
+				    (u32 *)out, sizeof(*out) / sizeof(u32));
 }
 
 /*
- * Pre-DM variant lookup (same FDT match as pll_setpoints): hand back the
- * variant struct for the DDR node's per-SKU compatible so board_init_f can
- * bring DRAM up imperatively before driver model is up.
+ * Imperative pre-DM bring-up for the small-cache SoCs (T23): read the params
+ * from the FDT, set the PLLs, bring DDR up. T23's 80 KB cache-as-RAM cannot run
+ * the DM scan before DRAM is alive, so it calls this from board_init_f before
+ * spl_init(); the later UCLASS_RAM probe then finds ddr_done set and only
+ * records the size.
  */
-const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void)
+int ingenic_t31_ddr_bringup_from_fdt(void)
 {
-	const void *blob = gd->fdt_blob;
-	int node, i;
+	struct ingenic_t31_ddr_params p;
+	int ret;
 
-	if (!blob)
-		return NULL;
+	ret = ddr_params_from_fdt(&p);
+	if (ret)
+		return ret;
 
-	for (i = 0; i < ARRAY_SIZE(t31_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     t31_ddr_variants[i].compatible);
-		if (node >= 0)
-			return t31_ddr_variants[i].cfg;
-	}
-	return NULL;
+	pll_init_params(p.apll_mnod, p.mpll_mnod, p.cpccr);
+	return ingenic_t31_ddr_sdram_init(&p);
 }
 
 /* ------------------------------------------------------------------
- * UCLASS_RAM driver. SPL probe brings DRAM up; U-Boot-proper probe just
- * records the size (DRAM is already alive). The per-SKU variant struct
- * comes from of_match .data (the node's compatible IS the selector).
+ * UCLASS_RAM driver. The per-SKU params come from the &ddr node's
+ * "ingenic,sdram-params" array, read into platdata by of_to_plat - the
+ * mainline rk3328 DMC shape, so the same driver works under OF_CONTROL and, in
+ * the capped SoCs' TPL, OF_PLATDATA. DDR is brought up in the first loader
+ * stage (the TPL on the capped SoCs, the SPL on the uncapped T31); the later
+ * probe just records the size. T23 brings DDR up imperatively before the DM
+ * scan, so by the time its probe runs ddr_done is set and it only records size.
  * ------------------------------------------------------------------ */
+
+struct ingenic_t31_ddr_plat {
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	struct dtd_ingenic_t31_ddr_innophy dtplat;
+#else
+	struct ingenic_t31_ddr_params params;
+#endif
+};
+
+struct ingenic_t31_ddr_priv {
+	u32 ram_size;			/* total bytes, for ram_get_info() */
+};
+
+static int ingenic_t31_ddr_of_to_plat(struct udevice *dev)
+{
+#if CONFIG_IS_ENABLED(OF_REAL)
+	struct ingenic_t31_ddr_plat *plat = dev_get_plat(dev);
+	int ret;
+
+	ret = dev_read_u32_array(dev, "ingenic,sdram-params",
+				 (u32 *)&plat->params,
+				 sizeof(plat->params) / sizeof(u32));
+	if (ret) {
+		dev_err(dev, "Cannot read ingenic,sdram-params %d\n", ret);
+		return ret;
+	}
+#endif
+	return 0;
+}
 
 static int ingenic_t31_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_t31_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_t31_ddr_variant *v;
+	struct ingenic_t31_ddr_plat *plat = dev_get_plat(dev);
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	const struct ingenic_t31_ddr_params *params =
+		(const struct ingenic_t31_ddr_params *)
+			plat->dtplat.ingenic_sdram_params;
+#else
+	const struct ingenic_t31_ddr_params *params = &plat->params;
+#endif
 
-	v = (const struct ingenic_t31_ddr_variant *)dev_get_driver_data(dev);
-	if (!v) {
-		dev_err(dev, "no variant data for compatible\n");
-		return -ENODEV;
+	/*
+	 * Bring DDR up in the first loader stage: the TPL on the capped SoCs
+	 * (CONFIG_TPL_BUILD), the SPL on the uncapped T31 (an XPL build with no
+	 * TPL). The ddr_done guard makes this a no-op on the SPL probe of a
+	 * capped SoC (its TPL already did it) and on T23 (imperative pre-DM
+	 * bring-up); U-Boot proper just records the size.
+	 */
+#if defined(CONFIG_TPL_BUILD) || \
+	(defined(CONFIG_XPL_BUILD) && !defined(CONFIG_TPL))
+	if (!ddr_done) {
+		pll_init_params(params->apll_mnod, params->mpll_mnod,
+				params->cpccr);
+		ingenic_t31_ddr_sdram_init(params);
 	}
-	p->cfg = v;
-	p->ram_size = v->chip0_size;
+#endif
 
-	if (IS_ENABLED(CONFIG_XPL_BUILD))
-		return ingenic_t31_ddr_sdram_init(v);
-
+	p->ram_size = params->chip0_size;
 	return 0;
 }
 
@@ -471,63 +495,26 @@ static const struct ram_ops ingenic_t31_ddr_ops = {
 	.get_info = ingenic_t31_ddr_get_info,
 };
 
-/*
- * Per-SKU compatible + .data = variant struct (the upstream DM idiom for
- * per-variant data - the node's compatible selects the SKU; no
- * ingenic,variant string, no Kconfig variant).
- */
 static const struct udevice_id ingenic_t31_ddr_ids[] = {
-	{ .compatible = "ingenic,t31x-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31x },
-	{ .compatible = "ingenic,t31n-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31n },
-	{ .compatible = "ingenic,t31l-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31l },
-	{ .compatible = "ingenic,t31lc-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31lc },
-	{ .compatible = "ingenic,t31al-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31al },
-	{ .compatible = "ingenic,t31a-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t31a },
-	{ .compatible = "ingenic,c100-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_c100 },
-	/* T23: same XBurst1 legacy DDRC + Innophy DDR2 IP. */
-	{ .compatible = "ingenic,t23n-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23n },
-	{ .compatible = "ingenic,t23zn-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23n },
-	{ .compatible = "ingenic,t23dl-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23dl },
-	{ .compatible = "ingenic,t23nhp-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23n_hp },
-	{ .compatible = "ingenic,t23nlp-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23n_lp },
-	{ .compatible = "ingenic,t23x-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23x },
-	{ .compatible = "ingenic,t23dn-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t23dn },
-	/* T21: same IP again; two clock profiles of the 64 MB part. */
-	{ .compatible = "ingenic,t21n-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t21n },
-	{ .compatible = "ingenic,t21hp-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t21hp },
-	/* T30: same IP; T30A is param-identical to T30X. */
-	{ .compatible = "ingenic,t30n-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t30n },
-	{ .compatible = "ingenic,t30l-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t30l },
-	{ .compatible = "ingenic,t30x-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t30x },
-	{ .compatible = "ingenic,t30a-ddr-innophy",
-	  .data = (ulong)&ingenic_t31_ddr_variant_t30x },
+	{ .compatible = INGENIC_T31_DDR_COMPATIBLE },
 	{ }
 };
 
-U_BOOT_DRIVER(ingenic_t31_ddr) = {
-	.name		= "ingenic_t31_ddr",
+/*
+ * Name the driver after its compatible ("ingenic,t31-ddr-innophy" ->
+ * "ingenic_t31_ddr_innophy"): dtoc derives a node's TPL driver name from its
+ * compatible and binds by that name, and the generated platdata struct is
+ * dtd_ingenic_t31_ddr_innophy (see struct ingenic_t31_ddr_plat). A mismatched
+ * name would leave the capped SoCs' TPL DDR device unbound (UCLASS_RAM probe
+ * -ENODEV).
+ */
+U_BOOT_DRIVER(ingenic_t31_ddr_innophy) = {
+	.name		= "ingenic_t31_ddr_innophy",
 	.id		= UCLASS_RAM,
 	.of_match	= ingenic_t31_ddr_ids,
+	.of_to_plat	= ingenic_t31_ddr_of_to_plat,
 	.ops		= &ingenic_t31_ddr_ops,
 	.probe		= ingenic_t31_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_t31_ddr_priv),
+	.plat_auto	= sizeof(struct ingenic_t31_ddr_plat),
 };

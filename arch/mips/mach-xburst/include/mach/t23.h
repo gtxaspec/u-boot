@@ -13,6 +13,8 @@
 #ifndef __T23_H__
 #define __T23_H__
 
+#include <linux/types.h>
+
 /* APB bus peripherals */
 #define CPM_BASE	0xb0000000
 #define INTC_BASE	0xb0001000
@@ -136,5 +138,12 @@
 #define GPIO_PXPAT0(n)	(0x40 + (n) * 0x100)
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
+
+/*
+ * SPL clock helper. pll_init_params() sets APLL/MPLL + the CPCCR dividers from
+ * the per-SKU setpoints; T23's imperative DDR bring-up calls it before DRAM is
+ * up. (T23 has no VPLL.)
+ */
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr);
 
 #endif /* __T23_H__ */

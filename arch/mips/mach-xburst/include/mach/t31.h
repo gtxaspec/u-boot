@@ -134,4 +134,26 @@
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
+#ifndef __ASSEMBLY__
+#include <linux/types.h>
+
+/*
+ * SPL bring-up helpers, defined across t31/{pll,serial,sfc}.c and shared by
+ * t31/soc.c and the DDR driver (drivers/ram/ingenic/ddr_t31.c). Declared here
+ * so the definitions are prototype-checked rather than re-declared extern in
+ * each user. pll_init_params() sets APLL/MPLL/VPLL + the CPCCR dividers from
+ * the per-SKU setpoints (the UCLASS_RAM probe feeds it the DT params).
+ *
+ * Guarded: the shared XBurst1 start.S includes this header (the default
+ * #else branch) for the register defines, so the C declarations must not
+ * reach the assembler.
+ */
+void clk_ungate_uart(unsigned int idx);
+void pll_init_params(u32 apll, u32 mpll, u32 cpccr);
+void t31_spl_serial_init(void);
+void t31_spl_putc(char c);
+void t31_spl_puts(const char *s);
+void t31_spl_sfc_clk_init(void);
+#endif /* __ASSEMBLY__ */
+
 #endif /* __T31_H__ */

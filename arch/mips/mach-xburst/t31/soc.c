@@ -3,11 +3,12 @@
  * Ingenic T31 SoC SPL bring-up
  *
  * The SPL runs from on-chip SRAM (TCSM, measured >=128 KB via the
- * bootrom dense read/write probe). It brings up a minimal console,
- * configures the PLLs and inits DDR (hand-rolled XBurst1 sdram_init),
- * then brings driver model up and hands U-Boot loading to the standard
- * SPL_SPI framework: board_init_r() reads U-Boot proper from SPI-NOR
- * via the DM SFC driver, LZMA-decompresses it and jumps. Full U-Boot
+ * bootrom dense read/write probe). It brings up a minimal console, then
+ * driver model, whose UCLASS_RAM probe sets the PLLs and brings DDR up from
+ * the per-SKU "ingenic,sdram-params" DT array (T31 is the uncapped SoC, so
+ * this single SPL is the first loader stage). It then hands U-Boot loading to
+ * the standard SPL_SPI framework: board_init_r() reads U-Boot proper from
+ * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps. Full U-Boot
  * uses driver model.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
@@ -26,13 +27,6 @@
 #include <mach/t31.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-void pll_init(void);
-void clk_ungate_uart(unsigned int idx);
-void t31_spl_serial_init(void);
-void t31_spl_puts(const char *s);
-void t31_spl_putc(char c);
-void t31_spl_sfc_clk_init(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -109,21 +103,20 @@ void board_init_f(ulong dummy)
 	t31_spl_serial_init();
 
 	/*
-	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
-	 * so pll_init() can read the per-SKU PLL setpoints from the DDR node
-	 * before driver model comes up.
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL) so
+	 * the DM scan can bind devices and the UCLASS_RAM probe can read the
+	 * per-SKU "ingenic,sdram-params" array from the &ddr node.
 	 */
 	if (fdtdec_setup())
 		hang();
 
-	pll_init();
-
 	/*
-	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
-	 * probe runs sdram_init() to bring up DDR - replaces the old direct
-	 * sdram_init() call, mirroring the XBurst2 A1/T40/T41 flow. spl_init
-	 * here needs the enlarged SPL-f heap (SYS_MALLOC_F_LEN) for the DM
-	 * scan, since the DRAM malloc is not up until board_init_r.
+	 * Bring driver model up and probe the UCLASS_RAM driver. T31 is the
+	 * uncapped SoC, so this single SPL is the first loader stage: its probe
+	 * sets the PLLs and brings DDR up from the DT params
+	 * (drivers/ram/ingenic/ddr_t31.c), then records the size. spl_init here
+	 * needs the enlarged SPL-f heap (SYS_MALLOC_F_LEN) for the DM scan, since
+	 * the DRAM malloc is not up until board_init_r.
 	 */
 	if (spl_init())
 		hang();

@@ -7,8 +7,8 @@
  * pre-DDR budget is the 16 KB L1 + 64 KB L2 (~80 KB). That cannot hold
  * the SPL image plus the DM scan's heap/stack (T31's 32 KB L1 + 128 KB
  * L2 can), so unlike T31 the DDR is brought up imperatively (shared
- * XBurst1 ddr_t31.c, T23 variant, selected by the DDR node's per-SKU
- * compatible) and the SPL makes itself DRAM-resident *before*
+ * XBurst1 ddr_t31.c, params from the &ddr node's "ingenic,sdram-params"
+ * array) and the SPL makes itself DRAM-resident *before*
  * spl_init() brings driver model up (image re-read from NOR, live data
  * copied out of the cache - see t23_spl_to_dram()). From there the
  * flow matches T31: the UCLASS_RAM probe records the DRAM size, and
@@ -34,7 +34,6 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void pll_init(void);
 void clk_ungate_uart(unsigned int idx);
 void t23_spl_serial_init(void);
 void t23_spl_puts(const char *s);
@@ -43,10 +42,8 @@ void t23_spl_sfc_clk_init(void);
 void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 		      unsigned int bytes);
 
-/* ddr_t31.c: imperative DDR bring-up before driver model (cache-as-RAM). */
-struct ingenic_t31_ddr_variant;
-const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void);
-int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg);
+/* ddr_t31.c: imperative pre-DM DDR bring-up (PLLs + DDR from FDT params). */
+int ingenic_t31_ddr_bringup_from_fdt(void);
 
 #ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
@@ -191,25 +188,24 @@ void board_init_f(ulong dummy)
 	t23_spl_serial_init();
 
 	/*
-	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
-	 * so pll_init() can match the DDR node's per-SKU compatible and pick
-	 * the per-SKU PLL setpoints before driver model comes up.
+	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL) so
+	 * the imperative bring-up below can read the &ddr node's per-SKU
+	 * "ingenic,sdram-params" array before driver model comes up.
 	 */
 	if (fdtdec_setup())
 		hang();
 
-	pll_init();
-
 	/*
-	 * Bring DDR up imperatively, BEFORE spl_init(). The ~80 KB
+	 * Bring PLLs + DDR up imperatively, BEFORE spl_init(). The ~80 KB
 	 * cache-as-RAM budget cannot hold the SPL image plus the DM scan's
-	 * heap/stack, so driver model must run DRAM-backed. Uses the same
-	 * shared ddr_t31 driver as the uclass path (sdram_init() is one-shot;
-	 * the UCLASS_RAM probe below then just records the size). T31's
-	 * 32 KB L1 + 128 KB L2 fits DM-in-SPL, so it keeps probing DDR via
-	 * the uclass.
+	 * heap/stack, so driver model must run DRAM-backed. Reads the per-SKU
+	 * params from the &ddr node and runs the shared ddr_t31 bring-up
+	 * (one-shot; the UCLASS_RAM probe below then just records the size).
+	 * T31's 32 KB L1 + 128 KB L2 fits DM-in-SPL, so it brings DDR up via
+	 * the uclass probe instead.
 	 */
-	ingenic_t31_ddr_sdram_init(ingenic_t31_ddr_get_variant());
+	if (ingenic_t31_ddr_bringup_from_fdt())
+		hang();
 
 	/*
 	 * Make the SPL DRAM-resident, then invalidate the cache so all

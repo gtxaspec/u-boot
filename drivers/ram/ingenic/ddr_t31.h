@@ -1,15 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Ingenic T31 (XBurst1) DDR2/DDR3 controller + Innophy PHY register map
- * and per-SKU variant table.
+ * and per-SKU parameter struct.
  *
  * Sibling of the XBurst2 driver (ddr_innophy.c) but a distinct IP: the
  * XBurst1 DDRC and Innophy PHY have a different register layout, so this
- * is its own driver/struct rather than a reuse. The per-SKU values
+ * is its own driver/struct rather than a reuse. T31/T23/T21/T30 share it
+ * (identical legacy DDRC + Innophy DDR2 IP); only the per-SKU values
  * (geometry, clock setpoints, ddr_params_creator GOLD register words)
- * live in struct ingenic_t31_ddr_variant and are selected at runtime
- * from the devicetree via the node's compatible + the driver of_match
- * .data - no compile-time CONFIG_T31_VARIANT_*.
+ * differ. Those come from the &ddr node's "ingenic,sdram-params" u32 array
+ * (struct ingenic_t31_ddr_params) under a single compatible
+ * "ingenic,t31-ddr-innophy" - the mainline rk3328 DMC idiom, so the same
+ * driver works under OF_CONTROL and, in the TPL, OF_PLATDATA. No
+ * compile-time CONFIG_T31_VARIANT_*, no per-SKU compatible/.data table.
  *
  * Register map ported verbatim from the former
  * arch/mips/mach-xburst/include/mach/t31-ddr.h.
@@ -83,111 +86,63 @@ enum ingenic_t31_ddr_type {
 };
 
 /*
- * Per-SKU DDR configuration. One const instance per T31 variant
- * (ddr_t31_types.c), selected at probe time from the DT node compatible
- * via the driver of_match .data. All numeric fields are direct vendor
- * ddr_params_creator GOLD output (what the old mach/t31-ddr.h #if
- * branches produced) plus the SPL clock setpoints.
+ * Per-SKU DDR configuration, deserialized from the &ddr node's
+ * "ingenic,sdram-params" devicetree property (a flat u32 array). The field
+ * order below IS the array order, and the struct is all-u32 so it can be
+ * filled in one shot by casting it to (u32 *) - the mainline rk3328
+ * rockchip,sdram-params idiom (dev_read_u32_array for OF_CONTROL,
+ * dtoc-baked platdata for OF_PLATDATA in the TPL). All numeric fields are
+ * direct vendor ddr_params_creator GOLD output (what the old mach/t31-ddr.h
+ * #if branches produced) plus the SPL clock setpoints; T31/T23/T21/T30 all
+ * share this driver, only the array values differ.
+ *
+ * [0..2] are the SPL PLL setpoints (CPAPCR/CPMPCR M/N/OD encodings + the
+ * CPCCR divider word, whose H0/H2/PCLK band tracks the MPLL rate): the TPL's
+ * UCLASS_RAM probe feeds them to t31/pll.c pll_init_params() before bringing
+ * DDR up. [3] is the CPM_DDRCDR divider (DDR CK = MPLL / (ddr_cdr + 1));
+ * 0 = default = 1 (MPLL/2) on every SKU except the T23N-LP 400 MHz profile
+ * (MPLL 1200 / 3, ddr_cdr = 2). [4] selects the DDR2-soft vs legacy-DDR3
+ * init branch (enum ingenic_t31_ddr_type).
  */
-struct ingenic_t31_ddr_variant {
-	const char *name;		/* "T31N" - boot banner */
-	const char *chip;		/* "M14D5121632A" - log only */
-	enum ingenic_t31_ddr_type type;
-	unsigned int cpu_mhz;		/* APLL/CPU clock, for the banner */
-
-	/* Chip geometry (mem_remap inputs + reported size). */
-	u8 row;
-	u8 col;
-	u8 bank8;			/* 1 = 8-bank, 0 = 4-bank */
-	u8 cs0;
-	u8 cs1;
-	u8 dw32;			/* 0 = 16-bit data bus */
-	u32 chip0_size;			/* bytes */
-
-	/*
-	 * SPL PLL setpoints: CPAPCR/CPMPCR M/N/OD encodings + the full
-	 * CPCCR divider word (H0/H2/PCLK band tracks the MPLL rate).
-	 * Consumed by t31/pll.c in SPL via ingenic_t31_ddr_pll_setpoints()
-	 * before driver model is up.
-	 */
-	u32 apll_mnod;
-	u32 mpll_mnod;
-	u32 cpccr;
-
-	/*
-	 * CPM_DDRCDR divider field (DDR CK = MPLL / (ddr_cdr + 1)).
-	 * 0 = default = 1, i.e. MPLL/2 - every T31 SKU and the T23
-	 * 600/500 MHz SKUs. Only the T23N-LP 400 MHz profile (MPLL 1200
-	 * / 3) needs ddr_cdr = 2.
-	 */
-	u8 ddr_cdr;
-
-	/* DDR controller GOLD values (ddr_params_creator). */
-	u32 ddrc_cfg;
-	u32 ddrc_ctrl;
-	u32 ddrc_mmap0;
-	u32 ddrc_mmap1;
-	u32 ddrc_refcnt;
-	u32 ddrc_timing[6];		/* TIMING1..6 */
-	u32 mr0;
+struct ingenic_t31_ddr_params {
+	u32 apll_mnod;			/* [0]  CPAPCR M/N/OD (CPU/APLL) */
+	u32 mpll_mnod;			/* [1]  CPMPCR M/N/OD (DDR/MPLL) */
+	u32 cpccr;			/* [2]  CPCCR clock-divider word */
+	u32 ddr_cdr;			/* [3]  CPM_DDRCDR divider (0 = MPLL/2) */
+	u32 type;			/* [4]  enum ingenic_t31_ddr_type */
+	u32 row;			/* [5]  chip geometry (mem_remap) */
+	u32 col;			/* [6] */
+	u32 bank8;			/* [7]  1 = 8-bank, 0 = 4-bank */
+	u32 cs0;			/* [8] */
+	u32 cs1;			/* [9] */
+	u32 dw32;			/* [10] 0 = 16-bit data bus */
+	u32 chip0_size;			/* [11] total DRAM bytes */
+	u32 ddrc_cfg;			/* [12] DDRC GOLD values */
+	u32 ddrc_ctrl;			/* [13] */
+	u32 ddrc_mmap0;			/* [14] */
+	u32 ddrc_mmap1;			/* [15] */
+	u32 ddrc_refcnt;		/* [16] */
+	u32 ddrc_timing[6];		/* [17..22] DDRC_TIMING1..6 */
+	u32 mr0;			/* [23] */
 };
 
-struct ingenic_t31_ddr_priv {
-	const struct ingenic_t31_ddr_variant *cfg;
-	u32 ram_size;			/* total bytes */
-};
-
-/* Top-level DDR bring-up (ddr_t31.c), run once from the SPL probe. */
-int ingenic_t31_ddr_sdram_init(const struct ingenic_t31_ddr_variant *cfg);
+/*
+ * Imperative pre-DM DDR bring-up for the small-cache SoCs (T23): read the
+ * per-SKU params from the &ddr node's "ingenic,sdram-params" FDT array, set the
+ * PLLs and bring DRAM up. T23's 80 KB cache-as-RAM cannot run the DM scan
+ * before DRAM, so it calls this from board_init_f before spl_init(); the later
+ * UCLASS_RAM probe finds the one-shot guard set and only records the size.
+ * The caller must have set gd->fdt_blob (fdtdec_setup()). 0 / -errno.
+ */
+int ingenic_t31_ddr_bringup_from_fdt(void);
 
 /*
- * SPL helper for t31/pll.c: find the T31 DDR node in the FDT (by trying
- * each known per-SKU compatible), and return that SKU's PLL setpoints.
- * Runs before driver model, so the caller must have set gd->fdt_blob
- * (via fdtdec_setup()). Returns 0 on success, negative on error.
+ * Re-assert the one-shot DDR-init guard without touching the controller.
+ * T30 runs the SPL cached after DDR is up and its guard .bss byte may not
+ * survive the cache-as-RAM hand-off, so it re-asserts before the DM scan
+ * (DDR is alive; the probe must NOT re-run the init on the live controller).
+ * Other XBurst1 SoCs never call this.
  */
-int ingenic_t31_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *cpccr);
-
-/* Pre-DM variant lookup for an imperative board_init_f DDR bring-up. */
-const struct ingenic_t31_ddr_variant *ingenic_t31_ddr_get_variant(void);
-
-/* Per-SKU variant configs (ddr_t31_types.c). */
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31x;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31n;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31l;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31lc;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31al;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t31a;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_c100;
-
-/*
- * T23 SKUs (ddr_t23_types.c). Same XBurst1 legacy DDRC + Innophy DDR2
- * IP as T31, so they reuse this driver - only the per-SKU geometry/
- * clock values differ. T23ZN is param-identical to T23N (shared
- * struct); T23N-HP/-LP are clock profiles of the 64M T23N silicon.
- */
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dl;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n_hp;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23n_lp;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23x;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t23dn;
-
-/*
- * T21 SKUs (ddr_t21_types.c). Same XBurst1 legacy DDRC + Innophy DDR2
- * IP again; both SKUs are the 64 MB M14D5121632A, differing only in
- * the APLL/MPLL/DDR clock profile (T21N 864/900/450, HP 1200/1000/500).
- */
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21n;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t21hp;
-
-/*
- * T30 SKUs (ddr_t30_types.c). Same IP; all run DDR 500 (MPLL 1000/2).
- * T30N/T30L = 64 MB 4-bank (APLL 864/720); T30X = 128 MB 8-bank
- * (APLL 864); T30A is param-identical to T30X (alias compatible).
- */
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30n;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30l;
-extern const struct ingenic_t31_ddr_variant ingenic_t31_ddr_variant_t30x;
+void ingenic_t31_ddr_set_done(void);
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T31_H */

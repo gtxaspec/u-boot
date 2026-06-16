@@ -136,13 +136,4 @@ struct ingenic_t31_ddr_params {
  */
 int ingenic_t31_ddr_bringup_from_fdt(void);
 
-/*
- * Re-assert the one-shot DDR-init guard without touching the controller.
- * T30 runs the SPL cached after DDR is up and its guard .bss byte may not
- * survive the cache-as-RAM hand-off, so it re-asserts before the DM scan
- * (DDR is alive; the probe must NOT re-run the init on the live controller).
- * Other XBurst1 SoCs never call this.
- */
-void ingenic_t31_ddr_set_done(void);
-
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T31_H */

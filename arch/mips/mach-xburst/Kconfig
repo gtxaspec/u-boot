@@ -104,6 +104,7 @@ config SOC_T30
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
 	select BINMAN
+	select SUPPORT_TPL
 	help
 	  Ingenic T30 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
 	  Innophy DDR2 PHY (64 MB M14D5121632A like T21/T23), SFC SPI-flash

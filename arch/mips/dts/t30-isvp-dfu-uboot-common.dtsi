@@ -3,16 +3,16 @@
  * Shared U-Boot overlay for the Ingenic ISVP-T30 DFU/USB-boot leaf DTs.
  * Each per-SKU <leaf>-u-boot.dtsi is a one-line include of this file.
  *
- * The USB-boot path uploads spl/u-boot-spl.bin + u-boot-lzma.img via
- * the mask ROM (the XBurst1-generic t31-usbboot protocol), so the
- * binman flash image here is not used in the USB-boot flow; it is kept
- * for a sensible `make` artifact.
+ * USB-boot is a TPL chain: the mask ROM uploads the cache-as-RAM TPL (its only
+ * DM device is &ddr; the probe brings up PLL + DDR), the TPL returns into the
+ * ROM's USB loop, and the ROM uploads U-Boot proper to DRAM. So the binman
+ * flash image here is not used in the USB-boot flow (kept for a sensible `make`
+ * artifact); thingino-dfu uploads tpl/u-boot-tpl.bin + u-boot.bin directly.
  *
- * The USB-boot SPL never reads NOR (U-Boot proper arrives over USB, not
- * from NOR), so only the DDR controller + its clock tree need to
- * survive into the SPL devicetree for the UCLASS_RAM probe; without
- * these bootph-all tags the DDR node is stripped and the SPL hangs
- * before DDR is up.
+ * &ddr is the only node tagged for the TPL phase (bootph-all); everything else
+ * is bootph-pre-ram + bootph-some-ram (present pre-relocation in U-Boot proper,
+ * absent from the minimal TPL - tagging the clock tree bootph-all would pull the
+ * clk uclass into the TPL's OF_PLATDATA scan and fail it).
  */
 
 / {
@@ -48,7 +48,7 @@
 	};
 };
 
-&exclk { bootph-all; };
-&rtclk { bootph-all; };
-&cgu { bootph-all; };
-&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
+&ddr { bootph-all; };		/* the TPL's only DM device */
+&exclk { bootph-pre-ram; bootph-some-ram; };
+&rtclk { bootph-pre-ram; bootph-some-ram; };
+&cgu { bootph-pre-ram; bootph-some-ram; };

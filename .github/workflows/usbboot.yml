@@ -128,14 +128,23 @@ jobs:
           ccache --zero-stats
           make "${{ matrix.defconfig }}"
           make -j"$(nproc)"
-          echo "==== usbboot loader binaries ===="
-          ls -l spl/u-boot-spl.bin u-boot.bin
           echo "==== ccache statistics ===="
           ccache --show-stats
-          # Stage a FLAT artifact dir (u-boot-spl.bin at the root, not under
-          # spl/) and derive the artifact name without the _defconfig suffix.
+          # Stage a FLAT artifact dir and derive the artifact name without the
+          # _defconfig suffix. The USB-boot stage1 loader is the TPL on the capped
+          # XBurst1 SoCs (T10/T20/T21/T30) and the SPL on every uncapped SoC - both
+          # load to 0x80001000, bring up DDR and return to the bootrom. (The capped
+          # SoCs also build a DRAM-resident SPL, but it is NOR-only and unused over
+          # USB, so it is not published.)
           mkdir -p "$RUNNER_TEMP/artifact"
-          cp spl/u-boot-spl.bin u-boot.bin "$RUNNER_TEMP/artifact/"
+          if [ -f tpl/u-boot-tpl.bin ]; then
+            stage1="tpl/u-boot-tpl.bin"
+          else
+            stage1="spl/u-boot-spl.bin"
+          fi
+          echo "==== usbboot loader binaries ===="
+          ls -l "$stage1" u-boot.bin
+          cp "$stage1" u-boot.bin "$RUNNER_TEMP/artifact/"
           defconfig="${{ matrix.defconfig }}"
           echo "ARTIFACT_NAME=${defconfig%_defconfig}" >> "$GITHUB_ENV"
 
@@ -167,7 +176,7 @@ jobs:
           echo "==== downloaded artifacts ===="
           ls -R artifacts
 
-      - name: Stage release assets (SoC-prefixed spl + u-boot per loader)
+      - name: Stage release assets (SoC-prefixed stage1 + u-boot per loader)
         run: |
           mkdir -p release
           for d in artifacts/*/; do
@@ -181,7 +190,7 @@ jobs:
 
       - name: Roll the "usbboot" pre-release
         run: |
-          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each <soc>-u-boot-spl.bin plus <soc>-u-boot.bin pair is uploaded to RAM via the mask-ROM USB boot. Rolling release - replaced on every manual run of the usbboot workflow."
+          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each SoC ships a stage1 loader (<soc>-u-boot-spl.bin, or <soc>-u-boot-tpl.bin on the capped T10/T20/T21/T30) plus <soc>-u-boot.bin, uploaded to RAM via the mask-ROM USB boot. Rolling release - replaced on every manual run of the usbboot workflow."
           # Drop the previous rolling release + tag (ignored on the first run),
           # then recreate it at the commit that was built.
           gh release delete usbboot -R "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true

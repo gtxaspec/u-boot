@@ -55,6 +55,7 @@ jobs:
           - { defconfig: isvp_t31_usbboot_defconfig,       arch: xburst1 }
           - { defconfig: isvp_t31_usbboot_ddr3_defconfig,  arch: xburst1 }
           - { defconfig: isvp_t32_usbboot_defconfig,       arch: xburst1 }
+          - { defconfig: isvp_t32_usbboot_ddr3_defconfig,  arch: xburst1 }
           - { defconfig: isvp_t33_usbboot_defconfig,       arch: xburst1 }
           - { defconfig: isvp_t40_usbboot_defconfig,       arch: xburst2 }
           - { defconfig: isvp_t40_usbboot_ddr3_defconfig,  arch: xburst2 }

@@ -29,8 +29,9 @@
 	};
 
 	ddr: memory-controller@b34f0000 {
+		compatible = "ingenic,a1-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
-		/* compatible is set by the per-SKU leaf .dts. */
+		/* the leaf .dts supplies the per-SKU ingenic,sdram-params array. */
 		bootph-all;
 	};
 

@@ -42,7 +42,7 @@
 	};
 
 	flash {
-		filename = "u-boot-with-tpl.bin";
+		filename = "u-boot-with-tpl-lzma.bin";
 		pad-byte = <0xff>;
 
 		tpl {

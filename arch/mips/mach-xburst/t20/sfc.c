@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Ingenic T20 SPL SFC clock + controller bring-up, plus a minimal polled
- * NOR read and the T20-generation self-completion tail read.
+ * NOR read.
  *
  * After PLL + DDR init the T20 SPL hands U-Boot loading to the standard
  * SPL_SPI framework (NOR cold-boot, via board_init_r) or returns to the
@@ -10,10 +10,13 @@
  * (drivers/spi/ingenic_sfc.c, compatible ingenic,t31-sfc) touches flash.
  *
  * The SFC block is the same as T31/T23 (same SFC_BASE, same SFC regs);
- * only the SSI cgu entry differs - T20's CPM_SSICDR uses a single-bit
- * PLL select at bit 31 (0=APLL, 1=MPLL) and ce=29/busy=28/stop=27, NOT
- * the [31:30] 2-bit select + 28/27/26 of T31/T23. The vendor
- * ssi_clk_set_rate() (clk.c) is kept verbatim for T20.
+ * the SSI cgu entry matches T10 (the other DWC SoC): T20's CPM_SSICDR uses
+ * a single-bit PLL select at bit 31 (0=APLL, 1=MPLL) and ce=29/busy=28/
+ * stop=27, NOT the [31:30] 2-bit select + 28/27/26 of T31/T23.
+ *
+ * t20_spl_nor_read() is a pre-driver-model polled NOR read used by the TPL
+ * (tpl.c) to load the DRAM-resident SPL from SPI-NOR after the UCLASS_RAM
+ * probe has brought PLL + DDR up.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -167,25 +170,6 @@ static void sfc_read_data(unsigned int *data, unsigned int words)
 }
 
 /*
- * Core polled read, no clock/controller (re)programming: clear stale
- * status, STOP+FLUSH, then issue the READ. The caller guarantees the SFC
- * clock is already running.
- */
-static void sfc_raw_read(unsigned int nor_off, unsigned int *dst,
-			 unsigned int bytes)
-{
-	unsigned int words = (bytes + 3) / 4;
-
-	jz_sfc_writel(0x1f, SFC_SCR);		/* clear stale status */
-	jz_sfc_writel(STOP, SFC_TRIG);
-	jz_sfc_writel(FLUSH, SFC_TRIG);
-
-	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
-	sfc_set_read_reg(CMD_READ, nor_off, 3);
-	sfc_read_data(dst, words);
-}
-
-/*
  * Read `bytes` (rounded up to a whole word) from NOR offset `nor_off` to
  * `dst`. Self-contained: derives the SFC clock off MPLL and programs the
  * controller, so it works before driver model is up. Used by the TPL to load
@@ -194,6 +178,15 @@ static void sfc_raw_read(unsigned int nor_off, unsigned int *dst,
 void t20_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 		      unsigned int bytes)
 {
+	unsigned int words = (bytes + 3) / 4;
+
 	t20_spl_sfc_clk_init();
-	sfc_raw_read(nor_off, dst, bytes);
+
+	jz_sfc_writel(0x1f, SFC_SCR);		/* clear stale status */
+	jz_sfc_writel(STOP, SFC_TRIG);
+	jz_sfc_writel(FLUSH, SFC_TRIG);
+
+	jz_sfc_writel(words * 4, SFC_TRAN_LEN);
+	sfc_set_read_reg(CMD_READ, nor_off, 3);
+	sfc_read_data(dst, words);
 }

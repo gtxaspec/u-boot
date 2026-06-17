@@ -4,9 +4,9 @@ config SPL_T20_USB_BOOT
 	bool "T20 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL
 	help
-	  Build the SPL as a mask-ROM USB-boot stage1: bring up the clocks +
-	  DDR, run the DM scan, then return to the bootrom (jr ra) instead of
-	  loading U-Boot proper from SPI-NOR - how the SPL is brought up and
-	  tested on the lab rig. Development only.
+	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
+	  clocks and DDR, then return to the bootrom (jr ra) instead
+	  of loading U-Boot proper from SPI-NOR. Used as the loader
+	  stage of the USB flashing flow. Development only.
 
 endif

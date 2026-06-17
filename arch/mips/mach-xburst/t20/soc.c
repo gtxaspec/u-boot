@@ -7,8 +7,8 @@
  * ddr_t20.c via the UCLASS_RAM probe), then loads this SPL from SPI-NOR into
  * real DRAM and jumps to it. So none of the cache-as-RAM gymnastics the old
  * single-stage SPL needed (imperative pre-DM DDR init, the re-read-from-NOR
- * to_dram() copy, the dead-L2 K0-uncached switch, self_complete) apply here -
- * the flow is the plain T21/T23/T31 one: fdtdec + the DM scan, the UCLASS_RAM
+ * to_dram() copy, the self_complete() tail read past the 0x6800 ROM cap) apply
+ * here - the flow is the plain T21/T23/T31 one: fdtdec + the DM scan, the UCLASS_RAM
  * probe records the (already-up) DRAM size, and board_init_r() reads U-Boot
  * proper from SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps.
  *
@@ -27,7 +27,6 @@
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t20.h>
-#include <mach/t20-sfc.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -53,6 +52,12 @@ static void spl_put_hex(u32 v)
  *     than the populated part (the classic wrong-geometry bug) the high
  *     offsets wrap onto the low ones and the markers collide - so "DDR OK"
  *     actually proves the size/geometry.
+ *
+ * The accesses go through volatile pointers on purpose: each value is
+ * read back from the same address it was just written, so without
+ * volatile the compiler would prove the load redundant and delete the
+ * check. This is the standard DRAM-probe idiom (cf. cmd/mem.c and
+ * arch/mips/mach-mtmips/ddr_init.c).
  */
 static int dram_verify(u32 size)
 {
@@ -114,7 +119,7 @@ void board_init_f(ulong dummy)
 	/*
 	 * The TPL has already brought up PLL + DDR (cache-as-RAM) and loaded this
 	 * SPL into real DRAM, then jumped here, so everything runs DRAM-resident:
-	 * no cache-as-RAM staging, no to_dram(), no dead-L2 K0 dance. The flow now
+	 * no cache-as-RAM staging, no to_dram(), no self_complete(). The flow now
 	 * matches T21/T23/T31 - fdtdec + the DM scan, the UCLASS_RAM probe records
 	 * the (already-up) DRAM size, and board_init_r() reads U-Boot proper from
 	 * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps.

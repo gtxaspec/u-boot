@@ -10,7 +10,7 @@
  * host + USB-NIC).
  *
  * The per-SKU leaf .dts files (t21n-isvp-dfu.dts, ...) include this
- * and set the DDR node's per-SKU compatible; the matching
+ * and supply the DDR node's per-SKU "ingenic,sdram-params" array; the matching
  * <leaf>-u-boot.dtsi pulls in t21-isvp-dfu-uboot-common.dtsi.
  */
 

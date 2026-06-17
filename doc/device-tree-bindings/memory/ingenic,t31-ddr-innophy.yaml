@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/ingenic,t31-ddr-innophy.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Ingenic XBurst1 DDR controller + Innophy DDR PHY (T31/T23/T21/T30)
+
+maintainers:
+  - Alfonso Gamboa <gtxent@gmail.com>
+
+description: |
+  The Ingenic T31, T23, T21 and T30 XBurst1 SoCs share one DDR
+  controller paired with the on-die Innophy DDR PHY, driven by
+  drivers/ram/ingenic/ddr_t31.c under the single compatible
+  "ingenic,t31-ddr-innophy".
+
+  Unlike the XBurst2 DDR bindings (ingenic,t40-ddr-innophy.yaml and
+  friends), which select a driver-internal register table with an
+  "ingenic,variant" string, the per-SKU controller / PHY / timing
+  register block is carried directly in the devicetree as the
+  "ingenic,sdram-params" u32 array - the model used by the Rockchip
+  rk3328 DMC (rockchip,sdram-params). This keeps the SKU data in the
+  leaf .dts and leaves the driver table-free.
+
+  The controller is probed in the first loader stage (the TPL on T21/T30,
+  the single-stage SPL on T23/T31) to bring up PLL + DRAM, so the node is
+  tagged bootph-all to survive into that phase.
+
+properties:
+  compatible:
+    const: ingenic,t31-ddr-innophy
+
+  reg:
+    maxItems: 1
+    description: |
+      DDR controller MMIO base + span. Typical value <0x134f0000 0x1000>.
+
+  ingenic,sdram-params:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 24
+    maxItems: 24
+    description: |
+      The serialized per-SKU PLL + DDR controller + Innophy PHY register
+      block, 24 u32 cells in the order consumed by struct
+      ingenic_t31_ddr_params (see drivers/ram/ingenic/ddr_t31.h):
+      [0] CPAPCR (CPU/APLL M/N/OD), [1] CPMPCR (DDR/MPLL M/N/OD),
+      [2] CPCCR clock dividers, [3] CPM_DDRCDR (0 = MPLL/2), [4] DDR type,
+      [5..10] chip geometry (row/col/bank8/cs0/cs1/dw32),
+      [11] total DRAM bytes, [12..16] DDRC cfg/ctrl/mmap0/mmap1/refcnt,
+      [17..22] DDRC_TIMING1..6, [23] mode register MR0.
+
+required:
+  - compatible
+  - reg
+  - ingenic,sdram-params
+
+additionalProperties: false
+
+examples:
+  - |
+    memory-controller@134f0000 {
+            compatible = "ingenic,t31-ddr-innophy";
+            reg = <0x134f0000 0x1000>;
+            /* T31N: APLL 1404, MPLL 1008, DDR2 64 MiB */
+            ingenic,sdram-params = <
+                    0x07505100 0x05405100 0x9a073310
+                    0 0
+                    13 10 0 1 0 0
+                    0x04000000
+                    0x0a288a40 0x0000d91e
+                    0x000020fc 0x00002400 0x00f20001
+                    0x040e0806 0x02170707 0x2007051e
+                    0x1a240031 0xff060405 0x32170505
+                    0x00000f73
+            >;
+            bootph-all;
+    };

@@ -54,7 +54,7 @@ static void phy_reg_set_range(struct ingenic_ddr_priv *p, u32 reg,
  * ------------------------------------------------------------------ */
 int ingenic_ddr_t41_phy_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	unsigned int rate = v->ddr_hz;
 	u32 val;
 	int pll_sel = 0;

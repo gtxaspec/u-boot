@@ -250,7 +250,7 @@ static void t40_ddr3_baseline_seed(struct ingenic_ddr_priv *p)
  */
 int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	u32 val;
 
 	/*
@@ -365,7 +365,7 @@ int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
  */
 int ingenic_ddr_t40_phy_hw_calibration(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	unsigned int timeout = 1000000;
 
 	if (v->type == INGENIC_DDR_TYPE_DDR3) {
@@ -394,7 +394,7 @@ int ingenic_ddr_t40_phy_hw_calibration(struct ingenic_ddr_priv *p)
  */
 void ingenic_ddr_t40_post_phy_fixups(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 
 	if (v->type == INGENIC_DDR_TYPE_DDR3)
 		phy_set_range(p, 0x1, 6, 1, 1);			/* FIFO bit */

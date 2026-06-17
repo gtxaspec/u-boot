@@ -10,27 +10,20 @@ maintainers:
   - Alfonso Gamboa <gtxent@gmail.com>
 
 description: |
-  The Ingenic A1 XBurst2 SoC family integrates an Ingenic-internal
-  DDR controller paired with the on-die Innophy DDR PHY - the same
-  controller IP used by the T40 and T41 (see
-  ingenic,t40-ddr-innophy.yaml and ingenic,t41-ddr-innophy.yaml). On
-  the A1 the attached parts are all DDR3; the per-chip controller /
-  PHY / mode-register values come from the vendor
-  `tools/ingenic-tools/ddr_creator_chip/ddr_params_creator` host tool
-  for each (SoC variant, chip, frequency, bus-width) tuple.
+  The Ingenic A1 XBurst2 SoC integrates a DDR controller paired with the
+  Innophy DDR PHY, driven - together with the T40 and T41
+  (ingenic,t40-ddr-innophy.yaml, ingenic,t41-ddr-innophy.yaml) - by
+  drivers/ram/ingenic/ddr_innophy.c under the single compatible
+  "ingenic,a1-ddr-innophy".
 
-  The A1 ships in distinct factory SKUs that differ in attached chip,
-  density and drive/ODT trim: A1N (W632GU6NG, 256 MiB), A1NT
-  (M15T1G1664A, 256 MiB), A1X (W632GU6NG, 512 MiB) and A1L
-  (W631GU6NG, 128 MiB), all DDR3. A1A reuses the A1X register table
-  (no distinct A1A silicon yet). The SKU is selected by the
-  `ingenic,variant` property; the driver looks up the matching register
-  table at probe.
+  The per-SKU controller / PHY / PLL register block is carried in the
+  devicetree as the "ingenic,sdram-params" u32 array (the rk3328 DMC model),
+  not selected by a driver-internal variant table. The A1 array is 75 cells:
+  the common 60-cell block (with the T41 par[] cells zero) followed by 15
+  A1-specific Innophy PHY drive/ODT/DQ/VREF/DQS tuning cells.
 
-  The controller MMIO base lives at 0xb34f0000. The Innophy PHY
-  (offset -0x4df000) and the DDRC APB peripheral region
-  (offset -0x4de000) are addressed at fixed offsets relative to the
-  controller base.
+  The controller is probed in the SPL to bring up DRAM (the PLL is programmed
+  earlier from the same array), so the node is tagged bootph-all.
 
 properties:
   compatible:
@@ -39,27 +32,30 @@ properties:
   reg:
     maxItems: 1
     description: |
-      Base address and span covering the controller MMIO + PHY +
-      APB peripheral regions. Typical value is
+      DDR controller + Innophy PHY + APB aperture. Typically
       <0xb34f0000 0x3000>.
 
-  ingenic,variant:
-    $ref: /schemas/types.yaml#/definitions/string
+  ingenic,sdram-params:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 75
+    maxItems: 75
     description: |
-      Selects the per-SKU controller / PHY / mode-register table. Must
-      match the silicon-shipped product code (case-sensitive,
-      lowercase). a1a is an alias of a1x.
-    enum:
-      - a1n
-      - a1nt
-      - a1x
-      - a1a
-      - a1l
+      The serialized per-SKU DDR configuration, 75 u32 cells in the order
+      consumed by struct ingenic_ddr_params (see
+      drivers/ram/ingenic/ddr_innophy.h): [0] DDR type, [1] PHY family
+      (0 T41 / 1 T40 / 2 A1), [2] bus width, [3] chip0 size, [4] chip1 size,
+      [5] MPLL Hz, [6] DDR Hz, [7..9] CPAPCR/CPMPCR/CPVPCR M/N/OD,
+      [10..15] DDRC cfg/ctrl/dlmr/mmap0/mmap1/refcnt, [16..20] DDRC_TIMING1..5,
+      [21..22] autosr cnt/en, [23..24] hregpro/pregpro, [25..26] CGUC0/CGUC1,
+      [27..29] PHY memcfg/CL/CWL, [30..35] MR0/MR1/MR2/MR3/MR10/MR63,
+      [36..40] DDRC_REMAP1..5, [41..59] par[] (zero on A1),
+      [60..74] A1 Innophy PHY tuning (odt_pd/pu, drvcmd_pd/pu, drvcmdck_pd/pu,
+      dq_drv_a_pd/pu, dq_drv_b_pd/pu, dq_a, dq_b, vref, dqs_a, dqs_b).
 
 required:
   - compatible
   - reg
-  - ingenic,variant
+  - ingenic,sdram-params
 
 additionalProperties: false
 
@@ -68,6 +64,25 @@ examples:
     memory-controller@b34f0000 {
             compatible = "ingenic,a1-ddr-innophy";
             reg = <0xb34f0000 0x3000>;
-            ingenic,variant = "a1n";
+            /* A1N: DDR3 256 MiB */
+            ingenic,sdram-params = <
+                    0x00000000 0x00000002
+                    0x00000010 0x10000000 0x00000000
+                    0x5f5e1000 0x2faf0800
+                    0x05c05100 0x08605100 0x00000000
+                    0x4a004a35 0x0000b092 0x00000002 0x000020f0 0x00003000 0x41c30081
+                    0x07130d08 0x0809070b 0x030c040c 0x252b1f07 0x80069055
+                    0x40000c41 0x00000000 0x00000001 0x00000001
+                    0x11111111 0x00000113
+                    0x0000000a 0x0000000b 0x00000008
+                    0x00001f70 0x00010006 0x00020018 0x00030000 0x00000000 0x00000000
+                    0x030f0e0d 0x07060504 0x0b0a0908 0x0201000c 0x13121110
+                    0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+                    0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+                    0x00000000 0x00000000 0x00000000 0x00000000 0x00000000
+                    0x00000000 0x00000000 0x00000000 0x00000000
+                    0x00000001 0x00000000 0x0000000e 0x0000000e 0x0000000e 0x0000000e
+                    0x00000014 0x00000014 0x00000014 0x00000014 0x00000010 0x00000007 0x00000080 0x00000020 0x00000020
+            >;
             bootph-all;
     };

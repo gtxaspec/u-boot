@@ -10,23 +10,19 @@ maintainers:
   - Alfonso Gamboa <gtxent@gmail.com>
 
 description: |
-  The Ingenic T41 XBurst2 SoC family integrates an Ingenic-internal
-  DDR controller paired with the on-die Innophy DDR PHY. A single
-  controller IP services DDR2, DDR3, LPDDR2 and LPDDR3 memory chips;
-  the per-chip controller / PHY / mode-register values come from the
-  vendor `tools/ingenic-tools/ddr_creator_chip/ddr_params_creator`
-  host tool for each (SoC variant, chip, frequency, bus-width) tuple.
+  The Ingenic T41 XBurst2 SoC integrates a DDR controller paired with the
+  Innophy DDR PHY, driven - together with the A1 and T40
+  (ingenic,a1-ddr-innophy.yaml, ingenic,t40-ddr-innophy.yaml) - by
+  drivers/ram/ingenic/ddr_innophy.c under the single compatible
+  "ingenic,t41-ddr-innophy".
 
-  The T41 ships in 13 distinct factory SKUs (T41A, T41L, T41LQ, T41N,
-  T41NQ, T41XQ, T41ZG, T41ZGC, T41ZL, T41ZM, T41ZMC, T41ZN, T41ZX)
-  that differ in clocked frequency, attached chip, drive/ODT trim,
-  and skew correction. The SKU is selected by the `ingenic,variant`
-  property; the driver looks up the matching register table at probe.
+  The per-SKU controller / PHY / PLL register block is carried in the
+  devicetree as the "ingenic,sdram-params" u32 array (the rk3328 DMC model),
+  not selected by a driver-internal variant table. The T41 family uses the
+  trailing par[] efuse drive/ODT/skew cells (zero on T40).
 
-  The controller MMIO base lives at 0xb34f0000. The Innophy PHY
-  (offset -0x4df000) and the DDRC APB peripheral region
-  (offset -0x4de000) are addressed at fixed offsets relative to the
-  controller base.
+  The controller is probed in the SPL to bring up DRAM (the PLL is programmed
+  earlier from the same array), so the node is tagged bootph-all.
 
 properties:
   compatible:
@@ -35,35 +31,28 @@ properties:
   reg:
     maxItems: 1
     description: |
-      Base address and span covering the controller MMIO + PHY +
-      APB peripheral regions. Typical value is
+      DDR controller + Innophy PHY + APB aperture. Typically
       <0xb34f0000 0x3000>.
 
-  ingenic,variant:
-    $ref: /schemas/types.yaml#/definitions/string
+  ingenic,sdram-params:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 60
+    maxItems: 60
     description: |
-      Selects the per-SKU controller / PHY / mode-register table. Must
-      match the silicon-shipped product code (case-sensitive,
-      lowercase).
-    enum:
-      - t41a
-      - t41l
-      - t41lq
-      - t41n
-      - t41nq
-      - t41xq
-      - t41zg
-      - t41zgc
-      - t41zl
-      - t41zm
-      - t41zmc
-      - t41zn
-      - t41zx
+      The serialized per-SKU DDR configuration, 60 u32 cells in the order
+      consumed by struct ingenic_ddr_params (see
+      drivers/ram/ingenic/ddr_innophy.h): [0] DDR type, [1] PHY family
+      (0 T41 / 1 T40 / 2 A1), [2] bus width, [3] chip0 size, [4] chip1 size,
+      [5] MPLL Hz, [6] DDR Hz, [7..9] CPAPCR/CPMPCR/CPVPCR M/N/OD,
+      [10..15] DDRC cfg/ctrl/dlmr/mmap0/mmap1/refcnt, [16..20] DDRC_TIMING1..5,
+      [21..22] autosr cnt/en, [23..24] hregpro/pregpro, [25..26] CGUC0/CGUC1,
+      [27..29] PHY memcfg/CL/CWL, [30..35] MR0/MR1/MR2/MR3/MR10/MR63,
+      [36..40] DDRC_REMAP1..5 (DDR3 only), [41..59] efuse drive/ODT/skew par[].
 
 required:
   - compatible
   - reg
-  - ingenic,variant
+  - ingenic,sdram-params
 
 additionalProperties: false
 
@@ -72,6 +61,23 @@ examples:
     memory-controller@b34f0000 {
             compatible = "ingenic,t41-ddr-innophy";
             reg = <0xb34f0000 0x3000>;
-            ingenic,variant = "t41nq";
+            /* T41NQ: DDR3 128 MiB */
+            ingenic,sdram-params = <
+                    0x00000000 0x00000000
+                    0x00000010 0x08000000 0x00000000
+                    0x53724e00 0x29b92700
+                    0x05b008b0 0x15d08890 0x059008b0
+                    0x02002a35 0x0000b092 0x00000000 0x000020f8 0x00002800 0x67aa0083
+                    0x07120b08 0x0708060a 0x030a040a 0x19221805 0x00050054
+                    0x26001556 0x00000000 0x00000001 0x00000001
+                    0x11111111 0x00000113
+                    0x0000000a 0x0000000a 0x00000008
+                    0x00001d50 0x00010006 0x00020018 0x00030000 0x00000000 0x00000000
+                    0x030e0d0c 0x07060504 0x0b0a0908 0x0f020100 0x13121110
+                    0x00000000 0x00000000 0x0000000f 0x0000000f 0x00000003
+                    0x00000003 0x00000014 0x00000014 0x0000008b 0x00000000
+                    0x00000001 0x00000002 0x00000011 0x00000011 0x0000000a
+                    0x00000008 0x00000008 0x0000000a 0x00000003
+            >;
             bootph-all;
     };

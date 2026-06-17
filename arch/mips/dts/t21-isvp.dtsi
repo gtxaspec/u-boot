@@ -3,10 +3,10 @@
  * Ingenic ISVP-T21 shared board body (SFC-NOR, USB host).
  *
  * The per-SKU leaf .dts files (t21n-isvp.dts, t21hp-isvp.dts) include
- * this and set the DDR node's per-SKU compatible
- * (ingenic,t21<sku>-ddr-innophy), which selects the variant table in
- * the shared DDR driver. The matching <leaf>-u-boot.dtsi pulls in
- * t21-isvp-uboot-common.dtsi (binman image + SPL bootph).
+ * this and supply the DDR node's per-SKU "ingenic,sdram-params"
+ * array, consumed by the shared Innophy DDR driver (ddr_t31.c). The
+ * matching <leaf>-u-boot.dtsi pulls in t21-isvp-uboot-common.dtsi
+ * (binman image + SPL bootph).
  */
 
 #include <dt-bindings/gpio/gpio.h>

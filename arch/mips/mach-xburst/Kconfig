@@ -24,8 +24,8 @@ menu "Ingenic XBurst T-series platforms"
 #
 # This follows established U-Boot patterns: DDR-in-TPL via OF_PLATDATA
 # (Rockchip rk3328) on a MIPS tpl/spl split (MediaTek mt7621). Bindings:
-# doc/device-tree-bindings/memory/ingenic,t31-ddr-innophy.yaml and
-# ingenic,t20-ddr-dwc.yaml.
+# doc/device-tree-bindings/memory-controllers/ingenic,t31-ddr-innophy.yaml
+# and ingenic,t20-ddr-dwc.yaml.
 #
 
 config SYS_VENDOR

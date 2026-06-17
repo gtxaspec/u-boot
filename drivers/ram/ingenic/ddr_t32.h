@@ -8,7 +8,7 @@
  * controller (MSTR/INITn/DRAMTMGn/ADDRMAPn/DFITMGn/RFSHTMG ...) with
  * an Innophy training PHY, so this is its own driver/struct. The
  * per-SKU values (uMCTL2 GOLD words, PHY timing words, PLL/CPCCR
- * setpoints) live in struct ingenic_t32_ddr_variant and are selected
+ * setpoints) live in struct ingenic_t32_ddr_params and are selected
  * at runtime from the devicetree via the node's compatible + the
  * driver of_match .data - no compile-time CONFIG_T32_VARIANT_*.
  *
@@ -279,21 +279,17 @@ enum ingenic_t32_ddr_type {
 };
 
 /*
- * Per-SKU DDR configuration. One const instance per T32 variant
- * (ddr_t32_types.c), selected at probe time from the DT node compatible
- * via the driver of_match .data. The uMCTL2/PHY words are the verbatim
- * vendor host ddr_creator_chip_v3 output for that PRJ007 class (what
- * the old mach/t32-ddr.h #if branches carried), plus the SPL PLL/CPCCR
- * setpoints from the vendor pll_params_creator (t32/pll.c #if chain).
+ * Per-SKU DDR configuration, deserialized from the &ddr node's
+ * "ingenic,sdram-params" u32 array (the rk3328 DMC model). The struct is
+ * all-u32 and its field order IS the DT array order, so of_to_plat reads it
+ * in one shot. Values are the verbatim vendor ddr_creator_chip_v3 +
+ * pll_params_creator output (PRJ007 class), carried per SKU in the board
+ * leaf .dts. 44 cells.
  */
-struct ingenic_t32_ddr_variant {
-	const char *name;		/* "T32LQ" - boot banner */
-	const char *chip;		/* "M14D5121632A" - log only */
-	enum ingenic_t32_ddr_type type;
-	unsigned int cpu_mhz;		/* APLL/CPU clock, for the banner */
-
-	u32 size;			/* DRAM bytes */
-	u32 ddr_ck_hz;			/* DDR CK = data rate / 2 (DDRCDR) */
+struct ingenic_t32_ddr_params {
+	u32 type;			/* [0]  enum ingenic_t32_ddr_type */
+	u32 size;			/* [1]  DRAM bytes */
+	u32 ddr_ck_hz;			/* [2]  DDR CK = data rate / 2 */
 
 	/*
 	 * SPL PLL/CPCCR setpoints: CPAPCR/CPMPCR M/N/OD words and the
@@ -325,32 +321,21 @@ struct ingenic_t32_ddr_variant {
 };
 
 struct ingenic_t32_ddr_priv {
-	const struct ingenic_t32_ddr_variant *cfg;
-	u32 ram_size;			/* total bytes */
+	u32 ram_size;			/* total bytes, for ram_get_info() */
 };
 
 /* Top-level DDR bring-up (ddr_t32.c), run once from the SPL probe. */
-int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_variant *cfg);
+int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_params *cfg);
 
 /*
- * SPL helper for t32/pll.c: find the T32 DDR node in the FDT (by trying
- * each known per-SKU compatible), and return that SKU's PLL/CPCCR
- * setpoints. Runs before driver model, so the caller must have set
+ * SPL helper for t32/pll.c: find the T32 DDR node in the FDT (by the single
+ * ingenic,t32-ddr-innophy compatible) and return that SKU's PLL/CPCCR
+ * setpoints from its ingenic,sdram-params array. Runs before driver model,
+ * so the caller must have set
  * gd->fdt_blob (via fdtdec_setup()). Returns 0 on success, negative on
  * error.
  */
 int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
 				  u32 *cpccr_div, u32 *cpccr_sel);
-
-/*
- * Per-SKU variant configs (ddr_t32_types.c). Param-identical vendor
- * bin badges share a struct: VL/ZL = LQ, ZN = VN, ZX = VX.
- */
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32lq;
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32nq;
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vn;
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32xq;
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vx;
-extern const struct ingenic_t32_ddr_variant ingenic_t32_ddr_variant_t32vnp;
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T32_H */

@@ -58,7 +58,7 @@
 &exclk { bootph-all; };
 &rtclk { bootph-all; };
 &cgu { bootph-all; };
-&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
+&ddr { bootph-all; };		/* leaf .dts supplies ingenic,sdram-params */
 &pinctrl { bootph-all; };
 &gpa { bootph-all; };
 &gpb { bootph-all; };

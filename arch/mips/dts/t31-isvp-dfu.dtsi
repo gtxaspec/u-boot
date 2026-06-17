@@ -9,7 +9,7 @@
  * t31-isvp.dtsi (dr_mode="host" for USB host + USB-NIC).
  *
  * The per-SKU leaf .dts files (t31l-isvp-dfu.dts, t31a-isvp-dfu.dts)
- * include this and set the DDR node's per-SKU compatible; the matching
+ * include this and supply the DDR node's per-SKU "ingenic,sdram-params" array; the matching
  * <leaf>-u-boot.dtsi pulls in t31-isvp-dfu-uboot-common.dtsi.
  */
 

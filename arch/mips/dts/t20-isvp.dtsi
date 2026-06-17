@@ -3,9 +3,9 @@
  * Ingenic ISVP-T20 shared board body (SFC-NOR, USB host).
  *
  * The per-SKU leaf .dts files (t20n-isvp.dts, t20l-isvp.dts,
- * t20x-isvp.dts) include this and set the DDR node's per-SKU compatible
- * (ingenic,t20<sku>-ddr-dwc), which selects the variant table in the DWC
- * DDR driver. The matching <leaf>-u-boot.dtsi pulls in
+ * t20x-isvp.dts) include this and supply the DDR node's per-SKU
+ * "ingenic,sdram-params" array, consumed by the shared DWC DDR driver
+ * (ddr_t20.c). The matching <leaf>-u-boot.dtsi pulls in
  * t20-isvp-uboot-common.dtsi (binman image + SPL bootph).
  */
 

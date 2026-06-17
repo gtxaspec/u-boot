@@ -8,7 +8,7 @@
  * (dr_mode="host").
  *
  * The per-SKU leaf .dts files (t20l-isvp-dfu.dts, ...) include this and
- * set the DDR node's per-SKU compatible; the matching <leaf>-u-boot.dtsi
+ * supply the DDR node's per-SKU "ingenic,sdram-params" array; the matching <leaf>-u-boot.dtsi
  * pulls in t20-isvp-dfu-uboot-common.dtsi.
  */
 

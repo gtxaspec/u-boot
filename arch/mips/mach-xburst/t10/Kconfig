@@ -11,9 +11,8 @@ config SPL_T10_USB_BOOT
 	depends on SPL
 	help
 	  Build the SPL as a mask-ROM USB-boot stage1: bring up the
-	  clocks (and DDR once ported), then return to the bootrom
-	  (jr ra) instead of loading U-Boot proper from SPI-NOR -
-	  how the SPL is brought up and tested on the lab rig.
-	  Development only.
+	  clocks and DDR, then return to the bootrom (jr ra) instead
+	  of loading U-Boot proper from SPI-NOR. Used as the loader
+	  stage of the USB flashing flow. Development only.
 
 endif

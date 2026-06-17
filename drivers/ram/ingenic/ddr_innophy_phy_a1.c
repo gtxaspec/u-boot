@@ -83,7 +83,7 @@ static void a1p_rmw(struct ingenic_ddr_priv *p, u32 off, u32 mask, u32 val)
  * at CPM+0x3c, so it cannot share the T40/T41 ingenic_ddr_cgu_init().
  * Divider = MPLL/DDR - 1 (1 for the MPLL/2 setpoint all A1 SKUs use).
  */
-void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_variant *v)
+void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_params *v)
 {
 	void __iomem *clkgr0 = (void __iomem *)(uintptr_t)(A1_CPM_BASE + A1_CPM_CLKGR0);
 	void __iomem *ddrcdr = (void __iomem *)(uintptr_t)(A1_CPM_BASE + A1_CPM_DDRCDR);
@@ -107,7 +107,7 @@ void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_variant *v)
  * are the vendor DQxRxOFFSET / drive / ODT tables. */
 static void a1_phy_param_write(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	static const u32 odt_pd_idx[] = { 0x140, 0x150, 0x160, 0x170 };
 	static const u32 odt_pu_idx[] = { 0x141, 0x151, 0x161, 0x171 };
 	static const u32 drv_a_pd[] = { 0x142, 0x152 };
@@ -161,7 +161,7 @@ static void a1_phy_param_write(struct ingenic_ddr_priv *p)
  * drive/ODT/DQS/DQ/VREF programming. */
 int ingenic_ddr_a1_phy_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	bool dw32 = (v->bus_width == 32);
 	int timeout = 100000;
 
@@ -192,7 +192,7 @@ int ingenic_ddr_a1_phy_init(struct ingenic_ddr_priv *p)
  * (0xf for the 32-bit bus, 0x3 for 16-bit). */
 int ingenic_ddr_a1_phy_hw_calibration(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	u32 done = (v->bus_width == 32) ? 0xf : 0x3;
 	int timeout = 100000;
 	u32 ctrl;

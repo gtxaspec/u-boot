@@ -26,6 +26,7 @@
 #define LOG_CATEGORY UCLASS_RAM
 
 #include <dm.h>
+#include <fdtdec.h>
 #include <hang.h>
 #include <log.h>
 #include <ram.h>
@@ -57,7 +58,7 @@ static void ddrc_reset_phy(struct ingenic_ddr_priv *p)
 
 static void ddrc_prev_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	int i;
 
 	for (i = 0; i < 5; i++)
@@ -72,7 +73,7 @@ static void ddrc_prev_init(struct ingenic_ddr_priv *p)
 
 static void ddrc_post_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	int i;
 
 	ddr_writel(p, v->ddrc_refcnt, DDRC_REFCNT);
@@ -89,7 +90,7 @@ static void ddrc_post_init(struct ingenic_ddr_priv *p)
 
 static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	u32 dlmr = v->ddrc_dlmr;
 	u32 kgd_rtt_dic = v->par[IDP_KGD_RTT_DIC];
 
@@ -257,7 +258,7 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 
 static void ddrc_autosr_setup(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 
 	ddr_writel(p, v->ddrc_autosr_cnt, DDRC_AUTOSR_CNT);
 	ddr_writel(p, v->ddrc_autosr_en ? 1 : 0, DDRC_AUTOSR_EN);
@@ -282,7 +283,7 @@ static void ddrc_autosr_setup(struct ingenic_ddr_priv *p)
 #define CPM_BASE_KSEG1		0xb0000000u
 #define CPM_DDRCDR_OFFSET	0x2cu
 
-static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
+static void ingenic_ddr_cgu_init(const struct ingenic_ddr_params *v)
 {
 	void __iomem *ddrcdr = (void __iomem *)(CPM_BASE_KSEG1 + CPM_DDRCDR_OFFSET);
 	u32 cdr = (v->mpll_hz / v->ddr_hz) - 1;
@@ -324,12 +325,12 @@ static void ingenic_ddr_cgu_init(const struct ingenic_ddr_variant *v)
 
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
 {
-	const struct ingenic_ddr_variant *v = p->cfg;
+	const struct ingenic_ddr_params *v = p->cfg;
 	bool is_t40 = (v->family == INGENIC_DDR_FAMILY_T40);
 	int ret;
 
-	debug("ingenic-ddr: init %s (%s, %u MHz, family %d)\n",
-	      v->name, v->chip, v->ddr_hz / 1000000, v->family);
+	debug("ingenic-ddr: init (%u MHz, family %d)\n",
+	      v->ddr_hz / 1000000, v->family);
 
 	ingenic_ddr_cgu_init(v);
 
@@ -424,79 +425,89 @@ int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p)
  * ------------------------------------------------------------------ */
 
 /*
- * Map the DT node compatible to the per-variant config table. The node's
- * per-SKU compatible (ingenic,<sku>-ddr-innophy) selects the SKU via the
- * driver of_match .data; this same table backs the SPL PLL-setpoint
- * helper below (which has no live device to read .data from).
+ * One compatible per SoC - the driver builds for exactly one of T40/T41/A1
+ * (CONFIG_SOC_*), and the board leaf .dts supplies the per-SKU
+ * "ingenic,sdram-params" u32 array. Shared by the pre-DM FDT read below and
+ * the driver of_match - no per-SKU compatible, no of_match .data variant table.
  */
-static const struct {
-	const char *compatible;
-	const struct ingenic_ddr_variant *cfg;
-} ingenic_ddr_variants[] = {
-	{ "ingenic,t41a-ddr-innophy",   &ingenic_ddr_variant_t41a   },
-	{ "ingenic,t41l-ddr-innophy",   &ingenic_ddr_variant_t41l   },
-	{ "ingenic,t41lq-ddr-innophy",  &ingenic_ddr_variant_t41lq  },
-	{ "ingenic,t41n-ddr-innophy",   &ingenic_ddr_variant_t41n   },
-	{ "ingenic,t41nq-ddr-innophy",  &ingenic_ddr_variant_t41nq  },
-	{ "ingenic,t41xq-ddr-innophy",  &ingenic_ddr_variant_t41xq  },
-	{ "ingenic,t41zg-ddr-innophy",  &ingenic_ddr_variant_t41zg  },
-	{ "ingenic,t41zgc-ddr-innophy", &ingenic_ddr_variant_t41zgc },
-	{ "ingenic,t41zl-ddr-innophy",  &ingenic_ddr_variant_t41zl  },
-	{ "ingenic,t41zm-ddr-innophy",  &ingenic_ddr_variant_t41zm  },
-	{ "ingenic,t41zmc-ddr-innophy", &ingenic_ddr_variant_t41zmc },
-	{ "ingenic,t41zn-ddr-innophy",  &ingenic_ddr_variant_t41zn  },
-	{ "ingenic,t41zx-ddr-innophy",  &ingenic_ddr_variant_t41zx  },
-	/* T40 family */
-	{ "ingenic,t40a-ddr-innophy",   &ingenic_ddr_variant_t40a   },
-	{ "ingenic,t40n-ddr-innophy",   &ingenic_ddr_variant_t40n   },
-	{ "ingenic,t40xp-ddr-innophy",  &ingenic_ddr_variant_t40xp  },
-#ifdef CONFIG_SOC_A1
-	/* A1 family */
-	{ "ingenic,a1n-ddr-innophy",    &ingenic_ddr_variant_a1n    },
-	{ "ingenic,a1nt-ddr-innophy",   &ingenic_ddr_variant_a1nt   },
-	{ "ingenic,a1x-ddr-innophy",    &ingenic_ddr_variant_a1x    },
-	{ "ingenic,a1l-ddr-innophy",    &ingenic_ddr_variant_a1l    },
+#if defined(CONFIG_SOC_T40)
+#define INGENIC_DDR_COMPATIBLE	"ingenic,t40-ddr-innophy"
+#elif defined(CONFIG_SOC_A1)
+#define INGENIC_DDR_COMPATIBLE	"ingenic,a1-ddr-innophy"
+#else
+#define INGENIC_DDR_COMPATIBLE	"ingenic,t41-ddr-innophy"
 #endif
-};
 
 /*
- * SPL helper for the per-SoC pll.c: find the DDR node in the FDT by
- * trying each known per-SKU compatible, and return that SKU's PLL
- * setpoints. Runs before driver model, so it reads the FDT blob directly
- * (the caller must have set gd->fdt_blob, e.g. via fdtdec_setup()).
+ * Read the per-SKU params from the &ddr node's "ingenic,sdram-params" array in
+ * the live FDT, before driver model is up. The struct is all-u32 and the
+ * property order IS the field order, so it deserializes in one shot.
  */
-int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *vpll_mnod)
+static int ddr_params_from_fdt(struct ingenic_ddr_params *out)
 {
 	const void *blob = gd->fdt_blob;
-	int node, i;
+	int node;
 
 	if (!blob)
 		return -ENODEV;
-	for (i = 0; i < ARRAY_SIZE(ingenic_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     ingenic_ddr_variants[i].compatible);
-		if (node >= 0) {
-			*apll_mnod = ingenic_ddr_variants[i].cfg->apll_mnod;
-			*mpll_mnod = ingenic_ddr_variants[i].cfg->mpll_mnod;
-			*vpll_mnod = ingenic_ddr_variants[i].cfg->vpll_mnod;
-			return 0;
-		}
+
+	node = fdt_node_offset_by_compatible(blob, -1, INGENIC_DDR_COMPATIBLE);
+	if (node < 0)
+		return -ENODEV;
+
+	return fdtdec_get_int_array(blob, node, "ingenic,sdram-params",
+				    (u32 *)out, sizeof(*out) / sizeof(u32));
+}
+
+/*
+ * SPL helper for the per-SoC pll.c: hand back the SKU's PLL setpoints from the
+ * DDR node's ingenic,sdram-params array. Runs before driver model is up (the
+ * caller must have set gd->fdt_blob, e.g. via fdtdec_setup()).
+ */
+int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod, u32 *vpll_mnod)
+{
+	struct ingenic_ddr_params p;
+	int ret;
+
+	ret = ddr_params_from_fdt(&p);
+	if (ret)
+		return ret;
+
+	*apll_mnod = p.apll_mnod;
+	*mpll_mnod = p.mpll_mnod;
+	*vpll_mnod = p.vpll_mnod;
+	return 0;
+}
+
+struct ingenic_ddr_plat {
+	struct ingenic_ddr_params params;
+};
+
+static int ingenic_ddr_of_to_plat(struct udevice *dev)
+{
+#if CONFIG_IS_ENABLED(OF_REAL)
+	struct ingenic_ddr_plat *plat = dev_get_plat(dev);
+	int ret;
+
+	ret = dev_read_u32_array(dev, "ingenic,sdram-params",
+				 (u32 *)&plat->params,
+				 sizeof(plat->params) / sizeof(u32));
+	if (ret) {
+		dev_err(dev, "Cannot read ingenic,sdram-params %d\n", ret);
+		return ret;
 	}
-	return -ENODEV;
+#endif
+	return 0;
 }
 
 static int ingenic_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_ddr_variant *v;
+	struct ingenic_ddr_plat *plat = dev_get_plat(dev);
+	const struct ingenic_ddr_params *v = &plat->params;
 	fdt_addr_t base;
 	u64 size;
 
-	v = (const struct ingenic_ddr_variant *)dev_get_driver_data(dev);
-	if (!v) {
-		dev_err(dev, "no variant data for compatible\n");
-		return -ENODEV;
-	}
 	p->cfg = v;
 
 	base = dev_read_addr(dev);
@@ -537,55 +548,8 @@ static const struct ram_ops ingenic_ddr_ops = {
 	.get_info = ingenic_ddr_get_info,
 };
 
-/*
- * Per-SKU compatible + .data = variant struct (the upstream DM idiom:
- * the node's compatible selects the SKU). Mirrors ingenic_ddr_variants[]
- * above, which the SPL pll.c helper iterates (it has no live device to
- * read .data from).
- */
 static const struct udevice_id ingenic_ddr_ids[] = {
-	{ .compatible = "ingenic,t41a-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41a },
-	{ .compatible = "ingenic,t41l-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41l },
-	{ .compatible = "ingenic,t41lq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41lq },
-	{ .compatible = "ingenic,t41n-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41n },
-	{ .compatible = "ingenic,t41nq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41nq },
-	{ .compatible = "ingenic,t41xq-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41xq },
-	{ .compatible = "ingenic,t41zg-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zg },
-	{ .compatible = "ingenic,t41zgc-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zgc },
-	{ .compatible = "ingenic,t41zl-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zl },
-	{ .compatible = "ingenic,t41zm-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zm },
-	{ .compatible = "ingenic,t41zmc-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zmc },
-	{ .compatible = "ingenic,t41zn-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zn },
-	{ .compatible = "ingenic,t41zx-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t41zx },
-	{ .compatible = "ingenic,t40a-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t40a },
-	{ .compatible = "ingenic,t40n-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t40n },
-	{ .compatible = "ingenic,t40xp-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_t40xp },
-#ifdef CONFIG_SOC_A1
-	{ .compatible = "ingenic,a1n-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_a1n },
-	{ .compatible = "ingenic,a1nt-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_a1nt },
-	{ .compatible = "ingenic,a1x-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_a1x },
-	{ .compatible = "ingenic,a1l-ddr-innophy",
-	  .data = (ulong)&ingenic_ddr_variant_a1l },
-#endif
+	{ .compatible = INGENIC_DDR_COMPATIBLE },
 	{ }
 };
 
@@ -593,7 +557,9 @@ U_BOOT_DRIVER(ingenic_ddr_innophy) = {
 	.name		= "ingenic_ddr_innophy",
 	.id		= UCLASS_RAM,
 	.of_match	= ingenic_ddr_ids,
+	.of_to_plat	= ingenic_ddr_of_to_plat,
 	.ops		= &ingenic_ddr_ops,
 	.probe		= ingenic_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_ddr_priv),
+	.plat_auto	= sizeof(struct ingenic_ddr_plat),
 };

@@ -50,7 +50,7 @@
 	};
 };
 
-&ddr { bootph-all; };		/* per-SKU compatible set by the leaf .dts */
+&ddr { bootph-all; };		/* the TPL's only DM device */
 
 &exclk { bootph-pre-ram; bootph-some-ram; };
 &rtclk { bootph-pre-ram; bootph-some-ram; };

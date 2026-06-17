@@ -12,5 +12,18 @@
 };
 
 &ddr {
-	compatible = "ingenic,t32xq-ddr-innophy";
+	ingenic,sdram-params = <
+		1 0x10000000 450000000	/* type size ddr_ck_hz */
+		0x06405101 0x04b05101 0x55752210 0x9a052210	/* cpapcr cpmpcr cpccr_div cpccr_sel */
+		0x00040001	/* mstr */
+		0x000100dc 0x00580000 0x1f140000 0x00200000 0x00080000	/* init0 init1 init3 init4 init5 */
+		0x0d131e10 0x00030317 0x0000050a 0x00002007 0x07020307	/* timing0..4 */
+		0x05050303 0x00000000 0x00000505 0x00000802 0x00000000	/* timing5 timing6 timing7 timing8 timing14 */
+		0x00161616 0x00000000 0x00000000 0x00001f1f 0x04040404 0x0f0f0404	/* addrmap1..6 */
+		0x00000002 0x006d0052 0x06000610	/* rfshctl3 rfshtmg odtcfg */
+		0x06050003 0x00080307 0x80400003	/* dfitmg0 dfitmg1 dfiupd0 */
+		0x00000003 0x00000009 0x0000000d 0x00000000	/* phy: channel_en cwl cl al */
+		0x00000052 0x00000db7 0x00000002	/* phy: trfc trefi mem_sel */
+		0x00000000 0x00000000	/* phy: pllpostdiven pllpostdiv */
+	>;
 };

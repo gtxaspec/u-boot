@@ -9,7 +9,7 @@
  * known-good path (U-Boot 2022.10 arch/mips/mach-xburst/PRJ/
  * ddr_innophy.c), formerly arch/mips/mach-xburst/t32/sdram.c. The
  * per-SKU register/clock values come from the DT-selected
- * struct ingenic_t32_ddr_variant (of_match .data) instead of
+ * struct ingenic_t32_ddr_params (of_match .data) instead of
  * compile-time CONFIG_T32_VARIANT_* #if branches; the old
  * CONFIG_T32_DDR3/LPDDR3/HWTRAIN build branches are runtime
  * cfg->type tests (DDR2 = soft-train, DDR3/LPDDR3 = hardware-train).
@@ -28,6 +28,7 @@
 #define LOG_CATEGORY UCLASS_RAM
 
 #include <dm.h>
+#include <dt-structs.h>
 #include <log.h>
 #include <ram.h>
 #include <fdtdec.h>
@@ -89,7 +90,7 @@ static const u32 t32_ddr_par_lpddr3[T32_DDR_PAR_NUM] = {
 	[T32_KGD_DS] = 0x02, [T32_KGD_RTT_DIC] = 0x02,
 };
 
-static const u32 *t32_ddr_par(const struct ingenic_t32_ddr_variant *cfg)
+static const u32 *t32_ddr_par(const struct ingenic_t32_ddr_params *cfg)
 {
 	switch (cfg->type) {
 	case T32_DDR_TYPE_LPDDR3:
@@ -157,7 +158,7 @@ static u32 t32_mpll_rate(void)
  * 2=MPLL), ce[29], busy[28], stop[27], divider[7:0].
  * cdr = ceil(MPLL / CK) - 1.
  */
-static void ddr_clk_init(const struct ingenic_t32_ddr_variant *cfg)
+static void ddr_clk_init(const struct ingenic_t32_ddr_params *cfg)
 {
 	u32 mpll = t32_mpll_rate();
 	u32 cdr = ((mpll + cfg->ddr_ck_hz - 1) / cfg->ddr_ck_hz - 1) & 0xff;
@@ -387,7 +388,7 @@ static void ddrp_dqs_calibration(void)
  * LPDDR3.
  * ------------------------------------------------------------------ */
 
-static void ddrp_training_write_leveling(const struct ingenic_t32_ddr_variant *cfg)
+static void ddrp_training_write_leveling(const struct ingenic_t32_ddr_params *cfg)
 {
 	SET_INNOPHY_REG(reg_wlcs_sel, 0x2);
 	if (cfg->type == T32_DDR_TYPE_LPDDR3)
@@ -436,7 +437,7 @@ static void ddrp_training_write_training(void)
 	SET_INNOPHY_REG(reg_phy_refresh_en, 0x0);
 }
 
-static void ddrp_training(const struct ingenic_t32_ddr_variant *cfg)
+static void ddrp_training(const struct ingenic_t32_ddr_params *cfg)
 {
 	u32 stat;
 
@@ -468,7 +469,7 @@ static void ddrp_training(const struct ingenic_t32_ddr_variant *cfg)
 	}
 }
 
-static void ddrc_init(const struct ingenic_t32_ddr_variant *cfg,
+static void ddrc_init(const struct ingenic_t32_ddr_params *cfg,
 		      u32 kgd_rtt_dic)
 {
 	u32 data;
@@ -541,7 +542,7 @@ static void ddrc_init(const struct ingenic_t32_ddr_variant *cfg,
  * CMD/DQ from the DRAM's POV and the DQS gating calibration
  * BNE_INNOPHY_REG(calib_end, 0x1) hangs.
  */
-static void ddrp_init(const struct ingenic_t32_ddr_variant *cfg,
+static void ddrp_init(const struct ingenic_t32_ddr_params *cfg,
 		      u32 ddrc_reset)
 {
 	u32 data;
@@ -650,7 +651,7 @@ static void ddrc_set_port_priority(void)
 	writel(0xffdd, (void __iomem *)(DDR_QOS_BASE + 0x70));
 }
 
-static void ddrc_dfi_init(const struct ingenic_t32_ddr_variant *cfg)
+static void ddrc_dfi_init(const struct ingenic_t32_ddr_params *cfg)
 {
 	const u32 *p = t32_ddr_par(cfg);
 	u32 ddrc_reset;
@@ -690,7 +691,7 @@ static void ddrc_dfi_init(const struct ingenic_t32_ddr_variant *cfg)
 }
 
 /* Top-level DDR2/DDR3/LPDDR3 init (vendor sdram_init() uMCTL2 path). */
-int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_variant *cfg)
+int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_params *cfg)
 {
 	enable_cpu_read_ddr();
 	ddr_clk_init(cfg);
@@ -700,71 +701,105 @@ int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_variant *cfg)
 }
 
 /*
- * SPL helper for t32/pll.c: find the T32 DDR node in the FDT by trying
- * each known per-SKU compatible, and hand back that SKU's PLL/CPCCR
- * setpoints. Shares the variant table below; runs before driver model
- * is up.
+ * DT compatible for the T32 DDR node - one binding for every T32 SKU; the
+ * board leaf .dts supplies the per-SKU "ingenic,sdram-params" u32 array.
+ * Shared by the pre-DM FDT read below and the driver of_match - no per-SKU
+ * compatible, no of_match .data variant table.
  */
-static const struct {
-	const char *compatible;
-	const struct ingenic_t32_ddr_variant *cfg;
-} t32_ddr_variants[] = {
-	{ "ingenic,t32lq-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
-	{ "ingenic,t32vl-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
-	{ "ingenic,t32zl-ddr-innophy",  &ingenic_t32_ddr_variant_t32lq  },
-	{ "ingenic,t32nq-ddr-innophy",  &ingenic_t32_ddr_variant_t32nq  },
-	{ "ingenic,t32vn-ddr-innophy",  &ingenic_t32_ddr_variant_t32vn  },
-	{ "ingenic,t32zn-ddr-innophy",  &ingenic_t32_ddr_variant_t32vn  },
-	{ "ingenic,t32xq-ddr-innophy",  &ingenic_t32_ddr_variant_t32xq  },
-	{ "ingenic,t32vx-ddr-innophy",  &ingenic_t32_ddr_variant_t32vx  },
-	{ "ingenic,t32zx-ddr-innophy",  &ingenic_t32_ddr_variant_t32vx  },
-	{ "ingenic,t32vnp-ddr-innophy", &ingenic_t32_ddr_variant_t32vnp },
-};
+#define INGENIC_T32_DDR_COMPATIBLE	"ingenic,t32-ddr-innophy"
 
-int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
-				  u32 *cpccr_div, u32 *cpccr_sel)
+/*
+ * Read the per-SKU params from the &ddr node's "ingenic,sdram-params" array in
+ * the live FDT, before driver model is up. The struct is all-u32 and the
+ * property order IS the field order, so it deserializes in one shot.
+ */
+static int ddr_params_from_fdt(struct ingenic_t32_ddr_params *out)
 {
 	const void *blob = gd->fdt_blob;
-	int node, i;
+	int node;
 
 	if (!blob)
 		return -ENODEV;
 
-	for (i = 0; i < ARRAY_SIZE(t32_ddr_variants); i++) {
-		node = fdt_node_offset_by_compatible(blob, -1,
-						     t32_ddr_variants[i].compatible);
-		if (node >= 0) {
-			*cpapcr = t32_ddr_variants[i].cfg->cpapcr;
-			*cpmpcr = t32_ddr_variants[i].cfg->cpmpcr;
-			*cpccr_div = t32_ddr_variants[i].cfg->cpccr_div;
-			*cpccr_sel = t32_ddr_variants[i].cfg->cpccr_sel;
-			return 0;
-		}
-	}
-	return -ENODEV;
+	node = fdt_node_offset_by_compatible(blob, -1,
+					     INGENIC_T32_DDR_COMPATIBLE);
+	if (node < 0)
+		return -ENODEV;
+
+	return fdtdec_get_int_array(blob, node, "ingenic,sdram-params",
+				    (u32 *)out, sizeof(*out) / sizeof(u32));
+}
+
+/*
+ * SPL helper for t32/pll.c: hand back the SKU's PLL/CPCCR setpoints from the
+ * DDR node's ingenic,sdram-params array. Runs before driver model is up.
+ */
+int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
+				  u32 *cpccr_div, u32 *cpccr_sel)
+{
+	struct ingenic_t32_ddr_params p;
+	int ret;
+
+	ret = ddr_params_from_fdt(&p);
+	if (ret)
+		return ret;
+
+	*cpapcr = p.cpapcr;
+	*cpmpcr = p.cpmpcr;
+	*cpccr_div = p.cpccr_div;
+	*cpccr_sel = p.cpccr_sel;
+	return 0;
 }
 
 /* ------------------------------------------------------------------
- * UCLASS_RAM driver. SPL probe brings DRAM up; U-Boot-proper probe just
- * records the size (DRAM is already alive). The per-SKU variant struct
- * comes from of_match .data (the node's compatible IS the selector).
+ * UCLASS_RAM driver. The per-SKU params come from the &ddr node's
+ * "ingenic,sdram-params" array, read into platdata by of_to_plat (the
+ * mainline rk3328 DMC shape). The SPL probe brings DRAM up; the
+ * U-Boot-proper probe just records the size (DRAM is already alive). PLL is
+ * programmed earlier, in t32/pll.c, via ingenic_t32_ddr_pll_setpoints().
  * ------------------------------------------------------------------ */
+
+struct ingenic_t32_ddr_plat {
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	struct dtd_ingenic_t32_ddr_innophy dtplat;
+#else
+	struct ingenic_t32_ddr_params params;
+#endif
+};
+
+static int ingenic_t32_ddr_of_to_plat(struct udevice *dev)
+{
+#if CONFIG_IS_ENABLED(OF_REAL)
+	struct ingenic_t32_ddr_plat *plat = dev_get_plat(dev);
+	int ret;
+
+	ret = dev_read_u32_array(dev, "ingenic,sdram-params",
+				 (u32 *)&plat->params,
+				 sizeof(plat->params) / sizeof(u32));
+	if (ret) {
+		dev_err(dev, "Cannot read ingenic,sdram-params %d\n", ret);
+		return ret;
+	}
+#endif
+	return 0;
+}
 
 static int ingenic_t32_ddr_probe(struct udevice *dev)
 {
 	struct ingenic_t32_ddr_priv *p = dev_get_priv(dev);
-	const struct ingenic_t32_ddr_variant *v;
+	struct ingenic_t32_ddr_plat *plat = dev_get_plat(dev);
+#if CONFIG_IS_ENABLED(OF_PLATDATA)
+	const struct ingenic_t32_ddr_params *params =
+		(const struct ingenic_t32_ddr_params *)
+			plat->dtplat.ingenic_sdram_params;
+#else
+	const struct ingenic_t32_ddr_params *params = &plat->params;
+#endif
 
-	v = (const struct ingenic_t32_ddr_variant *)dev_get_driver_data(dev);
-	if (!v) {
-		dev_err(dev, "no variant data for compatible\n");
-		return -ENODEV;
-	}
-	p->cfg = v;
-	p->ram_size = v->size;
+	p->ram_size = params->size;
 
 	if (IS_ENABLED(CONFIG_XPL_BUILD))
-		return ingenic_t32_ddr_sdram_init(v);
+		return ingenic_t32_ddr_sdram_init(params);
 
 	return 0;
 }
@@ -782,40 +817,25 @@ static const struct ram_ops ingenic_t32_ddr_ops = {
 	.get_info = ingenic_t32_ddr_get_info,
 };
 
-/*
- * Per-SKU compatible + .data = variant struct (the upstream DM idiom
- * for per-variant data - the node's compatible selects the SKU). The
- * param-identical vendor bin badges share one struct (VL/ZL = LQ).
- */
 static const struct udevice_id ingenic_t32_ddr_ids[] = {
-	{ .compatible = "ingenic,t32lq-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
-	{ .compatible = "ingenic,t32vl-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
-	{ .compatible = "ingenic,t32zl-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32lq },
-	{ .compatible = "ingenic,t32nq-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32nq },
-	{ .compatible = "ingenic,t32vn-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32vn },
-	{ .compatible = "ingenic,t32zn-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32vn },
-	{ .compatible = "ingenic,t32xq-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32xq },
-	{ .compatible = "ingenic,t32vx-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32vx },
-	{ .compatible = "ingenic,t32zx-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32vx },
-	{ .compatible = "ingenic,t32vnp-ddr-innophy",
-	  .data = (ulong)&ingenic_t32_ddr_variant_t32vnp },
+	{ .compatible = INGENIC_T32_DDR_COMPATIBLE },
 	{ }
 };
 
-U_BOOT_DRIVER(ingenic_t32_ddr) = {
-	.name		= "ingenic_t32_ddr",
+/*
+ * Name the driver after its compatible ("ingenic,t32-ddr-innophy" ->
+ * "ingenic_t32_ddr_innophy") so an OF_PLATDATA (dtoc) build would bind it by
+ * the compatible-derived name with a matching dtd_ingenic_t32_ddr_innophy
+ * platdata struct. T32 is OF_CONTROL today; this keeps it consistent with
+ * ingenic_t31_ddr_innophy and TPL-ready.
+ */
+U_BOOT_DRIVER(ingenic_t32_ddr_innophy) = {
+	.name		= "ingenic_t32_ddr_innophy",
 	.id		= UCLASS_RAM,
 	.of_match	= ingenic_t32_ddr_ids,
+	.of_to_plat	= ingenic_t32_ddr_of_to_plat,
 	.ops		= &ingenic_t32_ddr_ops,
 	.probe		= ingenic_t32_ddr_probe,
 	.priv_auto	= sizeof(struct ingenic_t32_ddr_priv),
+	.plat_auto	= sizeof(struct ingenic_t32_ddr_plat),
 };

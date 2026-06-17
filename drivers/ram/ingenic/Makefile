@@ -13,9 +13,9 @@ obj-$(CONFIG_SOC_A1) += ddr_innophy_phy_a1.o
 # from each board's "ingenic,sdram-params" devicetree array, not a C table.
 obj-$(CONFIG_RAM_INGENIC_DDR_T31) += ddr_t31.o
 
-# T32 (PRJ007) uMCTL2 + Innophy DDR - sibling driver, distinct IP.
+# T32 (PRJ007) uMCTL2 + Innophy DDR - sibling driver, distinct IP. Per-SKU
+# params live in the devicetree (ingenic,sdram-params), not a C table.
 obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32.o
-obj-$(CONFIG_RAM_INGENIC_DDR_T32) += ddr_t32_types.o
 
 # T20 (XBurst1) DDR2 + Synopsys DWC PHY - the only non-Innophy XBurst1
 # camera SoC, so its own driver/struct (hardware ZQ cal + DQS training).

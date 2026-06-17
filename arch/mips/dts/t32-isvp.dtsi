@@ -3,10 +3,9 @@
  * Ingenic ISVP-T32 shared board body (SFC-NOR, USB host).
  *
  * The per-SKU leaf .dts files (t32lq-isvp.dts, ...) include this and
- * set the DDR node's per-SKU compatible (ingenic,t32<sku>-ddr-innophy),
- * which selects the variant table in the DDR driver. The matching
- * <leaf>-u-boot.dtsi pulls in t32-isvp-uboot-common.dtsi (binman image
- * + SPL bootph).
+ * supply the DDR node's per-SKU "ingenic,sdram-params" array, consumed
+ * by the DDR driver (ddr_t32.c). The matching <leaf>-u-boot.dtsi pulls
+ * in t32-isvp-uboot-common.dtsi (binman image + SPL bootph).
  */
 
 #include <dt-bindings/gpio/gpio.h>

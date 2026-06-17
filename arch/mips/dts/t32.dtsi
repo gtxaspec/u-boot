@@ -54,13 +54,14 @@
 
 	/*
 	 * DDR: Synopsys uMCTL2-class controller + Innophy training PHY,
-	 * each with its own APB aperture. The per-SKU compatible
-	 * (ingenic,t32<sku>-ddr-innophy) is set by the leaf .dts and
-	 * selects the variant table in drivers/ram/ingenic/ddr_t32.c
-	 * (of_match .data). bootph-all is added by the leaf's shared
-	 * U-Boot overlay so the node survives into the SPL devicetree.
+	 * each with its own APB aperture. The per-SKU register/timing block
+	 * is supplied as the leaf .dts's "ingenic,sdram-params" array,
+	 * consumed by drivers/ram/ingenic/ddr_t32.c (the rk3328 DMC model).
+	 * bootph-all is added by the leaf's shared U-Boot overlay so the
+	 * node survives into the SPL devicetree.
 	 */
 	ddr: memory-controller@13012000 {
+		compatible = "ingenic,t32-ddr-innophy";
 		reg = <0x13012000 0x1000>,	/* uMCTL2 controller APB */
 		      <0x13011000 0x1000>;	/* Innophy PHY APB */
 	};

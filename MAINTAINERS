@@ -1466,6 +1466,7 @@ F:	arch/mips/dts/*isvp*
 F:	arch/mips/mach-xburst/
 F:	board/ingenic/
 F:	configs/isvp_*_defconfig
+F:	doc/device-tree-bindings/memory-controllers/ingenic,*-ddr-*.yaml
 F:	drivers/ram/ingenic/
 F:	include/configs/isvp-*.h
 

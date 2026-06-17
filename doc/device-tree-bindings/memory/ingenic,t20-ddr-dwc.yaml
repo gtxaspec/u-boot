@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/ingenic,t20-ddr-dwc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Ingenic XBurst1 DDR controller + Synopsys DWC DDR PHY (T20/T10)
+
+maintainers:
+  - Alfonso Gamboa <gtxent@gmail.com>
+
+description: |
+  The Ingenic T20 and T10 XBurst1 SoCs pair the DDR controller with a
+  Synopsys DesignWare (DWC) DDR2 PHY rather than the Innophy PHY of the
+  T21/T23/T30/T31 (ingenic,t31-ddr-innophy.yaml). Both DWC SoCs share
+  drivers/ram/ingenic/ddr_t20.c under the single compatible
+  "ingenic,t20-ddr-dwc".
+
+  As with the Innophy binding, the per-SKU PLL + controller + DWC PHY
+  register block is carried in the devicetree as the
+  "ingenic,sdram-params" u32 array (the rk3328 DMC model), not selected
+  by a driver-internal variant table. The array is two cells longer than
+  the Innophy one because the DWC PHY adds the PTR0/PTR1 timing words.
+
+  Both DWC SoCs are TPL-chain parts, so the controller is probed in the
+  TPL to bring up PLL + DRAM and the node is tagged bootph-all.
+
+properties:
+  compatible:
+    const: ingenic,t20-ddr-dwc
+
+  reg:
+    maxItems: 1
+    description: |
+      DDR controller MMIO base + span. Typical value <0x134f0000 0x1000>.
+
+  ingenic,sdram-params:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    minItems: 26
+    maxItems: 26
+    description: |
+      The serialized per-SKU PLL + DDR controller + DWC PHY register
+      block, 26 u32 cells in the order consumed by struct
+      ingenic_t20_ddr_params (see drivers/ram/ingenic/ddr_t20.h):
+      [0] CPAPCR (CPU/APLL M/N/OD), [1] CPMPCR (DDR/MPLL M/N/OD),
+      [2] CPCCR clock dividers, [3] total DRAM bytes,
+      [4..6] DDRC cfg/mmap0/mmap1, [7..12] DDRC_TIMING1..6,
+      [13..15] DWC PHY DCR/DTPR0/DTPR1, [16..20] DDRC_REMAP1..5,
+      [21] CPM_DDRCDR (DDR = MPLL/(cdr+1)), [22] DDRC_REFCNT,
+      [23..25] DWC PHY MR0/PTR0/PTR1.
+
+required:
+  - compatible
+  - reg
+  - ingenic,sdram-params
+
+additionalProperties: false
+
+examples:
+  - |
+    memory-controller@134f0000 {
+            compatible = "ingenic,t20-ddr-dwc";
+            reg = <0x134f0000 0x1000>;
+            /* T20N: APLL 860, MPLL 1000, DDR2 64 MiB */
+            ingenic,sdram-params = <
+                    0x04708900 0x07d0c900 0x9a073310
+                    0x04000000
+                    0x0a688a40 0x000020fc 0x00002400
+                    0x040e0806 0x02170707 0x2007051e
+                    0x1a240031 0xff060505 0x32170505
+                    0x00000002 0x3cb7779a 0x003500b8
+                    0x03020d0c 0x07060504 0x0b0a0908
+                    0x0f0e0100 0x13121110
+                    1
+                    0x00f20001
+                    0x00000e73 0x00228019 0x064186a0
+            >;
+            bootph-all;
+    };

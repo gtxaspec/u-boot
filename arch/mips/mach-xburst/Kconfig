@@ -1,6 +1,33 @@
 menu "Ingenic XBurst T-series platforms"
 	depends on ARCH_XBURST
 
+#
+# XBurst1 T-series boot shape is dictated by one hardware fact: the
+# mask-ROM SPI-NOR load cap. Two ROM generations exist in the family:
+#
+#   Capped (0x6800 = 26 KiB) - T10/T20/T21/T30. The gen-1/1.5 ROM loads
+#     only the first 0x6800 bytes of the boot image, too small for the
+#     DM SFC + spi-nor framework (~29 KiB on its own). These parts run a
+#     tiny DDR-only TPL (cache-as-RAM) that brings up PLL + DRAM and
+#     chain-loads a DRAM-resident SPL over a minimal 0x03 NOR read; the
+#     full SPI framework then lives in that SPL. They select SUPPORT_TPL.
+#
+#   Uncapped - T23/T31. The later ROM loads the whole image, so these
+#     keep a single big DM SPL (SPL_SPI) and need no TPL or hand-rolled
+#     read.
+#
+# Either way the only per-SoC difference is DDR: the Innophy PHY
+# (drivers/ram/ingenic/ddr_t31.c; T21/T23/T30/T31) or the Synopsys DWC
+# PHY (ddr_t20.c; T10/T20), with the per-SKU register block supplied as
+# the "ingenic,sdram-params" devicetree array. Everything below the
+# bring-up shim is one shared codebase.
+#
+# This follows established U-Boot patterns: DDR-in-TPL via OF_PLATDATA
+# (Rockchip rk3328) on a MIPS tpl/spl split (MediaTek mt7621). Bindings:
+# doc/device-tree-bindings/memory/ingenic,t31-ddr-innophy.yaml and
+# ingenic,t20-ddr-dwc.yaml.
+#
+
 config SYS_VENDOR
 	default "ingenic"
 

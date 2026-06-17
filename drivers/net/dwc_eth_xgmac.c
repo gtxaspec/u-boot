@@ -451,7 +451,19 @@ static int xgmac_read_rom_hwaddr(struct udevice *dev)
 	if (ret < 0)
 		return ret;
 
-	return !is_valid_ethaddr(pdata->enetaddr);
+	/*
+	 * The MAC registers can read back blank (e.g. an Ingenic A1 with an
+	 * unfused per-port MAC -> ff:ff:ff:ff:ff:ff). Don't leave that invalid
+	 * address in platdata: eth-uclass would then warn it "doesn't match"
+	 * the (valid) environment MAC. Clear it so the environment/derived
+	 * address is used cleanly.
+	 */
+	if (!is_valid_ethaddr(pdata->enetaddr)) {
+		memset(pdata->enetaddr, 0, ARP_HLEN);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int xgmac_get_phy_addr(struct xgmac_priv *priv, struct udevice *dev)

@@ -146,18 +146,21 @@ enum ingenic_ddr_par {
 	IDP_NUM,
 };
 
-/* Per-variant DDR configuration. One struct per board/SoC variant,
- * matched at probe time by DT compatible string. All numeric fields
- * are direct vendor ddr_params_creator output (mirrors what we have
- * in arch/mips/mach-xburst/include/mach/t41<variant>-ddr.h). */
-struct ingenic_ddr_variant {
-	const char *name;		/* e.g. "T41NQ" */
-	const char *chip;		/* e.g. "W631GU6NG" */
-	enum ingenic_ddr_type type;
-	enum ingenic_ddr_family family;	/* defaults to T41 (omit field) */
-	unsigned int bus_width;		/* 16 or 32 */
-	u32 chip0_size;
-	u32 chip1_size;
+/*
+ * Per-SKU DDR configuration, deserialized from the &ddr node's
+ * "ingenic,sdram-params" u32 array (the rk3328 DMC model) by of_to_plat.
+ * The struct is all-u32 and its field order IS the DT array order, so it
+ * reads in one shot. Values are direct vendor ddr_params_creator output,
+ * carried per SKU in the board leaf .dts. Common block = 41 cells, then the
+ * T41 efuse par[] (19), then (A1 builds only) the a1_phy group (15) -> 60
+ * cells for T40/T41, 75 for A1.
+ */
+struct ingenic_ddr_params {
+	enum ingenic_ddr_type type;	/* [0] */
+	enum ingenic_ddr_family family;	/* [1] T41=0 / T40=1 / A1=2 */
+	u32 bus_width;			/* [2] 16 or 32 */
+	u32 chip0_size;			/* [3] */
+	u32 chip1_size;			/* [4] */
 
 	/* PLL / clocks */
 	unsigned int mpll_hz;		/* expected MPLL freq, for clk_set_rate */
@@ -212,20 +215,20 @@ struct ingenic_ddr_variant {
 	 * their original size. */
 #ifdef CONFIG_SOC_A1
 	struct {
-		u8 odt_pd, odt_pu;
-		u8 drvcmd_pd, drvcmd_pu;
-		u8 drvcmdck_pd, drvcmdck_pu;
-		u8 dq_drv_a_pd, dq_drv_a_pu;
-		u8 dq_drv_b_pd, dq_drv_b_pu;
-		u8 dq_a, dq_b;
-		u8 vref;
-		u8 dqs_a, dqs_b;
-	} a1_phy;
+		u32 odt_pd, odt_pu;
+		u32 drvcmd_pd, drvcmd_pu;
+		u32 drvcmdck_pd, drvcmdck_pu;
+		u32 dq_drv_a_pd, dq_drv_a_pu;
+		u32 dq_drv_b_pd, dq_drv_b_pu;
+		u32 dq_a, dq_b;
+		u32 vref;
+		u32 dqs_a, dqs_b;
+	} a1_phy;			/* [60..74], A1 builds only */
 #endif
 };
 
 struct ingenic_ddr_priv {
-	const struct ingenic_ddr_variant *cfg;
+	const struct ingenic_ddr_params *cfg;
 	void __iomem *base;		/* DDRC controller base */
 	u32 ram_size;			/* total bytes (chip0+chip1, capped) */
 };
@@ -255,7 +258,7 @@ void ingenic_ddr_t40_phy_set_skew(struct ingenic_ddr_priv *p);
 
 /* ----- A1-family PHY paths (ddr_innophy_phy_a1.c, A1 builds only) ----- */
 #ifdef CONFIG_SOC_A1
-void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_variant *v);
+void ingenic_ddr_a1_cgu_init(const struct ingenic_ddr_params *v);
 int ingenic_ddr_a1_phy_init(struct ingenic_ddr_priv *p);
 int ingenic_ddr_a1_phy_hw_calibration(struct ingenic_ddr_priv *p);
 void ingenic_ddr_a1_post_phy_fixups(struct ingenic_ddr_priv *p);
@@ -263,21 +266,6 @@ void ingenic_ddr_a1_post_phy_fixups(struct ingenic_ddr_priv *p);
 
 /* ----- Top-level init (ddr_innophy.c) ----- */
 int ingenic_ddr_sdram_init(struct ingenic_ddr_priv *p);
-
-/* ----- Per-variant configs (ddr_innophy_types.c, T41 family) ----- */
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41nq;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41a;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41l;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41lq;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41n;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41xq;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zg;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zgc;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zl;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zm;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zmc;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zn;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
 
 /*
  * Find the DDR node in the FDT (by trying each known per-SKU compatible)
@@ -288,18 +276,5 @@ extern const struct ingenic_ddr_variant ingenic_ddr_variant_t41zx;
  */
 int ingenic_ddr_pll_setpoints(u32 *apll_mnod, u32 *mpll_mnod,
 			      u32 *vpll_mnod);
-
-/* ----- Per-variant configs (T40 family) ----- */
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40a;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40n;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_t40xp;
-
-/* ----- Per-variant configs (A1 family, A1 builds only) ----- */
-#ifdef CONFIG_SOC_A1
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1n;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1nt;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1x;
-extern const struct ingenic_ddr_variant ingenic_ddr_variant_a1l;
-#endif
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_INNOPHY_H */

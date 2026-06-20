@@ -140,10 +140,19 @@
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
 /*
- * SPL clock helper. pll_init_params() sets APLL/MPLL + the CPCCR dividers from
- * the per-SKU setpoints; T23's imperative DDR bring-up calls it before DRAM is
- * up. (T23 has no VPLL.)
+ * SPL bring-up helpers (t23/{serial,sfc}.c) and the shared imperative DDR
+ * bring-up entry (ddr_t31.c). pll_init_params() sets APLL/MPLL + the CPCCR
+ * dividers from the per-SKU setpoints; T23's imperative DDR bring-up calls it
+ * before DRAM is up. (T23 has no VPLL.)
  */
 void pll_init_params(u32 apll, u32 mpll, u32 cpccr);
+void clk_ungate_uart(unsigned int idx);
+void t23_spl_serial_init(void);
+void t23_spl_puts(const char *s);
+void t23_spl_putc(char c);
+void t23_spl_sfc_clk_init(void);
+void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
+int ingenic_t31_ddr_bringup_from_fdt(void);
 
 #endif /* __T23_H__ */

@@ -62,16 +62,33 @@ static int mmc_block_op(enum dfu_op op, struct dfu_entity *dfu,
 	debug("%s: %s dev: %d start: %d cnt: %d buf: 0x%p\n", __func__,
 	      op == DFU_OP_READ ? "MMC READ" : "MMC WRITE",
 	      dfu->data.mmc.dev_num, blk_start, blk_count, buf);
-	switch (op) {
-	case DFU_OP_READ:
-		n = blk_dread(mmc_get_blk_desc(mmc), blk_start, blk_count, buf);
-		break;
-	case DFU_OP_WRITE:
-		n = blk_dwrite(mmc_get_blk_desc(mmc), blk_start, blk_count,
-			       buf);
-		break;
-	default:
-		pr_err("Operation not supported\n");
+	for (int try = 0; ; try++) {
+		switch (op) {
+		case DFU_OP_READ:
+			n = blk_dread(mmc_get_blk_desc(mmc), blk_start, blk_count, buf);
+			break;
+		case DFU_OP_WRITE:
+			n = blk_dwrite(mmc_get_blk_desc(mmc), blk_start, blk_count,
+				       buf);
+			break;
+		default:
+			pr_err("Operation not supported\n");
+			n = 0;
+		}
+		if (n == blk_count || op != DFU_OP_WRITE || try >= 7)
+			break;
+		printf("MMC: write error - re-initialising card and retrying (%d)\n",
+		       try + 1);
+		/*
+		 * Some Ingenic MSC (SDHCI) controllers fail a multi-block write
+		 * with a spurious data CRC/end-bit error a few blocks in when
+		 * the transfer runs on the stale boot-time card init (e.g. once
+		 * the USB gadget has run). A full card re-init clears the
+		 * controller state; mmc_init() no-ops unless has_init is first
+		 * cleared. Then retry the transfer.
+		 */
+		mmc->has_init = 0;
+		mmc_init(mmc);
 	}
 
 	if (n != blk_count) {

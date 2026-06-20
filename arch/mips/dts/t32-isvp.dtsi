@@ -23,7 +23,7 @@
 		stdout-path = "serial1:115200n8";
 	};
 
-	memory {
+	memory@0 {
 		device_type = "memory";
 		/* Placeholder; the DDR driver reports the real per-SKU size. */
 		reg = <0x0 0x04000000>;

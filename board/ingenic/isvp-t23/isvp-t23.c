@@ -4,9 +4,9 @@
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
  * (mach-xburst/t23) brings up console + PLL + Innophy DDR2. The T23
- * SKU (geometry + clocks) is selected at runtime by the DDR node's
- * per-SKU compatible (drivers/ram/ingenic/ddr_t23_types.c);
- * T23/T23N = 64 MB, T23DL/T23DN = 32 MB, no 128 MB board.
+ * SKU (geometry + clocks) comes from the &ddr node's per-SKU
+ * "ingenic,sdram-params" array in the DT; T23/T23N = 64 MB,
+ * T23DL/T23DN = 32 MB, no 128 MB board.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -172,8 +172,7 @@ int board_init(void)
  */
 int checkboard(void)
 {
-#ifdef CONFIG_SPL_T23_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T23_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

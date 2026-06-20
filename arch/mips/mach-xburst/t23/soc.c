@@ -28,24 +28,13 @@
 #include <ram.h>
 #include <spl.h>
 #include <asm/global_data.h>
+#include <asm/io.h>
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t23.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void clk_ungate_uart(unsigned int idx);
-void t23_spl_serial_init(void);
-void t23_spl_puts(const char *s);
-void t23_spl_putc(char c);
-void t23_spl_sfc_clk_init(void);
-void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
-		      unsigned int bytes);
-
-/* ddr_t31.c: imperative pre-DM DDR bring-up (PLLs + DDR from FDT params). */
-int ingenic_t31_ddr_bringup_from_fdt(void);
-
-#ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
 {
 	static const char hex[] = "0123456789abcdef";
@@ -89,15 +78,15 @@ static void t23_spl_to_dram(void)
 		*(volatile u32 *)(((from) + a) | 0x20000000) =		\
 			*(volatile u32 *)((from) + a);			\
 } while (0)
-#ifdef CONFIG_SPL_T23_USB_BOOT
-	/* bootrom vars + SPL + DTB */
-	T23_CP(0x80000000UL, CONFIG_SPL_BSS_START_ADDR - 0x80000000UL);
-#else
-	t23_spl_nor_read(0, (unsigned int *)(CONFIG_SPL_TEXT_BASE |
-					     0x20000000),
-			 CONFIG_SPL_BSS_START_ADDR - CONFIG_SPL_TEXT_BASE);
-	T23_CP(0x80000000UL, 0x1000);	/* bootrom vars page */
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T23_USB_BOOT)) {
+		/* bootrom vars + SPL + DTB */
+		T23_CP(0x80000000UL, CONFIG_SPL_BSS_START_ADDR - 0x80000000UL);
+	} else {
+		t23_spl_nor_read(0, (unsigned int *)(CONFIG_SPL_TEXT_BASE |
+						     0x20000000),
+				 CONFIG_SPL_BSS_START_ADDR - CONFIG_SPL_TEXT_BASE);
+		T23_CP(0x80000000UL, 0x1000);	/* bootrom vars page */
+	}
 	T23_CP(CONFIG_SPL_BSS_START_ADDR, CONFIG_SPL_BSS_MAX_SIZE);
 	T23_CP(CONFIG_SPL_STACK - 0x4000, 0x4000);	/* live stack */
 #undef T23_CP
@@ -131,18 +120,18 @@ static int dram_verify(u32 size)
 
 	for (b = 0; b < 2; b++) {
 		for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-			volatile u32 *a =
-				(volatile u32 *)(bases[b] + offs[o]);
+			void __iomem *a =
+				(void __iomem *)(uintptr_t)(bases[b] + offs[o]);
 
 			for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-				*a = pat[p];
-				if (*a != pat[p]) {
+				writel(pat[p], a);
+				if (readl(a) != pat[p]) {
 					t23_spl_puts("T23 SPL: DDR FAIL @");
 					spl_put_hex((u32)(uintptr_t)a);
 					t23_spl_puts(" wrote ");
 					spl_put_hex(pat[p]);
 					t23_spl_puts(" read ");
-					spl_put_hex(*a);
+					spl_put_hex(readl(a));
 					t23_spl_putc('\n');
 					return -1;
 				}
@@ -151,15 +140,16 @@ static int dram_verify(u32 size)
 	}
 
 	for (o = 0; o < (int)ARRAY_SIZE(offs); o++)
-		*(volatile u32 *)(0xa0000000 + offs[o]) = 0xa5000000 | offs[o];
+		writel(0xa5000000 | offs[o],
+		       (void __iomem *)(uintptr_t)(0xa0000000 + offs[o]));
 	for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-		volatile u32 *a = (volatile u32 *)(0xa0000000 + offs[o]);
+		void __iomem *a = (void __iomem *)(uintptr_t)(0xa0000000 + offs[o]);
 
-		if (*a != (0xa5000000 | offs[o])) {
+		if (readl(a) != (0xa5000000 | offs[o])) {
 			t23_spl_puts("T23 SPL: DDR ALIAS @");
 			spl_put_hex((u32)(uintptr_t)a);
 			t23_spl_puts(" read ");
-			spl_put_hex(*a);
+			spl_put_hex(readl(a));
 			t23_spl_puts(" (controller mis-sized vs part)\n");
 			return -1;
 		}
@@ -235,16 +225,17 @@ void board_init_f(ulong dummy)
 		dram_verify((u32)ram.size);
 	}
 
-#ifdef CONFIG_SPL_T23_USB_BOOT
-	/*
-	 * USB-boot stage1: clocks and DDR are up. Set up the SFC clock so
-	 * U-Boot proper (uploaded to DRAM by the mask ROM) can probe NOR,
-	 * then return into the mask ROM USB loop (start.S kept the bootrom
-	 * sp, so a plain jr ra resumes it).
-	 */
-	t23_spl_sfc_clk_init();
-	return;
-#else
+	if (IS_ENABLED(CONFIG_SPL_T23_USB_BOOT)) {
+		/*
+		 * USB-boot stage1: clocks and DDR are up. Set up the SFC
+		 * clock so U-Boot proper (uploaded to DRAM by the mask ROM)
+		 * can probe NOR, then return into the mask ROM USB loop
+		 * (start.S kept the bootrom sp, so a plain jr ra resumes it).
+		 */
+		t23_spl_sfc_clk_init();
+		return;
+	}
+
 	/*
 	 * NOR cold-boot: DDR is up, so hand off to the standard SPL
 	 * framework board_init_r(). It sets up the DRAM malloc heap and
@@ -256,11 +247,9 @@ void board_init_f(ulong dummy)
 	t23_spl_sfc_clk_init();
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
-#endif
 }
 
 u32 spl_boot_device(void)
 {
 	return BOOT_DEVICE_SPI;
 }
-#endif /* CONFIG_XPL_BUILD */

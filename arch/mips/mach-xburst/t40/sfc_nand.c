@@ -24,13 +24,11 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void t40_spl_puts(const char *s);
-void t40_spl_putc(char c);
-
 static void puthex32(u32 v)
 {
 	static const char hex[] = "0123456789abcdef";
 	int i;
+
 	for (i = 28; i >= 0; i -= 4)
 		t40_spl_putc(hex[(v >> i) & 0xf]);
 }
@@ -242,7 +240,8 @@ static void sfc_controller_init(void)
 
 	/* SFC_GLB: wp_en=1, tran_dir=0, op_mode=0, threshold=31, phase_num=1.
 	 * Bits: WP_EN=(1<<2), TRAN_DIR=(1<<13), OP_MODE=(1<<6),
-	 *       THRESHOLD=(0x3f<<7), PHASE_NUM=(0x7<<3). */
+	 *       THRESHOLD=(0x3f<<7), PHASE_NUM=(0x7<<3).
+	 */
 	t = sfc_readl(SFC_GLB);
 	t &= ~((1 << 13) | (1 << 6) | THRESHOLD_MSK | PHASE_NUM_MSK);
 	t |= (1 << 2);				/* WP_EN */
@@ -251,12 +250,14 @@ static void sfc_controller_init(void)
 	sfc_writel(t, SFC_GLB);
 
 	/* SFC_DEV_CONF: cmd_type=0, cpol=0, cpha=0, smp_delay=0, thold=0,
-	 * tsetup=0, tsh=0, ce_dl=1, hold_dl=1, wp_dl=1. */
+	 * tsetup=0, tsh=0, ce_dl=1, hold_dl=1, wp_dl=1.
+	 */
 	sfc_writel(0x7, SFC_DEV_CONF);
 
 	/* Clear FMAT (TRAN_CONF0 bit 23) and TRAN_MODE (TRAN_CONF1 bits
 	 * 4-7) for all 6 channels - leftover bits from previous SFC use
-	 * (e.g. a prior NOR probe) break later transactions. */
+	 * (e.g. a prior NOR probe) break later transactions.
+	 */
 	for (i = 0; i < 6; i++) {
 		sfc_writel(sfc_readl(SFC_TRAN_CONF(i)) & ~(1 << 23),
 			   SFC_TRAN_CONF(i));
@@ -327,7 +328,8 @@ static int spinand_probe_id(struct jz_sfc *sfc)
 		u8 buf[8] = { 0 };
 
 		/* Clear all SFC status flags before each transfer (matches
-		 * drivers/spi/ingenic_sfc.c sfc_exec_op behaviour). */
+		 * drivers/spi/ingenic_sfc.c sfc_exec_op behaviour).
+		 */
 		sfc_writel(CLR_END | (1 << 3) | CLR_RREQ |
 			   (1 << 1) | (1 << 0), SFC_SCR);
 		SFC_SEND_COMMAND(sfc, CMD_RDID, 4, 0,
@@ -338,7 +340,8 @@ static int spinand_probe_id(struct jz_sfc *sfc)
 		if (probe_id_match(buf[0], buf[1]) == 0)
 			return 0;
 		/* The +1-offset retry handles the case where the chip
-		 * returned (dummy, mfr, did, ...) instead of (mfr, did, ...). */
+		 * returned (dummy, mfr, did, ...) instead of (mfr, did, ...).
+		 */
 		if (probe_id_match(buf[1], buf[2]) == 0)
 			return 0;
 	}
@@ -406,7 +409,8 @@ read_oob:
 	}
 
 	/* Page Read: transfer cell -> on-chip cache. Status1.OIP polled
-	 * until 0 (transfer complete). */
+	 * until 0 (transfer complete).
+	 */
 	SFC_SEND_COMMAND(&sfc, CMD_PARD, 0, page, 3, 0, 0, 0);
 	clear_end();
 	do {
@@ -417,7 +421,8 @@ read_oob:
 	} while (read_buf & 0x1);
 
 	/* ECC status check (vendor pattern: shift, mask by bit_counts,
-	 * compare against eccerrstatus[]). */
+	 * compare against eccerrstatus[]).
+	 */
 	for (i = 0; i < curr_device->eccstat_count; i++) {
 		if (((read_buf >> curr_device->ecc_bit) &
 		     (~(0xff << curr_device->bit_counts))) ==
@@ -442,7 +447,8 @@ read_oob:
 	sfc_read_buf((u32 *)dst, len);
 
 	/* Bad-block detection: on the first page of each block, also read
-	 * the first OOB byte; if it's not 0xff, mark block bad. */
+	 * the first OOB byte; if it's not 0xff, mark block bad.
+	 */
 	if (!read_id_oob && !(page % SPI_NAND_PPB)) {
 		read_id_oob = 1;
 		goto read_oob;
@@ -543,7 +549,7 @@ static u32 hdr_be32(const u8 *p)
  * lines are never touched because U-Boot proper landed in DRAM via
  * the SFC controller (which doesn't pass through cache).
  */
-static void __attribute__((noreturn)) t40_jump_to_uboot(unsigned long target)
+static void __noreturn t40_jump_to_uboot(unsigned long target)
 {
 	unsigned long kseg1 = (target & 0x1fffffff) | 0xa0000000;
 

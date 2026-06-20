@@ -27,16 +27,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void pll_init(void);
-void clk_ungate_uart(unsigned int idx);
-void t40_spl_serial_init(void);
-void t40_spl_sfc_clk_init(void);
-int timer_init(void);
-
-#ifdef CONFIG_XPL_BUILD
-gd_t gdata __section(".bss");
-
-extern char __bss_start[], __bss_end[];
+static gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
@@ -75,6 +66,7 @@ void board_init_f(ulong dummy)
 	 */
 	{
 		u32 v = readl((void __iomem *)(CCU_BASE + 0xfe0));
+
 		writel(v | 0x18, (void __iomem *)(CCU_BASE + 0xfe0));
 	}
 
@@ -96,7 +88,8 @@ void board_init_f(ulong dummy)
 	/* Bring driver model up so the UCLASS_RAM driver in
 	 * drivers/ram/ingenic/ can probe off the memory-controller node
 	 * in DT. spl_init() runs dm_init_and_scan() + dm_autoprobe();
-	 * we then explicitly probe the RAM uclass to bring DRAM up. */
+	 * we then explicitly probe the RAM uclass to bring DRAM up.
+	 */
 	if (spl_init())
 		hang();
 
@@ -113,32 +106,32 @@ void board_init_f(ulong dummy)
 	 * cold-boot SFC NOR load and any DM operations against the flash
 	 * later) has a usable clock. The bootrom configured the SFC for
 	 * its own load, but our pll_init / CGU re-source above may have
-	 * left SFCCDR in a stale state. */
+	 * left SFCCDR in a stale state.
+	 */
 	t40_spl_sfc_clk_init();
 
 #ifdef CONFIG_SPL_T40_USB_BOOT
 	/* USB-boot dev path: return to mask ROM. The bootrom uploads
-	 * U-Boot proper to 0x80100000 and jumps to it. */
+	 * U-Boot proper to 0x80100000 and jumps to it.
+	 */
 	return;
 #elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
 	/* SFC NAND cold-boot (T40XP): DDR is up via UCLASS_RAM, the SPL
 	 * framework's malloc heap is in DRAM. Mainline U-Boot has no
 	 * generic DM SPI-NAND SPL loader, so call the custom NAND loader
 	 * in sfc_nand.c which reads the legacy mkimage header from the
-	 * boot NAND, LZMA-decompresses to CONFIG_TEXT_BASE, and jumps. */
-	{
-		extern void t40_spl_nand_load_uboot(void);
-
-		t40_spl_nand_load_uboot();
-		hang();
-	}
+	 * boot NAND, LZMA-decompresses to CONFIG_TEXT_BASE, and jumps.
+	 */
+	t40_spl_nand_load_uboot();
+	hang();
 #else
 	/* SFC NOR cold-boot: hand off to the standard SPL framework
 	 * board_init_r(). It runs boot_from_devices() against
 	 * spl_boot_device() (BOOT_DEVICE_SPI below), which uses the SPI
 	 * flash uclass to load u-boot-lzma.img from NOR offset
 	 * CONFIG_SYS_SPI_U_BOOT_OFFS, LZMA-decompresses to DRAM and
-	 * jumps. Does not return. */
+	 * jumps. Does not return.
+	 */
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 #endif
@@ -150,4 +143,3 @@ u32 spl_boot_device(void)
 	return BOOT_DEVICE_SPI;
 }
 #endif
-#endif /* CONFIG_XPL_BUILD */

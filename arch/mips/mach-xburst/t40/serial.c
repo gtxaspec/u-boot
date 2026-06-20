@@ -9,6 +9,7 @@
  */
 
 #include <asm/io.h>
+#include <linux/bitops.h>
 #include <mach/t40.h>
 
 #define U_THR_DLL	0x00
@@ -18,17 +19,17 @@
 #define U_LSR		0x14
 #define U_ISR		0x20
 
-#define FCR_FE		(1 << 0)
-#define FCR_RFLS	(1 << 1)
-#define FCR_TFLS	(1 << 2)
-#define FCR_UUE		(1 << 4)
+#define FCR_FE		BIT(0)
+#define FCR_RFLS	BIT(1)
+#define FCR_TFLS	BIT(2)
+#define FCR_UUE		BIT(4)
 #define LCR_WLEN_8	(3 << 0)
 #define LCR_STOP_1	(0 << 2)
-#define LCR_DLAB	(1 << 7)
-#define LSR_TDRQ	(1 << 5)
-#define LSR_TEMT	(1 << 6)
-#define SIRCR_TSIRE	(1 << 0)
-#define SIRCR_RSIRE	(1 << 1)
+#define LCR_DLAB	BIT(7)
+#define LSR_TDRQ	BIT(5)
+#define LSR_TEMT	BIT(6)
+#define SIRCR_TSIRE	BIT(0)
+#define SIRCR_RSIRE	BIT(1)
 
 #define T40_UART1_CLK	24000000
 #define T40_UART1_BAUD	115200

@@ -176,12 +176,13 @@ int board_init(void)
 	return 0;
 }
 
-/* Printed right after the "Model:" line. The exact T32 SKU is carried
- * by the per-SKU DT /model (no compile-time CONFIG_T32_VARIANT_*). */
+/*
+ * Printed right after the "Model:" line. The exact T32 SKU is carried
+ * by the per-SKU DT /model (no compile-time CONFIG_T32_VARIANT_*).
+ */
 int checkboard(void)
 {
-#ifdef CONFIG_SPL_T32_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T32_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

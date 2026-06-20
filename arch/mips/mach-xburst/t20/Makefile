@@ -6,12 +6,13 @@
 #
 # Phase split (mt7621 pattern): the TPL (cache-as-RAM) brings up PLL+DDR and
 # loads the DRAM-resident SPL; the SPL (board_init_f in soc.c) runs the DM
-# scan and loads U-Boot. Shared low-level helpers are built for every phase.
+# scan and loads U-Boot. The shared low-level helpers are built for both
+# loader phases (TPL + SPL).
 
-obj-y	+= pll.o serial.o sfc.o
+obj-$(CONFIG_XPL_BUILD)	+= pll.o serial.o sfc.o
 
 ifeq ($(CONFIG_TPL_BUILD),y)
 obj-y	+= tpl.o
 else
-obj-y	+= soc.o
+obj-$(CONFIG_XPL_BUILD)	+= soc.o
 endif

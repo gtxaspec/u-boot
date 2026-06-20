@@ -12,6 +12,7 @@
  */
 
 #include <asm/io.h>
+#include <linux/bitops.h>
 #include <mach/t20.h>
 
 /* jz_uart byte registers, 4-byte stride (see vendor asm/jz_uart.h) */
@@ -22,17 +23,17 @@
 #define U_LSR		0x14
 #define U_ISR		0x20
 
-#define FCR_FE		(1 << 0)	/* FIFO enable */
-#define FCR_RFLS	(1 << 1)	/* flush RX FIFO */
-#define FCR_TFLS	(1 << 2)	/* flush TX FIFO */
-#define FCR_UUE		(1 << 4)	/* UART unit enable */
+#define FCR_FE		BIT(0)	/* FIFO enable */
+#define FCR_RFLS	BIT(1)	/* flush RX FIFO */
+#define FCR_TFLS	BIT(2)	/* flush TX FIFO */
+#define FCR_UUE		BIT(4)	/* UART unit enable */
 #define LCR_WLEN_8	(3 << 0)
 #define LCR_STOP_1	(0 << 2)
-#define LCR_DLAB	(1 << 7)
-#define LSR_TDRQ	(1 << 5)	/* TX FIFO half-empty */
-#define LSR_TEMT	(1 << 6)	/* TX FIFO + shift reg empty */
-#define SIRCR_TSIRE	(1 << 0)	/* 1: TX in IrDA mode */
-#define SIRCR_RSIRE	(1 << 1)	/* 1: RX in IrDA mode */
+#define LCR_DLAB	BIT(7)
+#define LSR_TDRQ	BIT(5)	/* TX FIFO half-empty */
+#define LSR_TEMT	BIT(6)	/* TX FIFO + shift reg empty */
+#define SIRCR_TSIRE	BIT(0)	/* 1: TX in IrDA mode */
+#define SIRCR_RSIRE	BIT(1)	/* 1: RX in IrDA mode */
 
 #define T20_UART1_CLK	24000000	/* EXTAL feeds the baud generator */
 #define T20_UART1_BAUD	115200

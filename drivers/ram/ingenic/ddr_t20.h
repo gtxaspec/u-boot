@@ -31,6 +31,7 @@
 #define _DRIVERS_RAM_INGENIC_DDR_T20_H
 
 #include <linux/types.h>
+#include <linux/bitops.h>
 
 /* Base addresses (KSEG1 uncached); fixed on XBurst1 T20. */
 #define DDRC_BASE		0xb34f0000
@@ -52,11 +53,11 @@
 #define DDRC_TIMING(n)		(0x060 + 4 * ((n) - 1))
 #define DDRC_REMAP(n)		(0x09c + 4 * ((n) - 1))
 
-#define DDRC_DSTATUS_MISS	(1 << 6)
-#define DDRC_CFG_CS1EN		(1 << 7)
-#define DDRC_CFG_CS0EN		(1 << 6)
-#define DDRC_CTRL_ALH		(1 << 3)
-#define DDRC_CTRL_CKE		(1 << 1)
+#define DDRC_DSTATUS_MISS	BIT(6)
+#define DDRC_CFG_CS1EN		BIT(7)
+#define DDRC_CFG_CS0EN		BIT(6)
+#define DDRC_CTRL_ALH		BIT(3)
+#define DDRC_CTRL_CKE		BIT(1)
 
 /* DWC PHY register offsets (relative to DDR_PHY_BASE) */
 #define DDRP_PIR		0x004	/* PHY Initialization Register */
@@ -87,28 +88,28 @@
 #define DDRP_ZQXSR0(n)		(0x188 + (n) * 0x10)	/* ZQ Imp Status 0 */
 
 /* DDRP PHY Initialization Register bits */
-#define DDRP_PIR_INIT		(1 << 0)
-#define DDRP_PIR_DLLSRST	(1 << 1)
-#define DDRP_PIR_DLLLOCK	(1 << 2)
-#define DDRP_PIR_ZCAL		(1 << 3)
-#define DDRP_PIR_ITMSRST	(1 << 4)
-#define DDRP_PIR_DRAMRST	(1 << 5)
-#define DDRP_PIR_DRAMINT	(1 << 6)
-#define DDRP_PIR_QSTRN		(1 << 7)
-#define DDRP_PIR_DLLBYP		(1 << 17)
-#define DDRP_PIR_LOCKBYP	(1 << 29)
+#define DDRP_PIR_INIT		BIT(0)
+#define DDRP_PIR_DLLSRST	BIT(1)
+#define DDRP_PIR_DLLLOCK	BIT(2)
+#define DDRP_PIR_ZCAL		BIT(3)
+#define DDRP_PIR_ITMSRST	BIT(4)
+#define DDRP_PIR_DRAMRST	BIT(5)
+#define DDRP_PIR_DRAMINT	BIT(6)
+#define DDRP_PIR_QSTRN		BIT(7)
+#define DDRP_PIR_DLLBYP		BIT(17)
+#define DDRP_PIR_LOCKBYP	BIT(29)
 
 /* DDRP PHY General Status Register bits */
-#define DDRP_PGSR_IDONE		(1 << 0)
-#define DDRP_PGSR_DLDONE	(1 << 1)
-#define DDRP_PGSR_ZCDONE	(1 << 2)
-#define DDRP_PGSR_DIDONE	(1 << 3)
-#define DDRP_PGSR_DTDONE	(1 << 4)
-#define DDRP_PGSR_DTERR		(1 << 5)
-#define DDRP_PGSR_DTIERR	(1 << 6)
+#define DDRP_PGSR_IDONE		BIT(0)
+#define DDRP_PGSR_DLDONE	BIT(1)
+#define DDRP_PGSR_ZCDONE	BIT(2)
+#define DDRP_PGSR_DIDONE	BIT(3)
+#define DDRP_PGSR_DTDONE	BIT(4)
+#define DDRP_PGSR_DTERR		BIT(5)
+#define DDRP_PGSR_DTIERR	BIT(6)
 
-#define DDRP_ZQXCR_ZDEN		(1 << 28)
-#define DDRP_DXGCR_DXEN		(1 << 0)
+#define DDRP_ZQXCR_ZDEN		BIT(28)
+#define DDRP_DXGCR_DXEN		BIT(0)
 
 /*
  * DWC GOLD values that are identical across every SKU served by this driver

@@ -19,7 +19,5 @@ const struct xburst_tpl_soc xburst_tpl_soc = {
 	.console_uart	= T20_CONSOLE_UART,
 	.spl_nor_offs	= 0x8000,
 	.banner		= "\nT20 TPL\n",
-#ifdef CONFIG_SPL_T20_USB_BOOT
-	.usb_boot	= true,
-#endif
+	.usb_boot	= IS_ENABLED(CONFIG_SPL_T20_USB_BOOT),
 };

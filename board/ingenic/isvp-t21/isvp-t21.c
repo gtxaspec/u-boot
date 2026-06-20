@@ -4,9 +4,9 @@
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
  * (mach-xburst/t21) brings up console + PLL + Innophy DDR2. The T21
- * SKU (clock profile) is selected at runtime by the DDR node's
- * per-SKU compatible (drivers/ram/ingenic/ddr_t21_types.c); both
- * SKUs are the 64 MB M14D5121632A.
+ * SKU (clock profile) comes from the &ddr node's per-SKU
+ * "ingenic,sdram-params" array in the DT; both SKUs are the 64 MB
+ * M14D5121632A.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -221,8 +221,7 @@ int board_init(void)
  */
 int checkboard(void)
 {
-#ifdef CONFIG_SPL_T21_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T21_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

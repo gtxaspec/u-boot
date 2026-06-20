@@ -87,9 +87,11 @@
 #define CPM_CLKGR1_SYS_OST	BIT(11)
 #define CPM_CLKGR1_GMAC		BIT(4)
 
-/* USB PHY control (CPM_USBPCR / CPM_USBPCR1 / CPM_OPCR) - vendor
+/*
+ * USB PHY control (CPM_USBPCR / CPM_USBPCR1 / CPM_OPCR) - vendor
  * otg_phy_init() host path. The VBUS/OTG_DISABLE bits are nops on
- * T31 but written for a faithful transliteration. */
+ * T31 but written for a faithful transliteration.
+ */
 #define USBPCR_USB_MODE_ORG	BIT(31)
 #define USBPCR_AVLD_REG		BIT(30)
 #define USBPCR_IDPULLUP_MASK	(0x3u << 28)

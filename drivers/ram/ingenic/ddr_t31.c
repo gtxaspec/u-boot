@@ -173,7 +173,7 @@ static void phy_calibration(void)
 	m = phy_readl(INNO_TRAINING_CTRL);
 	m = 0xa1;
 	phy_writel(m, INNO_TRAINING_CTRL);
-	while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xcc)))
+	while (readl((void __iomem *)(DDR_PHY_BASE + 0xcc)) != 0x3)
 		;
 	phy_writel(0xa0, INNO_TRAINING_CTRL);
 }
@@ -237,8 +237,10 @@ static void ddr_inno_phy_init(const struct ingenic_t31_ddr_params *cfg)
 	writel(0x0a, (void __iomem *)REG_DDR_CTRL);
 
 	if (ddr3) {
-		/* DDR3 LMR MRS sequence: MR2,MR3,MR1,MR0,ZQCL (no-poll
-		 * writel pairs - vendor ddr_innophy.c DDR3 branch). */
+		/*
+		 * DDR3 LMR MRS sequence: MR2,MR3,MR1,MR0,ZQCL (no-poll
+		 * writel pairs - vendor ddr_innophy.c DDR3 branch).
+		 */
 		writel((0x08 << 12) | 0x211, (void __iomem *)REG_DDR_LMR);
 		writel(0, (void __iomem *)REG_DDR_LMR);
 		writel(0x311, (void __iomem *)REG_DDR_LMR);
@@ -254,7 +256,7 @@ static void ddr_inno_phy_init(const struct ingenic_t31_ddr_params *cfg)
 		writel(0x4, (void __iomem *)(DDR_PHY_BASE + 0x0c));
 		writel(0x40, (void __iomem *)(DDR_PHY_BASE + 0x10));
 		writel(0xa4, (void __iomem *)(DDR_PHY_BASE + 0x08));
-		while (0x3 != readl((void __iomem *)(DDR_PHY_BASE + 0xc0)))
+		while (readl((void __iomem *)(DDR_PHY_BASE + 0xc0)) != 0x3)
 			;
 		writel(0xa1, (void __iomem *)(DDR_PHY_BASE + 0x08));
 	} else {
@@ -407,7 +409,8 @@ int ingenic_t31_ddr_bringup_from_fdt(void)
  * stage (the TPL on the capped SoCs, the SPL on the uncapped T31); the later
  * probe just records the size. T23 brings DDR up imperatively before the DM
  * scan, so by the time its probe runs ddr_done is set and it only records size.
- * ------------------------------------------------------------------ */
+ * ------------------------------------------------------------------
+ */
 
 struct ingenic_t31_ddr_plat {
 #if CONFIG_IS_ENABLED(OF_PLATDATA)

@@ -48,9 +48,12 @@ static void pll_set(unsigned int reg, u32 mnod)
 	 */
 	cur = cpm_readl(reg);
 	if ((cur & PLL_PLLEN) && ((cur & ~0xff) != (mnod & ~0xff))) {
-		volatile int d;
+		int d;
+
 		cpm_writel(cur & ~PLL_PLLEN, reg);
-		for (d = 0; d < 1000; d++);	/* ~1us busy-wait (no timer yet) */
+		/* ~1us busy-wait (no timer yet) */
+		for (d = 0; d < 1000; d++)
+			__asm__ volatile ("");
 	}
 	cpm_writel(mnod | PLL_PLLEN, reg);
 	while (!(cpm_readl(reg) & PLL_PLLON))

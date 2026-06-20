@@ -177,4 +177,13 @@
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
+#ifndef __ASSEMBLY__
+/* SPL bring-up helpers (mach-xburst/t41/{pll,serial,sfc,timer}.c) */
+void pll_init(void);
+void clk_ungate_uart(unsigned int idx);
+int timer_init(void);
+void t41_spl_serial_init(void);
+void t41_spl_sfc_clk_init(void);
+#endif /* __ASSEMBLY__ */
+
 #endif /* __T41_H__ */

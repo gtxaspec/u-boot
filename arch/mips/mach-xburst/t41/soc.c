@@ -25,16 +25,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void pll_init(void);
-void clk_ungate_uart(unsigned int idx);
-void t41_spl_serial_init(void);
-void t41_spl_sfc_clk_init(void);
-int timer_init(void);
-
-#ifdef CONFIG_XPL_BUILD
-gd_t gdata __section(".bss");
-
-extern char __bss_start[], __bss_end[];
+static gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
@@ -73,6 +64,7 @@ void board_init_f(ulong dummy)
 	 */
 	{
 		u32 v = readl((void __iomem *)(CCU_BASE + 0xfe0));
+
 		writel(v | 0x18, (void __iomem *)(CCU_BASE + 0xfe0));
 	}
 
@@ -96,13 +88,15 @@ void board_init_f(ulong dummy)
 	 * in DT. spl_init() runs dm_init_and_scan() and dm_autoprobe()
 	 * which together find the device, look up the variant struct via
 	 * the compatible string, and call the driver's .probe (which in
-	 * SPL phase runs ingenic_ddr_sdram_init() against the variant). */
+	 * SPL phase runs ingenic_ddr_sdram_init() against the variant).
+	 */
 	if (spl_init())
 		hang();
 
 	/* Bring up DDR: probe the UCLASS_RAM driver explicitly. The driver
 	 * programs the DDR CGU (source + divider) itself before training the
-	 * Innophy PHY, so nothing needs to set the CGU up beforehand. */
+	 * Innophy PHY, so nothing needs to set the CGU up beforehand.
+	 */
 	{
 		struct udevice *dev;
 
@@ -112,7 +106,8 @@ void board_init_f(ulong dummy)
 
 	/* Switch to DM serial output so board_init_r framework printf
 	 * goes somewhere visible. spl_init already brought DM up; this
-	 * probes the UART uclass and points printf at it. */
+	 * probes the UART uclass and points printf at it.
+	 */
 	preloader_console_init();
 
 	/* Re-program CPM_SFCCDR so the SFC SPI driver (used for both the
@@ -120,7 +115,8 @@ void board_init_f(ulong dummy)
 	 * later) has a usable clock. The bootrom used the SFC to load the
 	 * SPL, but pll_init() above may have left SFCCDR in a stale state.
 	 * vendor t41_spl_sfc_clk_init() programs source/div/CE consistent
-	 * with the SFC controller's expectation. */
+	 * with the SFC controller's expectation.
+	 */
 	t41_spl_sfc_clk_init();
 
 #ifdef CONFIG_SPL_T41_USB_BOOT
@@ -128,7 +124,8 @@ void board_init_f(ulong dummy)
 	 * U-Boot proper to 0x80100000 and jumps to it. We intentionally
 	 * skip board_init_r() - SPL framework's board_init_r() never
 	 * returns, but the vendor USB-boot pattern requires the mask ROM
-	 * to take control back after DRAM is up so it can upload U-Boot. */
+	 * to take control back after DRAM is up so it can upload U-Boot.
+	 */
 	return;
 #else
 	/* SFC NOR cold-boot: hand off to the standard SPL framework
@@ -136,7 +133,8 @@ void board_init_f(ulong dummy)
 	 * spl_boot_device() (BOOT_DEVICE_SPI below), which uses the SPI
 	 * flash uclass to load u-boot-lzma.img from NOR offset
 	 * CONFIG_SYS_SPI_U_BOOT_OFFS to DRAM, decompresses LZMA, and
-	 * jumps. Does not return. */
+	 * jumps. Does not return.
+	 */
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 #endif
@@ -148,5 +146,3 @@ u32 spl_boot_device(void)
 	return BOOT_DEVICE_SPI;
 }
 #endif
-
-#endif /* CONFIG_XPL_BUILD */

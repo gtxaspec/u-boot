@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T41 board (DDR2, SFC NOR)
+ * Ingenic ISVP-T41 board (DDR2/DDR3, SFC NOR)
  *
  * T41 board glue. The SPL (mach-xburst/t41) brings up console + PLL
  * + DDR + loads U-Boot proper from SFC NOR. Full U-Boot uses driver
@@ -128,8 +128,7 @@ int board_init(void)
 
 int checkboard(void)
 {
-#ifdef CONFIG_SPL_T41_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T41_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

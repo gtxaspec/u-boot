@@ -22,6 +22,7 @@
  */
 
 #include <asm/io.h>
+#include <linux/bitops.h>
 #include <mach/t20.h>
 #include <mach/t20-sfc.h>
 
@@ -34,7 +35,7 @@
 #define SSI_CGU_CE	29
 #define SSI_CGU_BUSY	28
 #define SSI_CGU_STOP	27
-#define SSI_SRC_MPLL	(1u << 31)	/* select MPLL (sel = 1) */
+#define SSI_SRC_MPLL	BIT(31)	/* select MPLL (sel = 1) */
 
 /*
  * SSI/SFC clock target (vendor sfc_init(): clk_set_rate(SSI, 70M)).

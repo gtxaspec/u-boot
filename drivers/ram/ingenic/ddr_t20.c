@@ -297,7 +297,7 @@ ingenic_t20_ddr_sdram_init_params(const struct ingenic_t20_ddr_params *cfg)
 	 * sdram_init() (settles the DWC controller before first real use);
 	 * 0x03fffffc (top of the 64 MB part) is valid on every T20 SKU.
 	 */
-	*(volatile u32 *)0xa3fffffc = 0x12345678;
+	writel(0x12345678, (void __iomem *)0xa3fffffc);
 
 	return 0;
 }
@@ -312,7 +312,8 @@ ingenic_t20_ddr_sdram_init_params(const struct ingenic_t20_ddr_params *cfg)
  * OF_PLATDATA in a future TPL. Unlike rk3328 (which detects size from a HW
  * register and so only needs platdata in TPL), T20 has no size-detect, so
  * of_to_plat / plat_auto are present in every phase that probes RAM.
- * ------------------------------------------------------------------ */
+ * ------------------------------------------------------------------
+ */
 
 struct ingenic_t20_ddr_plat {
 #if CONFIG_IS_ENABLED(OF_PLATDATA)

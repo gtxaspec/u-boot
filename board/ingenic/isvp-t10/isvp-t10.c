@@ -3,7 +3,7 @@
  * Ingenic ISVP-T10 board (DDR2 64 MB, SFC NOR)
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
- * (mach-xburst/t10) brings up console + PLL + Innophy DDR2 (T10N
+ * (mach-xburst/t10) brings up console + PLL + Synopsys-DWC DDR2 (T10N
  * 64 MB M14D5121632A).
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
@@ -149,8 +149,7 @@ int checkboard(void)
 	 * No "Variant:" line: the SKU is carried by the leaf-DT Model: string
 	 * (params-in-DT, no compile-time variant). DM-SPL boards do not re-add it.
 	 */
-#ifdef CONFIG_SPL_T10_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T10_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

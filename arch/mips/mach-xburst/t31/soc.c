@@ -22,13 +22,13 @@
 #include <ram.h>
 #include <spl.h>
 #include <asm/global_data.h>
+#include <asm/io.h>
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t31.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
 {
 	static const char hex[] = "0123456789abcdef";
@@ -58,18 +58,18 @@ static int dram_verify(u32 size)
 
 	for (b = 0; b < 2; b++) {
 		for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-			volatile u32 *a =
-				(volatile u32 *)(bases[b] + offs[o]);
+			void __iomem *a =
+				(void __iomem *)(uintptr_t)(bases[b] + offs[o]);
 
 			for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-				*a = pat[p];
-				if (*a != pat[p]) {
+				writel(pat[p], a);
+				if (readl(a) != pat[p]) {
 					t31_spl_puts("T31 SPL: DDR FAIL @");
 					spl_put_hex((u32)(uintptr_t)a);
 					t31_spl_puts(" wrote ");
 					spl_put_hex(pat[p]);
 					t31_spl_puts(" read ");
-					spl_put_hex(*a);
+					spl_put_hex(readl(a));
 					t31_spl_putc('\n');
 					return -1;
 				}
@@ -131,43 +131,33 @@ void board_init_f(ulong dummy)
 		dram_verify((u32)ram.size);
 	}
 
-#ifdef CONFIG_SPL_T31_USB_BOOT
+	if (IS_ENABLED(CONFIG_SPL_T31_USB_BOOT)) {
+		/*
+		 * USB-boot stage1: clocks and DDR are up. Set up the SFC
+		 * clock so U-Boot proper (uploaded to DRAM by the mask ROM)
+		 * can probe NOR, then return into the mask ROM USB loop
+		 * (start.S kept the bootrom sp, so a plain jr ra resumes it).
+		 */
+		t31_spl_sfc_clk_init();
+		return;
+	}
+
 	/*
-	 * USB-boot stage1: clocks and DDR are up. Set up the SFC clock so
-	 * U-Boot proper (uploaded to DRAM by the mask ROM) can probe NOR,
-	 * then return into the mask ROM USB loop (start.S kept the bootrom
-	 * sp, so a plain jr ra resumes it).
-	 */
-	t31_spl_sfc_clk_init();
-	return;
-#else
-	/*
-	 * NOR cold-boot: bring driver model up, then hand off to the
-	 * standard SPL framework board_init_r(), which loads
-	 * u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS via the SPI
-	 * flash uclass (spl_boot_device() == BOOT_DEVICE_SPI),
-	 * LZMA-decompresses it and jumps. Does not return.
-	 */
-	/*
-	 * DDR is up, so hand off to the standard SPL framework
-	 * board_init_r(). It sets up the DRAM malloc heap, brings driver
-	 * model up (spl_init) and loads u-boot-lzma.img from
-	 * CONFIG_SYS_SPI_U_BOOT_OFFS via the DM SFC driver
-	 * (spl_boot_device() == BOOT_DEVICE_SPI), LZMA-decompresses it and
-	 * jumps. Driver model is deferred to board_init_r (not called here)
-	 * so the DM scan / autoprobe runs against the full DRAM malloc, not
-	 * the tiny SPL-f heap - T31 needs no DM in board_init_f because DDR
-	 * is hand-rolled.
+	 * NOR cold-boot: DDR is up, so hand off to the standard SPL framework
+	 * board_init_r(). It sets up the DRAM malloc heap, brings driver model
+	 * up (spl_init) and loads u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS
+	 * via the DM SFC driver (spl_boot_device() == BOOT_DEVICE_SPI),
+	 * LZMA-decompresses it and jumps. Driver model is deferred to
+	 * board_init_r (not called here) so the DM scan runs against the full
+	 * DRAM malloc, not the tiny SPL-f heap. Does not return.
 	 */
 	preloader_console_init();
 	t31_spl_sfc_clk_init();
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
-#endif
 }
 
 u32 spl_boot_device(void)
 {
 	return BOOT_DEVICE_SPI;
 }
-#endif /* CONFIG_XPL_BUILD */

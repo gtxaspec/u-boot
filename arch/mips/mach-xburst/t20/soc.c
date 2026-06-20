@@ -24,13 +24,13 @@
 #include <ram.h>
 #include <spl.h>
 #include <asm/global_data.h>
+#include <asm/io.h>
 #include <asm/sections.h>
 #include <linux/string.h>
 #include <mach/t20.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#ifdef CONFIG_XPL_BUILD
 static void spl_put_hex(u32 v)
 {
 	static const char hex[] = "0123456789abcdef";
@@ -53,11 +53,8 @@ static void spl_put_hex(u32 v)
  *     offsets wrap onto the low ones and the markers collide - so "DDR OK"
  *     actually proves the size/geometry.
  *
- * The accesses go through volatile pointers on purpose: each value is
- * read back from the same address it was just written, so without
- * volatile the compiler would prove the load redundant and delete the
- * check. This is the standard DRAM-probe idiom (cf. cmd/mem.c and
- * arch/mips/mach-mtmips/ddr_init.c).
+ * The read-backs use readl()/writel() so the verify load is never
+ * proved redundant and optimised away.
  */
 static int dram_verify(u32 size)
 {
@@ -73,18 +70,18 @@ static int dram_verify(u32 size)
 
 	for (b = 0; b < 2; b++) {
 		for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-			volatile u32 *a =
-				(volatile u32 *)(bases[b] + offs[o]);
+			void __iomem *a =
+				(void __iomem *)(uintptr_t)(bases[b] + offs[o]);
 
 			for (p = 0; p < (int)ARRAY_SIZE(pat); p++) {
-				*a = pat[p];
-				if (*a != pat[p]) {
+				writel(pat[p], a);
+				if (readl(a) != pat[p]) {
 					t20_spl_puts("T20 SPL: DDR FAIL @");
 					spl_put_hex((u32)(uintptr_t)a);
 					t20_spl_puts(" wrote ");
 					spl_put_hex(pat[p]);
 					t20_spl_puts(" read ");
-					spl_put_hex(*a);
+					spl_put_hex(readl(a));
 					t20_spl_putc('\n');
 					return -1;
 				}
@@ -93,15 +90,16 @@ static int dram_verify(u32 size)
 	}
 
 	for (o = 0; o < (int)ARRAY_SIZE(offs); o++)
-		*(volatile u32 *)(0xa0000000 + offs[o]) = 0xa5000000 | offs[o];
+		writel(0xa5000000 | offs[o],
+		       (void __iomem *)(uintptr_t)(0xa0000000 + offs[o]));
 	for (o = 0; o < (int)ARRAY_SIZE(offs); o++) {
-		volatile u32 *a = (volatile u32 *)(0xa0000000 + offs[o]);
+		void __iomem *a = (void __iomem *)(uintptr_t)(0xa0000000 + offs[o]);
 
-		if (*a != (0xa5000000 | offs[o])) {
+		if (readl(a) != (0xa5000000 | offs[o])) {
 			t20_spl_puts("T20 SPL: DDR ALIAS @");
 			spl_put_hex((u32)(uintptr_t)a);
 			t20_spl_puts(" read ");
-			spl_put_hex(*a);
+			spl_put_hex(readl(a));
 			t20_spl_puts(" (controller mis-sized vs part)\n");
 			return -1;
 		}
@@ -150,4 +148,3 @@ u32 spl_boot_device(void)
 {
 	return BOOT_DEVICE_SPI;
 }
-#endif /* CONFIG_XPL_BUILD */

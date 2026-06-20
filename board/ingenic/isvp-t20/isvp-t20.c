@@ -3,7 +3,7 @@
  * Ingenic ISVP-T20 board (DDR2 64 MB, SFC NOR)
  *
  * U-Boot-proper board glue: DRAM size, USB PHY bring-up. The SPL
- * (mach-xburst/t20) brings up console + PLL + Innophy DDR2 (T20N
+ * (mach-xburst/t20) brings up console + PLL + Synopsys-DWC DDR2 (T20N
  * 64 MB M14D5121632A).
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
@@ -165,8 +165,7 @@ int checkboard(void)
 	 * The per-SKU leaf DT's "Model:" line carries the SKU now (T20 is
 	 * DM-in-SPL, DT-selected), so no "Variant:" line here.
 	 */
-#ifdef CONFIG_SPL_T20_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T20_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }

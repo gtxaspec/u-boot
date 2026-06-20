@@ -88,52 +88,73 @@ int board_late_init(void)
 	static const char * const nand[] = { "spi-nand0", "spi-nand1" };
 	struct spi_flash *flash;
 	struct mtd_info *mtd;
-	char info[48];
-	char cmd[32];
+	char ifc[24] = "";
+	char info[160];
+	unsigned long long size = 0;
 	int i;
 
 	/*
-	 * SPI-NAND first: each SFC's flash@0 is declared spi-nand, so this
-	 * probes them. T41 has two SFC controllers and the boot NAND may sit
-	 * on either; single-SFC SoCs simply lack spi-nand1.
+	 * Detect the boot flash (DFU alt 0): SPI-NAND on either SFC first
+	 * (T41 has two and the boot NAND may sit on either), else SPI-NOR.
+	 * flash@0 is declared spi-nand, so mtd_probe_devices() probes that;
+	 * if no NAND answers, unbind the stubs to free CS0 and probe a NOR.
 	 */
 	mtd_probe_devices();
 	for (i = 0; i < 2; i++) {
 		mtd = get_mtd_device_nm(nand[i]);
 		if (IS_ERR_OR_NULL(mtd))
 			continue;
-		snprintf(info, sizeof(info), "%s raw 0x0 0x%llx",
-			 nand[i], (unsigned long long)mtd->size);
+		snprintf(ifc, sizeof(ifc), "mtd %s", nand[i]);
+		size = mtd->size;
 		put_mtd_device(mtd);
-		env_set("dfu_alt_info", info);
-		snprintf(cmd, sizeof(cmd), "dfu 0 mtd %s", nand[i]);
-		env_set("dfubootcmd", cmd);
+		break;
+	}
+	if (!ifc[0]) {
+		free_cs0_of_spinand();
+		for (i = 0; i < 2; i++) {
+			flash = spi_flash_probe(i, 0, 50000000, 0);
+			if (!flash || !flash->size)
+				continue;
+			snprintf(ifc, sizeof(ifc), "sf %d:0", i);
+			size = flash->size;
+			break;
+		}
+	}
+
+	if (!ifc[0]) {
+		/* Nothing detected: harmless default so DFU still comes up. */
+		env_set("dfubootcmd", "dfu 0 sf 0:0");
 		return 0;
 	}
 
-	/*
-	 * No NAND on any SFC: unbind the failed spi-nand stubs to free the
-	 * chip-selects, then probe a SPI-NOR on each SFC bus in turn.
-	 * spi_flash_probe() (not _bus_cs) binds the jedec_spi_nor driver
-	 * itself, so it works on the now node-less CS0; the device it creates
-	 * stays bound for the subsequent "dfu 0 sf N:0". On single-SFC SoCs
-	 * bus 0 answers and bus 1 is a harmless miss.
-	 */
-	free_cs0_of_spinand();
-	for (i = 0; i < 2; i++) {
-		flash = spi_flash_probe(i, 0, 50000000, 0);
-		if (!flash || !flash->size)
-			continue;
-		snprintf(info, sizeof(info), "flash raw 0x0 0x%x", flash->size);
+	if (IS_ENABLED(CONFIG_DFU_MMC)) {
+		/*
+		 * Expose the boot flash (alt 0 "flash") AND the SD on MSC0
+		 * (alt 1 "sdcard") as one multi-device alt list, run via
+		 * "dfu 0". The SD alt is ALWAYS declared, never probed here:
+		 * some boards gate the SD slot behind a GPIO this generic
+		 * loader doesn't drive, so a boot-time card probe would be
+		 * unreliable - the card is only touched at transfer time, and
+		 * an absent/unpowered card just fails that one transfer. The
+		 * host defaults to alt 0 (flash); the SD is opt-in via --alt.
+		 */
+		snprintf(info, sizeof(info),
+			 "%s=flash raw 0x0 0x%llx&mmc 0=sdcard raw 0x0 0x4000",
+			 ifc, size);
 		env_set("dfu_alt_info", info);
-		snprintf(cmd, sizeof(cmd), "dfu 0 sf %d:0", i);
-		env_set("dfubootcmd", cmd);
-		return 0;
+		/*
+		 * Bring MSC0 up before entering DFU. board init only registers
+		 * the MMC; dfu_mmc does find_mmc_device() without mmc_init(), so
+		 * the card must be initialised here or the first DFU write to it
+		 * fails (and wedges the controller until the next rescan).
+		 */
+		env_set("dfubootcmd", "mmc dev 0; dfu 0");
+	} else {
+		snprintf(info, sizeof(info), "flash raw 0x0 0x%llx", size);
+		env_set("dfu_alt_info", info);
+		snprintf(info, sizeof(info), "dfu 0 %s", ifc);
+		env_set("dfubootcmd", info);
 	}
-
-	/* Nothing detected: leave a harmless default so the loader still
-	 * enters DFU (the host will see an empty/zero-size alt). */
-	env_set("dfubootcmd", "dfu 0 sf 0:0");
 	return 0;
 }
 #endif

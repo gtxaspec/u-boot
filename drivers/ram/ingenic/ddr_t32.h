@@ -100,121 +100,121 @@
  * [30:24] - this asymmetry is deliberate and preserved).
  */
 #define AL_FRE_OP0				(DDRPAPB_BASE + 0x008), 29, 24
-#define calib_done_byte				(DDRPAPB_BASE + 0x174), 8 , 0
+#define calib_done_byte				(DDRPAPB_BASE + 0x174), 8, 0
 #define calib_end				(DDRPAPB_BASE + 0x174), 10, 10
 #define CL_FRE_OP0				(DDRPAPB_BASE + 0x00c), 29, 24
 #define CWL_FRE_OP0				(DDRPAPB_BASE + 0x010), 29, 24
-#define mem_select_t				(DDRPAPB_BASE + 0x000), 6 , 4
+#define mem_select_t				(DDRPAPB_BASE + 0x000), 6, 4
 #define reg_a_h_abutnrcompdq_reg		(DDRPAPB_BASE + 0x304), 28, 24
 #define reg_a_h_abutodtpddq_reg			(DDRPAPB_BASE + 0x304), 12, 8
-#define reg_a_h_abutodtpudq_reg			(DDRPAPB_BASE + 0x304), 4 , 0
+#define reg_a_h_abutodtpudq_reg			(DDRPAPB_BASE + 0x304), 4, 0
 #define reg_a_h_abutprcompdq_reg		(DDRPAPB_BASE + 0x304), 20, 16
 #define reg_a_h_cs0_dm_invdelaysel		(DDRPAPB_BASE + 0x318), 26, 18
 #define reg_a_h_cs0_dm_invdelayselrx		(DDRPAPB_BASE + 0x328), 14, 8
 #define reg_a_h_cs0_dq0_invdelaysel		(DDRPAPB_BASE + 0x318), 17, 9
 #define reg_a_h_cs0_dq0_invdelayselrx		(DDRPAPB_BASE + 0x32c), 30, 24
-#define reg_a_h_cs0_dq1_invdelaysel		(DDRPAPB_BASE + 0x318), 8 , 0
+#define reg_a_h_cs0_dq1_invdelaysel		(DDRPAPB_BASE + 0x318), 8, 0
 #define reg_a_h_cs0_dq1_invdelayselrx		(DDRPAPB_BASE + 0x32c), 22, 16
 #define reg_a_h_cs0_dq2_invdelaysel		(DDRPAPB_BASE + 0x31c), 26, 18
 #define reg_a_h_cs0_dq2_invdelayselrx		(DDRPAPB_BASE + 0x32c), 14, 8
 #define reg_a_h_cs0_dq3_invdelaysel		(DDRPAPB_BASE + 0x31c), 17, 9
-#define reg_a_h_cs0_dq3_invdelayselrx		(DDRPAPB_BASE + 0x32c), 6 , 0
-#define reg_a_h_cs0_dq4_invdelaysel		(DDRPAPB_BASE + 0x31c), 8 , 0
+#define reg_a_h_cs0_dq3_invdelayselrx		(DDRPAPB_BASE + 0x32c), 6, 0
+#define reg_a_h_cs0_dq4_invdelaysel		(DDRPAPB_BASE + 0x31c), 8, 0
 #define reg_a_h_cs0_dq4_invdelayselrx		(DDRPAPB_BASE + 0x330), 30, 24
 #define reg_a_h_cs0_dq5_invdelaysel		(DDRPAPB_BASE + 0x320), 26, 18
 #define reg_a_h_cs0_dq5_invdelayselrx		(DDRPAPB_BASE + 0x330), 22, 16
 #define reg_a_h_cs0_dq6_invdelaysel		(DDRPAPB_BASE + 0x320), 17, 9
 #define reg_a_h_cs0_dq6_invdelayselrx		(DDRPAPB_BASE + 0x330), 14, 8
-#define reg_a_h_cs0_dq7_invdelaysel		(DDRPAPB_BASE + 0x320), 8 , 0
-#define reg_a_h_cs0_dq7_invdelayselrx		(DDRPAPB_BASE + 0x330), 6 , 0
+#define reg_a_h_cs0_dq7_invdelaysel		(DDRPAPB_BASE + 0x320), 8, 0
+#define reg_a_h_cs0_dq7_invdelayselrx		(DDRPAPB_BASE + 0x330), 6, 0
 #define reg_a_h_cs0_dqsb_invdelaysel		(DDRPAPB_BASE + 0x324), 15, 8
 #define reg_a_h_cs0_dqsb_invdelayselrx		(DDRPAPB_BASE + 0x334), 14, 8
 #define reg_a_h_cs0_dqs_invdelaysel		(DDRPAPB_BASE + 0x324), 31, 24
 #define reg_a_h_cs0_dqs_invdelayselrx		(DDRPAPB_BASE + 0x334), 30, 24
 #define reg_a_h_cycsel				(DDRPAPB_BASE + 0x384), 10, 8
-#define reg_a_h_dllsel				(DDRPAPB_BASE + 0x384), 4 , 0
-#define reg_a_h_ophsel				(DDRPAPB_BASE + 0x384), 7 , 5
+#define reg_a_h_dllsel				(DDRPAPB_BASE + 0x384), 4, 0
+#define reg_a_h_ophsel				(DDRPAPB_BASE + 0x384), 7, 5
 #define reg_a_h_rd_train_dqs_default		(DDRPAPB_BASE + 0x358), 30, 24
 #define reg_a_h_rxmen0_delay_bp			(DDRPAPB_BASE + 0x308), 26, 24
 #define reg_a_h_rxmen0_ophsel_bp		(DDRPAPB_BASE + 0x308), 23, 21
 #define reg_a_h_rxmen0_sdlltap_bp		(DDRPAPB_BASE + 0x308), 20, 16
 #define reg_a_l_abutnrcompdq_reg		(DDRPAPB_BASE + 0x204), 28, 24
 #define reg_a_l_abutodtpddq_reg			(DDRPAPB_BASE + 0x204), 12, 8
-#define reg_a_l_abutodtpudq_reg			(DDRPAPB_BASE + 0x204), 4 , 0
+#define reg_a_l_abutodtpudq_reg			(DDRPAPB_BASE + 0x204), 4, 0
 #define reg_a_l_abutprcompdq_reg		(DDRPAPB_BASE + 0x204), 20, 16
 #define reg_a_l_cs0_dm_invdelaysel		(DDRPAPB_BASE + 0x218), 26, 18
 #define reg_a_l_cs0_dm_invdelayselrx		(DDRPAPB_BASE + 0x228), 15, 8
 #define reg_a_l_cs0_dq0_invdelaysel		(DDRPAPB_BASE + 0x218), 17, 9
 #define reg_a_l_cs0_dq0_invdelayselrx		(DDRPAPB_BASE + 0x22c), 31, 24
-#define reg_a_l_cs0_dq1_invdelaysel		(DDRPAPB_BASE + 0x218), 8 , 0
+#define reg_a_l_cs0_dq1_invdelaysel		(DDRPAPB_BASE + 0x218), 8, 0
 #define reg_a_l_cs0_dq1_invdelayselrx		(DDRPAPB_BASE + 0x22c), 23, 16
 #define reg_a_l_cs0_dq2_invdelaysel		(DDRPAPB_BASE + 0x21c), 26, 18
 #define reg_a_l_cs0_dq2_invdelayselrx		(DDRPAPB_BASE + 0x22c), 15, 8
 #define reg_a_l_cs0_dq3_invdelaysel		(DDRPAPB_BASE + 0x21c), 17, 9
-#define reg_a_l_cs0_dq3_invdelayselrx		(DDRPAPB_BASE + 0x22c), 7 , 0
-#define reg_a_l_cs0_dq4_invdelaysel		(DDRPAPB_BASE + 0x21c), 8 , 0
+#define reg_a_l_cs0_dq3_invdelayselrx		(DDRPAPB_BASE + 0x22c), 7, 0
+#define reg_a_l_cs0_dq4_invdelaysel		(DDRPAPB_BASE + 0x21c), 8, 0
 #define reg_a_l_cs0_dq4_invdelayselrx		(DDRPAPB_BASE + 0x230), 31, 24
 #define reg_a_l_cs0_dq5_invdelaysel		(DDRPAPB_BASE + 0x220), 26, 18
 #define reg_a_l_cs0_dq5_invdelayselrx		(DDRPAPB_BASE + 0x230), 23, 16
 #define reg_a_l_cs0_dq6_invdelaysel		(DDRPAPB_BASE + 0x220), 17, 9
 #define reg_a_l_cs0_dq6_invdelayselrx		(DDRPAPB_BASE + 0x230), 15, 8
-#define reg_a_l_cs0_dq7_invdelaysel		(DDRPAPB_BASE + 0x220), 8 , 0
-#define reg_a_l_cs0_dq7_invdelayselrx		(DDRPAPB_BASE + 0x230), 7 , 0
+#define reg_a_l_cs0_dq7_invdelaysel		(DDRPAPB_BASE + 0x220), 8, 0
+#define reg_a_l_cs0_dq7_invdelayselrx		(DDRPAPB_BASE + 0x230), 7, 0
 #define reg_a_l_cs0_dqsb_invdelaysel		(DDRPAPB_BASE + 0x224), 15, 8
 #define reg_a_l_cs0_dqsb_invdelayselrx		(DDRPAPB_BASE + 0x234), 15, 8
 #define reg_a_l_cs0_dqs_invdelaysel		(DDRPAPB_BASE + 0x224), 31, 24
 #define reg_a_l_cs0_dqs_invdelayselrx		(DDRPAPB_BASE + 0x234), 31, 24
 #define reg_a_l_cycsel				(DDRPAPB_BASE + 0x284), 10, 8
-#define reg_a_l_dllsel				(DDRPAPB_BASE + 0x284), 4 , 0
-#define reg_a_l_ophsel				(DDRPAPB_BASE + 0x284), 7 , 5
+#define reg_a_l_dllsel				(DDRPAPB_BASE + 0x284), 4, 0
+#define reg_a_l_ophsel				(DDRPAPB_BASE + 0x284), 7, 5
 #define reg_a_l_rd_train_dqs_default		(DDRPAPB_BASE + 0x258), 30, 24
 #define reg_a_l_rxmen0_delay_bp			(DDRPAPB_BASE + 0x208), 26, 24
 #define reg_a_l_rxmen0_ophsel_bp		(DDRPAPB_BASE + 0x208), 23, 21
 #define reg_a_l_rxmen0_sdlltap_bp		(DDRPAPB_BASE + 0x208), 20, 16
-#define reg_calcs_sel				(DDRPAPB_BASE + 0x004), 3 , 2
-#define reg_calib_bypass			(DDRPAPB_BASE + 0x004), 1 , 1
+#define reg_calcs_sel				(DDRPAPB_BASE + 0x004), 3, 2
+#define reg_calib_bypass			(DDRPAPB_BASE + 0x004), 1, 1
 #define reg_calib_freq_update			(DDRPAPB_BASE + 0x04c), 27, 27
 #define reg_channel_en				(DDRPAPB_BASE + 0x000), 16, 8
 #define reg_cmd_abutnrcomp_ck0_reg		(DDRPAPB_BASE + 0x0c8), 12, 8
 #define reg_cmd_abutnrcomp_reg			(DDRPAPB_BASE + 0x0c8), 28, 24
-#define reg_cmd_abutprcomp_ck0_reg		(DDRPAPB_BASE + 0x0c8), 4 , 0
+#define reg_cmd_abutprcomp_ck0_reg		(DDRPAPB_BASE + 0x0c8), 4, 0
 #define reg_cmd_abutprcomp_reg			(DDRPAPB_BASE + 0x0c8), 20, 16
-#define reg_dq_rd_train_en			(DDRPAPB_BASE + 0x0a4), 0 , 0
-#define reg_dq_wr_train_auto			(DDRPAPB_BASE + 0x0b0), 0 , 0
-#define reg_dq_wr_train_en			(DDRPAPB_BASE + 0x0b0), 1 , 1
-#define reg_phy_refresh_en			(DDRPAPB_BASE + 0x0b8), 0 , 0
+#define reg_dq_rd_train_en			(DDRPAPB_BASE + 0x0a4), 0, 0
+#define reg_dq_wr_train_auto			(DDRPAPB_BASE + 0x0b0), 0, 0
+#define reg_dq_wr_train_en			(DDRPAPB_BASE + 0x0b0), 1, 1
+#define reg_phy_refresh_en			(DDRPAPB_BASE + 0x0b8), 0, 0
 #define reg_phy_trefi				(DDRPAPB_BASE + 0x0b8), 31, 18
 #define reg_phy_trfc				(DDRPAPB_BASE + 0x0b8), 17, 8
-#define reg_pllcpi_bias_fsp0			(DDRPAPB_BASE + 0x01c), 2 , 0
+#define reg_pllcpi_bias_fsp0			(DDRPAPB_BASE + 0x01c), 2, 0
 #define reg_pllcpi_bias_fsp1			(DDRPAPB_BASE + 0x01c), 10, 8
 #define reg_pllcpi_bias_fsp2			(DDRPAPB_BASE + 0x01c), 18, 16
 #define reg_pllcpi_bias_fsp3			(DDRPAPB_BASE + 0x01c), 26, 24
 #define reg_pllcpp_bias_dqcmd			(DDRPAPB_BASE + 0x088), 10, 8
-#define reg_pllpostdiven_fsp0			(DDRPAPB_BASE + 0x01c), 3 , 3
+#define reg_pllpostdiven_fsp0			(DDRPAPB_BASE + 0x01c), 3, 3
 #define reg_pllpostdiven_fsp1			(DDRPAPB_BASE + 0x01c), 11, 11
 #define reg_pllpostdiven_fsp2			(DDRPAPB_BASE + 0x01c), 19, 19
 #define reg_pllpostdiven_fsp3			(DDRPAPB_BASE + 0x01c), 27, 27
-#define reg_pllpostdiv_fsp0			(DDRPAPB_BASE + 0x01c), 6 , 4
+#define reg_pllpostdiv_fsp0			(DDRPAPB_BASE + 0x01c), 6, 4
 #define reg_pllpostdiv_fsp1			(DDRPAPB_BASE + 0x01c), 14, 12
 #define reg_pllpostdiv_fsp2			(DDRPAPB_BASE + 0x01c), 22, 20
 #define reg_pllpostdiv_fsp3			(DDRPAPB_BASE + 0x01c), 30, 28
-#define reg_rdtrain_cs_sel			(DDRPAPB_BASE + 0x0a4), 9 , 8
-#define reg_rd_train_dqs_range_bypass		(DDRPAPB_BASE + 0x0a4), 6 , 6
-#define reg_rd_train_freq_update		(DDRPAPB_BASE + 0x0a4), 2 , 2
-#define reg_start_calib				(DDRPAPB_BASE + 0x004), 0 , 0
+#define reg_rdtrain_cs_sel			(DDRPAPB_BASE + 0x0a4), 9, 8
+#define reg_rd_train_dqs_range_bypass		(DDRPAPB_BASE + 0x0a4), 6, 6
+#define reg_rd_train_freq_update		(DDRPAPB_BASE + 0x0a4), 2, 2
+#define reg_start_calib				(DDRPAPB_BASE + 0x004), 0, 0
 #define reg_train_reg_update_en			(DDRPAPB_BASE + 0x08c), 18, 18
-#define reg_wl_bypass				(DDRPAPB_BASE + 0x004), 5 , 5
-#define reg_wlcs_sel				(DDRPAPB_BASE + 0x004), 7 , 6
-#define reg_wl_enable				(DDRPAPB_BASE + 0x004), 4 , 4
+#define reg_wl_bypass				(DDRPAPB_BASE + 0x004), 5, 5
+#define reg_wlcs_sel				(DDRPAPB_BASE + 0x004), 7, 6
+#define reg_wl_enable				(DDRPAPB_BASE + 0x004), 4, 4
 #define reg_wl_end				(DDRPAPB_BASE + 0x174), 11, 11
 #define reg_wl_freq_update			(DDRPAPB_BASE + 0x04c), 28, 28
 #define reg_wl_loadmode				(DDRPAPB_BASE + 0x004), 31, 16
-#define reg_wrtrain_check_data_value_random_gen	(DDRPAPB_BASE + 0x0b0), 8 , 8
-#define reg_wrtrain_cs_sel			(DDRPAPB_BASE + 0x0b0), 7 , 6
-#define reg_wr_train_dqs_default_bypass		(DDRPAPB_BASE + 0x0b0), 4 , 4
-#define train_all_step_done			(DDRPAPB_BASE + 0x158), 7 , 7
-#define train_step1_delay_done			(DDRPAPB_BASE + 0x158), 6 , 6
-#define train_true_done				(DDRPAPB_BASE + 0x158), 0 , 0
+#define reg_wrtrain_check_data_value_random_gen	(DDRPAPB_BASE + 0x0b0), 8, 8
+#define reg_wrtrain_cs_sel			(DDRPAPB_BASE + 0x0b0), 7, 6
+#define reg_wr_train_dqs_default_bypass		(DDRPAPB_BASE + 0x0b0), 4, 4
+#define train_all_step_done			(DDRPAPB_BASE + 0x158), 7, 7
+#define train_step1_delay_done			(DDRPAPB_BASE + 0x158), 6, 6
+#define train_true_done				(DDRPAPB_BASE + 0x158), 0, 0
 #define wl_done_byte				(DDRPAPB_BASE + 0x174), 24, 16
 
 /* --- uMCTL2 register accessors (full address) --- */

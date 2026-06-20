@@ -141,4 +141,23 @@
 #define GPIO_PXPAT1C(n)	(0x38 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
+#ifndef __ASSEMBLY__
+#include <linux/types.h>
+
+/*
+ * SPL bring-up helpers, defined across t32/{pll,serial,sfc}.c and the DDR
+ * driver (drivers/ram/ingenic/ddr_t32.c); declared here so the shared
+ * XBurst1 start.S can include this header for the register defines without
+ * the C declarations reaching the assembler.
+ */
+void pll_init(void);
+void clk_ungate_uart(unsigned int idx);
+void t32_spl_serial_init(void);
+void t32_spl_puts(const char *s);
+void t32_spl_putc(char c);
+void t32_spl_sfc_clk_init(void);
+int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
+				  u32 *cpccr_div, u32 *cpccr_sel);
+#endif /* __ASSEMBLY__ */
+
 #endif /* __T32_H__ */

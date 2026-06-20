@@ -170,4 +170,16 @@
 #define GPIO_PXPAT0S(n)	(0x44 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
 
+#ifndef __ASSEMBLY__
+/* SPL bring-up helpers (mach-xburst/t40/{pll,serial,sfc,timer}.c + sfc_nand.c) */
+void pll_init(void);
+void clk_ungate_uart(unsigned int idx);
+int timer_init(void);
+void t40_spl_serial_init(void);
+void t40_spl_sfc_clk_init(void);
+void t40_spl_puts(const char *s);
+void t40_spl_putc(char c);
+void t40_spl_nand_load_uboot(void);
+#endif /* __ASSEMBLY__ */
+
 #endif /* __T40_H__ */

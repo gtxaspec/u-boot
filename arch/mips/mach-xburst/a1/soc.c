@@ -21,14 +21,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-void pll_init(void);
-int timer_init(void);
-void clk_ungate_uart(unsigned int idx);
-void a1_spl_serial_init(void);
-void a1_spl_sfc_clk_init(void);
-
-#ifdef CONFIG_XPL_BUILD
-gd_t gdata __section(".bss");
+static gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
@@ -54,6 +47,7 @@ void board_init_f(ulong dummy)
 	 * - CCU +0x060: set bit 4 to disable L1 prefetcher trust
 	 */
 	u32 ccu_val = readl((void __iomem *)(CCU_BASE + 0xfe0));
+
 	writel(ccu_val | 0x78, (void __iomem *)(CCU_BASE + 0xfe0));
 
 	ccu_val = readl((void __iomem *)(CCU_BASE + 0x060));
@@ -130,4 +124,3 @@ u32 spl_boot_device(void)
 {
 	return BOOT_DEVICE_SPI;
 }
-#endif /* CONFIG_XPL_BUILD */

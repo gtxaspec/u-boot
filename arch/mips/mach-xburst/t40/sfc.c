@@ -55,6 +55,7 @@ static void sfc_init(void)
 	 */
 	{
 		u32 reg = cpm_readl(CPM_SFCCDR);
+
 		reg &= ~((3u << 30) | (3 << SFC_CGU_STOP) | 0xff);
 		reg |= (1u << 30) | (1 << SFC_CGU_CE) | 80;
 		cpm_writel(reg, CPM_SFCCDR);

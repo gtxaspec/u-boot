@@ -245,9 +245,8 @@ int board_init(void)
  */
 int checkboard(void)
 {
-#ifdef CONFIG_SPL_T31_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
+	if (IS_ENABLED(CONFIG_SPL_T31_USB_BOOT))
+		puts("Loader: USB-boot\n");
 	return 0;
 }
 

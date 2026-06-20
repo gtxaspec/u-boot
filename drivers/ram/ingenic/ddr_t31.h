@@ -24,6 +24,7 @@
 #define _DRIVERS_RAM_INGENIC_DDR_T31_H
 
 #include <linux/types.h>
+#include <linux/bitops.h>
 
 /* Base addresses (KSEG1 uncached); fixed on XBurst1 T31. */
 #define DDRC_BASE		0xb34f0000
@@ -43,10 +44,10 @@
 #define DDRC_TIMING(n)		(0x060 + 4 * ((n) - 1))
 #define DDRC_REMAP(n)		(0x09c + 4 * ((n) - 1))
 
-#define DDRC_DSTATUS_MISS	(1 << 6)
-#define DDRC_CTRL_DFI_RST	(1 << 23)
-#define DDRC_CTRL_ALH		(1 << 3)
-#define DDRC_CTRL_CKE		(1 << 1)
+#define DDRC_DSTATUS_MISS	BIT(6)
+#define DDRC_CTRL_DFI_RST	BIT(23)
+#define DDRC_CTRL_ALH		BIT(3)
+#define DDRC_CTRL_CKE		BIT(1)
 
 /* Innophy PHY register offsets (added to DDR_PHY_BASE) */
 #define INNO_CHANNEL_EN		0x00

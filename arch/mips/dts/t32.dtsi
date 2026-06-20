@@ -49,7 +49,7 @@
 		#clock-cells = <1>;
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
-		u-boot,dm-pre-reloc;
+		bootph-all;
 	};
 
 	/*

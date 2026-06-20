@@ -27,14 +27,6 @@
 #define T32_CPVPCR	0x0c609101u	/* VPLL 1188 MHz (vendor SPL verified) */
 #define T32_CPCCR_DEFAULT	0x55700000u
 
-/*
- * SPL helper from the T32 DDR driver: find the DDR node in the FDT (by
- * its per-SKU compatible) and return that SKU's CPAPCR/CPMPCR words and
- * the two-stage CPCCR programming words. Runs before driver model is up.
- */
-int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
-				  u32 *cpccr_div, u32 *cpccr_sel);
-
 static u32 cpm_r(unsigned int off)
 {
 	return readl((void __iomem *)(CPM_BASE + off));
@@ -98,8 +90,10 @@ u32 t32_pll_rate(unsigned int cpxpcr_off)
 	u32 od1 = (v >> 11) & 0x7;
 	u32 od0 = (v >> 8) & 0x7;
 
-	/* Guard the divisors (defensive - the words are fixed nonzero
-	 * constants, but never divide by a stray 0 field). */
+	/*
+	 * Guard the divisors (defensive - the words are fixed nonzero
+	 * constants, but never divide by a stray 0 field).
+	 */
 	if (!n)
 		n = 1;
 	if (!od1)

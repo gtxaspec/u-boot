@@ -11,6 +11,8 @@
 #ifndef __T40_SFC_NAND_H__
 #define __T40_SFC_NAND_H__
 
+#include <linux/bitops.h>
+
 #include <linux/types.h>
 
 /* SPI-NAND opcodes */
@@ -29,16 +31,16 @@
 #define FEATURE_REG_STATUS2		0xf0
 
 /* Feature register bits */
-#define BITS_ECC_EN			(1 << 4)
-#define BITS_QUAD_EN			(1 << 0)
-#define BITS_BUF_EN			(1 << 3)	/* Winbond only */
+#define BITS_ECC_EN			BIT(4)
+#define BITS_QUAD_EN			BIT(0)
+#define BITS_BUF_EN			BIT(3)	/* Winbond only */
 
 /* SFC TRAN_CONF1 tran_mode encodings */
 #define TRAN_CONF1_SPI_STANDARD		0x0
 #define TRAN_CONF1_SPI_QUAD		0x5
 
 /* SFC register additions beyond t31-sfc.h */
-#define SFC_TRAN_CONF1(n)		(0x009c + (n * 4))
+#define SFC_TRAN_CONF1(n)		(0x009c + ((n) * 4))
 #define TRAN_CONF1_TRAN_MODE_OFFSET	(4)
 #define TRAN_CONF1_TRAN_MODE_MSK	(0xf << TRAN_CONF1_TRAN_MODE_OFFSET)
 #define GLB_TRAN_DIR_OFFSET		(13)
@@ -46,7 +48,7 @@
 #define DEV_CONF_SMP_DELAY_MSK		(0x1f << DEV_CONF_SMP_DELAY_OFFSET)
 
 /* SFC tranconf register layout for SPL command builder. */
-typedef union sfc_tranconf_r {
+union sfc_tranconf_r {
 	u32 d32;
 	struct {
 		unsigned cmd:16;
@@ -58,10 +60,10 @@ typedef union sfc_tranconf_r {
 		unsigned addr_width:3;
 		unsigned tran_mode:3;
 	} reg;
-} sfc_tranconf_r;
+};
 
 struct jz_sfc {
-	sfc_tranconf_r tranconf;
+	union sfc_tranconf_r tranconf;
 	u32 addr;
 	u32 len;
 	u32 addr_plus;
@@ -91,6 +93,6 @@ struct spl_nand_param {
 
 	u8 eccstat_count;
 	u8 eccerrstatus[2];
-} __attribute__((aligned(4)));
+} __aligned(4);
 
 #endif /* __T40_SFC_NAND_H__ */

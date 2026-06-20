@@ -22,7 +22,5 @@ const struct xburst_tpl_soc xburst_tpl_soc = {
 	.spl_nor_offs	= 0x8000,
 	.banner		= "\nT30 TPL\n",
 	.uncached_load	= true,
-#ifdef CONFIG_SPL_T30_USB_BOOT
-	.usb_boot	= true,
-#endif
+	.usb_boot	= IS_ENABLED(CONFIG_SPL_T30_USB_BOOT),
 };

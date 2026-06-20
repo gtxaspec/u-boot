@@ -120,14 +120,13 @@ static void enable_cpu_read_ddr(void)
 {
 	int res = 0, res1 = 0;
 
-	__asm__ __volatile__(
-		".set	push		\n"
-		".set	reorder		\n"
-		"mfc0	%0,$9,4		\n"
-		"li	%1,-3		\n"
-		"and	%0,%0,%1	\n"
-		"mtc0	%0,$9,4		\n"
-		".set	pop		\n"
+	__asm__ __volatile__(".set	push\n"
+		".set	reorder\n"
+		"mfc0	%0,$9,4\n"
+		"li	%1,-3\n"
+		"and	%0,%0,%1\n"
+		"mtc0	%0,$9,4\n"
+		".set	pop\n"
 		: "=r"(res), "=r"(res1));
 }
 
@@ -183,18 +182,19 @@ static void ddr_clk_init(const struct ingenic_t32_ddr_params *cfg)
 
 /* ------------------------------------------------------------------
  * DDR2 soft-training (vendor DDR_SOFT_TRAIN path)
- * ------------------------------------------------------------------ */
+ * ------------------------------------------------------------------
+ */
 
 /* Small uncached pattern check used to score soft-training taps. */
 static int ddr_mem_pattern(void)
 {
-	volatile u32 tmp;
+	u32 tmp;
 	u32 td;
 
 	for (tmp = 0xa0000000; tmp < 0xa0000020; tmp += 4) {
 		td = tmp;
-		*(volatile u32 *)tmp = td;
-		if (*(volatile u32 *)tmp != td)
+		writel(td, (void __iomem *)(uintptr_t)tmp);
+		if (readl((void __iomem *)(uintptr_t)tmp) != td)
 			return -1;
 	}
 	return 0;
@@ -386,7 +386,8 @@ static void ddrp_dqs_calibration(void)
  * PRINT_DDRP/dwc_debug stripped as in the DDR2 soft port). read/write
  * training are type-independent; write-leveling differs DDR3 vs
  * LPDDR3.
- * ------------------------------------------------------------------ */
+ * ------------------------------------------------------------------
+ */
 
 static void ddrp_training_write_leveling(const struct ingenic_t32_ddr_params *cfg)
 {
@@ -478,8 +479,10 @@ static void ddrc_init(const struct ingenic_t32_ddr_params *cfg,
 
 	ddrc_writel(INIT0, cfg->init0);
 	ddrc_writel(INIT1, cfg->init1);
-	/* INIT2 is LPDDR2-only (skipped). INIT3/INIT4 masks + INIT5 are
-	 * type-specific (vendor ddrc_init). */
+	/*
+	 * INIT2 is LPDDR2-only (skipped). INIT3/INIT4 masks + INIT5 are
+	 * type-specific (vendor ddrc_init).
+	 */
 	switch (cfg->type) {
 	case T32_DDR_TYPE_LPDDR3:
 		ddrc_writel(INIT3, cfg->init3);
@@ -757,7 +760,8 @@ int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
  * mainline rk3328 DMC shape). The SPL probe brings DRAM up; the
  * U-Boot-proper probe just records the size (DRAM is already alive). PLL is
  * programmed earlier, in t32/pll.c, via ingenic_t32_ddr_pll_setpoints().
- * ------------------------------------------------------------------ */
+ * ------------------------------------------------------------------
+ */
 
 struct ingenic_t32_ddr_plat {
 #if CONFIG_IS_ENABLED(OF_PLATDATA)

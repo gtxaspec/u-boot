@@ -6,4 +6,4 @@
 # only pre-sets the SFC clock/controller for the DM SFC driver).
 # XBurst1-generic pieces are shared from arch/mips/mach-xburst/.
 
-obj-y	+= soc.o pll.o serial.o sfc.o
+obj-$(CONFIG_XPL_BUILD)	+= soc.o pll.o serial.o sfc.o

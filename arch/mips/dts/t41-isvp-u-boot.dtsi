@@ -30,6 +30,34 @@
 };
 
 &binman {
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MSC/SD-card boot image (isvp_t41*_msc0). The SPL carries the
+	 * mask-ROM "MSPL" magic (arch/mips/mach-xburst/start.S, gated on
+	 * SPL_MMC) at offset 0, so it is used as a plain blob - the MSPL
+	 * header needs no CRC/length finalization (the mask ROM defaults the
+	 * load size). The ROM reads the SPL from SD sector 34 (0x4400); the
+	 * SPL then loads U-Boot from SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR
+	 * (0x100 = byte 0x20000). Write u-boot-with-spl-mmc-lzma.bin to the SD
+	 * starting at sector 0.
+	 */
+	mmc {
+		filename = "u-boot-with-spl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		spl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x20000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	u-boot-spl-t41 {
 		filename = "u-boot-spl-t41.bin";
 
@@ -54,4 +82,5 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };

@@ -22,6 +22,30 @@
 };
 
 &binman {
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MSC/SD-card boot image (isvp_t40xp_nor_msc0). Plain SPL blob with
+	 * the mask-ROM "MSPL" magic from start.S; the ROM defaults the SD
+	 * load to 0x19000, which covers BSS. SPL at SD sector 34 (0x4400);
+	 * U-Boot from SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR (0x100 = byte 0x20000).
+	 */
+	mmc {
+		filename = "u-boot-with-spl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		spl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x20000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	u-boot-spl-t40xp-nor {
 		filename = "u-boot-spl-t40xp-nor.bin";
 
@@ -47,4 +71,11 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	model = "Ingenic ISVP-T40XP (MMC0)";
+};
+#endif

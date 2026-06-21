@@ -29,6 +29,33 @@
 };
 
 &binman {
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MSC/SD-card boot image (isvp_t40xp_msc0). The SPL carries the
+	 * mask-ROM "MSPL" magic (start.S, gated on SPL_MMC) at offset 0 and
+	 * is used as a plain blob - no etype, no INGE/min-spl-length: the
+	 * mask ROM defaults the SD load to 0x19000, which already covers
+	 * BSS. The ROM reads the SPL from SD sector 34 (0x4400); the SPL
+	 * loads U-Boot from SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR (0x100 = byte
+	 * 0x20000).
+	 */
+	mmc {
+		filename = "u-boot-with-spl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		spl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x20000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	u-boot-spl-t40xp {
 		filename = "u-boot-spl-t40xp.bin";
 
@@ -55,4 +82,16 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	/*
+	 * The MSC/SD-card boot config (isvp_t40xp_msc0) reuses the SFC-NAND
+	 * board .dts, whose model is annotated "(SFC NAND)". Correct it to
+	 * reflect the actual boot medium.
+	 */
+	model = "Ingenic ISVP-T40XP (MMC0)";
+};
+#endif

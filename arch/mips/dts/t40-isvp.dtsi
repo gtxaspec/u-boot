@@ -114,6 +114,7 @@
 		pins_mmc0: mmc0 {
 			function = "mmc0";
 			groups = "mmc0-1bit", "mmc0-4bit";
+			bootph-all;
 		};
 	};
 
@@ -208,6 +209,7 @@
 		broken-cd;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_mmc0>;
+		bootph-all;
 		status = "okay";
 	};
 

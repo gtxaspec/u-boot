@@ -1,3 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0+
-/* Shared SFC-NOR binman image - identical for every T41 SKU. */
+/* Shared T41 binman image - SFC-NOR or MSC/SD-card per CONFIG_SPL_MMC. */
 #include "t41-isvp-u-boot.dtsi"
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	/*
+	 * The MSC/SD-card boot config (isvp_t41lq_msc0) reuses the SFC-NOR
+	 * board .dts, whose model is annotated "(SFC NOR)". Correct it to
+	 * reflect the actual boot medium.
+	 */
+	model = "Ingenic ISVP-T41LQ (MMC0)";
+};
+#endif

@@ -38,6 +38,17 @@ _start:
 	 * TODO: validate header/entry offset against the T31 bootrom
 	 * decompilation and on real hardware during board bring-up.
 	 */
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MMC/SD boot header. The XBurst2 mask ROM (msc_sd_boot) matches
+	 * "MSPL" (0x4d53504c) at offset 0, enters the SPL at +0x800, and
+	 * ignores the +0x40 header parse - it defaults the load size to
+	 * 0x19000 - so the magic word plus padding to 0x800 is all that is
+	 * required. Verified booting a T41NQ from SD.
+	 */
+	.word 0x4d53504c		/* "MSPL" */
+	.space (0x800 - 4), 0
+#else
 	.word 0x03040506
 	.word 0x55aa5502
 #if defined(CONFIG_SOC_T32) || defined(CONFIG_SOC_T33)
@@ -74,6 +85,7 @@ _start:
 	.space 500, 0
 #endif
 	.space 1536, 0
+#endif /* CONFIG_SPL_MMC: MSPL header vs SFC-NOR header */
 
 #if defined(CONFIG_SOC_T32)
 	/*

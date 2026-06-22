@@ -530,6 +530,7 @@ static int jz_mmc_dm_set_ios(struct udevice *dev)
  */
 static int jz_mmc_get_cd(struct udevice *dev)
 {
+#if CONFIG_IS_ENABLED(DM_GPIO)
 	struct jz_mmc_priv *priv = dev_get_priv(dev);
 	int cd;
 
@@ -538,6 +539,10 @@ static int jz_mmc_get_cd(struct udevice *dev)
 		return 1;
 
 	return cd;
+#else
+	/* No GPIO support (e.g. a broken-cd SPL): card assumed present. */
+	return 1;
+#endif
 }
 
 static const struct dm_mmc_ops jz_msc_ops = {
@@ -594,7 +599,9 @@ static int jz_mmc_of_to_plat(struct udevice *dev)
 	 * driver's set_flags, so the pin is biased correctly before the first
 	 * read. Absent property -> invalid desc -> treated as always-present.
 	 */
-	gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio, GPIOD_IS_IN);
+	if (CONFIG_IS_ENABLED(DM_GPIO))
+		gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio,
+				     GPIOD_IS_IN);
 
 	return 0;
 }

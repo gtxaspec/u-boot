@@ -13,6 +13,7 @@ obj-$(CONFIG_XPL_BUILD)	+= pll.o serial.o sfc.o
 
 ifeq ($(CONFIG_TPL_BUILD),y)
 obj-y	+= tpl.o
+obj-$(CONFIG_SPL_MMC)	+= msc.o
 else
 obj-$(CONFIG_XPL_BUILD)	+= soc.o
 endif

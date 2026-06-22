@@ -64,4 +64,8 @@ extern const struct xburst_tpl_soc xburst_tpl_soc;
 /* Common across every XBurst1 SoC's pll.c. */
 void clk_ungate_uart(unsigned int idx);
 
+/* Shared bare-metal SD reader (mach-xburst/msc.c) - the MSC TPL's msc_read hook. */
+void xburst_tpl_msc_read(unsigned int skip, unsigned int *dst,
+			 unsigned int bytes);
+
 #endif /* __XBURST_TPL_H__ */

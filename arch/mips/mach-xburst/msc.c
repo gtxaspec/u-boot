@@ -1,33 +1,33 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic T23 TPL bare-metal SD (MSC) reader.
+ * Shared XBurst1 TPL bare-metal SD (MSC) reader.
  *
- * On an SD (MSC) boot the first stage is the TPL. The mask ROM does the
- * full SD card init (CMD0/8/41/2/3/7), reads the headered TPL off the
- * card and jumps to it; by then the card is initialised and selected, and
- * that card state survives the TPL's DDR bring-up. So this reader reuses
- * the live card instead of re-initialising it: it re-asserts the 512-byte
- * block length and streams blocks via CMD18, exactly like the ROM's own
- * reader. It reads from block 0 and discards up to @skip bytes before
- * storing, so it is addressing-agnostic (works on byte- and block-
- * addressed cards alike), mirroring the ROM. (The SD *clock* does need
- * reprogramming - see t23_tpl_msc_read() - because pll_init has moved
- * MPLL out from under the ROM's divider.)
+ * On an SD (MSC) boot the first stage is the TPL. The mask ROM does the full
+ * SD card init (CMD0/8/41/2/3/7), reads the headered TPL off the card and
+ * jumps to it; by then the card is initialised and selected, and that card
+ * state survives the TPL's DDR bring-up. So this reader reuses the live card
+ * instead of re-initialising it: it re-asserts the 512-byte block length and
+ * streams blocks via CMD18, exactly like the ROM's own reader. It reads from
+ * block 0 and discards up to @skip bytes before storing, so it is addressing-
+ * agnostic (works on byte- and block-addressed cards alike), mirroring the ROM.
+ * (The SD *clock* does need reprogramming - see xburst_tpl_msc_read() - because
+ * pll_init has moved MPLL out from under the ROM's divider.)
  *
- * The read is hand-rolled rather than going through DM MMC because the
- * full MMC stack does not fit the bootrom's cache-as-RAM lock window in
- * the TPL - the same reason the NOR path uses a bare-metal SFC read.
- * Symmetric with t23_spl_nor_read(); built only for the MSC TPL
- * (CONFIG_SPL_MMC).
+ * The read is hand-rolled rather than going through DM MMC because the full MMC
+ * stack does not fit the bootrom's cache-as-RAM lock window in the TPL - the
+ * same reason the NOR path uses a bare-metal SFC read. Every XBurst1 SoC has
+ * the same MSC0 controller (ingenic,t31-mmc) and CPM clock layout, so one
+ * reader serves them all: each SoC's t<soc>/tpl.c just points its msc_read hook
+ * here. Built only for the MSC TPL (CONFIG_SPL_MMC).
  */
 
 #include <config.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <linux/types.h>
-#include <mach/t23.h>
+#include <mach/xburst-tpl.h>
 
-/* MSC0 controller, KSEG1 (uncached - the TPL runs cache-as-RAM) */
+/* MSC0 controller, KSEG1 (uncached - the TPL runs cache-as-RAM). */
 #define MSC_BASE		0xb3450000
 #define MSC_STAT		0x004
 #define MSC_CMDAT		0x00c
@@ -48,6 +48,12 @@
 #define CMDAT_BUSY		BIT(6)
 #define CMDAT_DATA_EN		BIT(3)
 #define CMDAT_RESPONSE_R1	(0x1 << 0)
+
+/* CPM MSC0 clock divider, KSEG1 (same layout on every XBurst1 SoC). */
+#define CPM_MSC0CDR		0xb0000068
+#define MSCCDR_SRC_MPLL		BIT(30)		/* MSCnCDR[31:30] = 1: MPLL */
+#define MSCCDR_CE		BIT(29)		/* apply (self-clears) */
+#define MSCCDR_BUSY		BIT(28)
 
 static inline u32 msc_readl(u32 reg)
 {
@@ -77,15 +83,15 @@ static void msc_cmd(u32 cmd, u32 arg, u32 cmdat)
 }
 
 /*
- * Read @bytes into @dst from the card, where the wanted data begins
- * @skip bytes into the image (block-0-relative). Streams 512-byte blocks
- * with CMD18 and drains the RX FIFO 16 words (64 bytes) at a time,
- * re-anchoring @dst until @skip bytes have passed so the leading region
- * is overwritten in place and discarded - the ROM's FUN_bfc00f9c idiom.
- * @dst should be a KSEG1 (uncached) pointer so the fill does not allocate
- * cache lines over the cache-as-RAM window.
+ * Read @bytes into @dst from the card, where the wanted data begins @skip
+ * bytes into the image (block-0-relative). Streams 512-byte blocks with CMD18
+ * and drains the RX FIFO 16 words (64 bytes) at a time, re-anchoring @dst until
+ * @skip bytes have passed so the leading region is overwritten in place and
+ * discarded - the ROM's FUN_bfc00f9c idiom. @dst should be a KSEG1 (uncached)
+ * pointer so the fill does not allocate cache lines over the cache-as-RAM
+ * window.
  */
-void t23_tpl_msc_read(u32 skip, u32 *dst, u32 bytes)
+void xburst_tpl_msc_read(u32 skip, u32 *dst, u32 bytes)
 {
 	u32 total = skip + bytes;
 	u32 total_iters = (total + 63) >> 6;		/* 64-byte chunks */
@@ -103,9 +109,8 @@ void t23_tpl_msc_read(u32 skip, u32 *dst, u32 bytes)
 	 * read is small so the exact rate does not matter.
 	 * rate = MPLL / ((div + 1) * 2).
 	 */
-	writel(MSCCDR_SRC_MPLL | MSCCDR_CE | 31,
-	       (void __iomem *)(CPM_BASE + CPM_MSC0CDR));
-	while (readl((void __iomem *)(CPM_BASE + CPM_MSC0CDR)) & MSCCDR_BUSY)
+	writel(MSCCDR_SRC_MPLL | MSCCDR_CE | 31, (void __iomem *)CPM_MSC0CDR);
+	while (readl((void __iomem *)CPM_MSC0CDR) & MSCCDR_BUSY)
 		;
 
 	msc_cmd(16, 512, CMDAT_RESPONSE_R1);		/* SET_BLOCKLEN */

@@ -9,6 +9,13 @@ obj-y				+= cpu.o
 # the TPL phase, which only those SoCs have (SUPPORT_TPL).
 obj-$(CONFIG_TPL_BUILD)		+= tpl.o
 
+# Shared bare-metal SD reader for the MSC (SD-card) TPL boot - every XBurst1 SoC
+# has the same ingenic,t31-mmc controller, so one reader serves them all. Pulled
+# in only by the MSC build (CONFIG_SPL_MMC) and only in the TPL phase.
+ifeq ($(CONFIG_TPL_BUILD),y)
+obj-$(CONFIG_SPL_MMC)		+= msc.o
+endif
+
 # U-Boot proper only (these hook misc_init_r / board_late_init, not the SPL).
 ifndef CONFIG_XPL_BUILD
 obj-$(CONFIG_SET_DFU_ALT_INFO)	+= dfu.o

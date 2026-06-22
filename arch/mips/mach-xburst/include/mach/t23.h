@@ -73,6 +73,7 @@
  * [29] CE (apply, left set by the vendor), [28] BUSY, [27] STOP,
  * [7:0] div; rate = src / ((div+1)*2).
  */
+#define MSCCDR_SRC_MPLL		BIT(30)		/* MSCnCDR[31:30] = 1: MPLL */
 #define MSCCDR_CE		BIT(29)
 #define MSCCDR_BUSY		BIT(28)
 #define MSCCDR_STOP_SHIFT	27

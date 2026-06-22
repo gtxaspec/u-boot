@@ -51,7 +51,7 @@
 		#clock-cells = <1>;
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
-		bootph-all;
+		bootph-pre-ram;
 	};
 
 	/*

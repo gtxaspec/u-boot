@@ -156,6 +156,8 @@ void t31_spl_serial_init(void);
 void t31_spl_putc(char c);
 void t31_spl_puts(const char *s);
 void t31_spl_sfc_clk_init(void);
+void t31_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
 #endif /* __ASSEMBLY__ */
 
 #endif /* __T31_H__ */

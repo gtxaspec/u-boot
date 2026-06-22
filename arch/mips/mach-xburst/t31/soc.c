@@ -2,14 +2,15 @@
 /*
  * Ingenic T31 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM (TCSM, measured >=128 KB via the
- * bootrom dense read/write probe). It brings up a minimal console, then
- * driver model, whose UCLASS_RAM probe sets the PLLs and brings DDR up from
- * the per-SKU "ingenic,sdram-params" DT array (T31 is the uncapped SoC, so
- * this single SPL is the first loader stage). It then hands U-Boot loading to
- * the standard SPL_SPI framework: board_init_r() reads U-Boot proper from
- * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps. Full U-Boot
- * uses driver model.
+ * This SPL is DRAM-resident: the TPL (tpl.c) runs first in the cache-as-RAM
+ * window, brings up PLL + DDR (the shared XBurst1 Innophy driver ddr_t31.c via
+ * the UCLASS_RAM probe), then loads this SPL - from SPI-NOR (NOR cold boot) or
+ * the SD card (MSC boot) - into real DRAM and jumps to it. So none of the
+ * cache-as-RAM gymnastics a single-stage SPL would need apply here: the flow is
+ * fdtdec + the DM scan, the UCLASS_RAM probe records the (already-up) DRAM size,
+ * and board_init_r() reads U-Boot proper - from SPI-NOR via the DM SFC driver
+ * (SPL_SPI) or from the SD via the DM MMC driver (SPL_MMC) - LZMA-decompresses
+ * it and jumps. Full U-Boot uses driver model.
  *
  * Copyright (c) 2019 Ingenic Semiconductor Co.,Ltd
  */
@@ -83,81 +84,46 @@ gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
-	char *p;
+	struct udevice *dev;
+	struct ram_info ram;
 
 	/*
-	 * Zero BSS - start.S jumps straight here without clearing it.
-	 * DM-in-SPL needs a clean gd / BSS before spl_init() brings
-	 * driver model up.
-	 */
-	for (p = __bss_start; p < __bss_end; p++)
-		*p = 0;
-	gd = &gdata;
-
-	/*
-	 * The mask ROM leaves a usable EXTAL-based clock, so the console
-	 * works before pll_init() - bring it up first so any later hang
-	 * still produces output.
+	 * The TPL has already brought up PLL + DDR (cache-as-RAM) and loaded
+	 * this SPL into real DRAM, then jumped here, so everything runs
+	 * DRAM-resident. Bring the console up first so any later hang still
+	 * produces output, then fdtdec + the DM scan; the UCLASS_RAM probe
+	 * records the (already-up) DRAM size (its bring-up is a no-op in the
+	 * SPL phase - the TPL was the first loader stage), and board_init_r()
+	 * loads U-Boot proper.
 	 */
 	clk_ungate_uart(T31_CONSOLE_UART);
 	t31_spl_serial_init();
 
-	/*
-	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL) so
-	 * the DM scan can bind devices and the UCLASS_RAM probe can read the
-	 * per-SKU "ingenic,sdram-params" array from the &ddr node.
-	 */
+	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	gd = &gdata;
+
 	if (fdtdec_setup())
 		hang();
-
-	/*
-	 * Bring driver model up and probe the UCLASS_RAM driver. T31 is the
-	 * uncapped SoC, so this single SPL is the first loader stage: its probe
-	 * sets the PLLs and brings DDR up from the DT params
-	 * (drivers/ram/ingenic/ddr_t31.c), then records the size. spl_init here
-	 * needs the enlarged SPL-f heap (SYS_MALLOC_F_LEN) for the DM scan, since
-	 * the DRAM malloc is not up until board_init_r.
-	 */
 	if (spl_init())
 		hang();
-	{
-		struct udevice *dev;
-		struct ram_info ram;
+	if (uclass_first_device_err(UCLASS_RAM, &dev))
+		hang();
+	if (ram_get_info(dev, &ram))
+		hang();
+	dram_verify((u32)ram.size);
 
-		if (uclass_first_device_err(UCLASS_RAM, &dev))
-			hang();
-		if (ram_get_info(dev, &ram))
-			hang();
-		dram_verify((u32)ram.size);
-	}
-
-	if (IS_ENABLED(CONFIG_SPL_T31_USB_BOOT)) {
-		/*
-		 * USB-boot stage1: clocks and DDR are up. Set up the SFC
-		 * clock so U-Boot proper (uploaded to DRAM by the mask ROM)
-		 * can probe NOR, then return into the mask ROM USB loop
-		 * (start.S kept the bootrom sp, so a plain jr ra resumes it).
-		 */
-		t31_spl_sfc_clk_init();
-		return;
-	}
-
-	/*
-	 * NOR cold-boot: DDR is up, so hand off to the standard SPL framework
-	 * board_init_r(). It sets up the DRAM malloc heap, brings driver model
-	 * up (spl_init) and loads u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS
-	 * via the DM SFC driver (spl_boot_device() == BOOT_DEVICE_SPI),
-	 * LZMA-decompresses it and jumps. Driver model is deferred to
-	 * board_init_r (not called here) so the DM scan runs against the full
-	 * DRAM malloc, not the tiny SPL-f heap. Does not return.
-	 */
 	preloader_console_init();
-	t31_spl_sfc_clk_init();
+	if (!IS_ENABLED(CONFIG_SPL_MMC))
+		t31_spl_sfc_clk_init();
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 }
 
 u32 spl_boot_device(void)
 {
+	/* MSC/SD cold-boot loads U-Boot from the SD via the SPL MMC path. */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
+		return BOOT_DEVICE_MMC1;
+
 	return BOOT_DEVICE_SPI;
 }

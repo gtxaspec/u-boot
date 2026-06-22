@@ -138,12 +138,17 @@ void board_init_f(ulong dummy)
 	dram_verify((u32)ram.size);
 
 	preloader_console_init();
-	t23_spl_sfc_clk_init();
+	if (!IS_ENABLED(CONFIG_SPL_MMC))
+		t23_spl_sfc_clk_init();
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 }
 
 u32 spl_boot_device(void)
 {
+	/* MSC/SD cold-boot loads U-Boot from the SD via the SPL MMC path. */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
+		return BOOT_DEVICE_MMC1;
+
 	return BOOT_DEVICE_SPI;
 }

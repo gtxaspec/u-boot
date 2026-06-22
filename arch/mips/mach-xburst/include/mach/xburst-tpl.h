@@ -27,8 +27,19 @@ struct xburst_tpl_soc {
 	void (*nor_read)(unsigned int nor_off, unsigned int *dst,
 			 unsigned int bytes);
 
+	/*
+	 * MSC/SD boot (set per-build via the SoC's ops table when
+	 * CONFIG_SPL_MMC): read the DRAM-resident SPL off the SD card instead
+	 * of NOR. The mask ROM left the card initialised and selected, so this
+	 * is a bare-metal CMD18 stream. NULL on NOR-only builds; when set,
+	 * board_init_f() takes the MSC path (no SFC clock, no flush).
+	 */
+	void (*msc_read)(unsigned int skip, unsigned int *dst,
+			 unsigned int bytes);
+
 	unsigned int console_uart;	/* clk_ungate_uart() index */
 	unsigned int spl_nor_offs;	/* NOR offset of the DRAM-resident SPL */
+	unsigned int spl_msc_skip;	/* SD byte offset of that SPL (MSC) */
 	const char *banner;		/* e.g. "\nT20 TPL\n" */
 
 	/*

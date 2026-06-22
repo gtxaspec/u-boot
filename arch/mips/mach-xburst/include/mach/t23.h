@@ -73,7 +73,6 @@
  * [29] CE (apply, left set by the vendor), [28] BUSY, [27] STOP,
  * [7:0] div; rate = src / ((div+1)*2).
  */
-#define MSCCDR_SRC_MPLL		BIT(30)		/* MSCnCDR[31:30] = 1: MPLL */
 #define MSCCDR_CE		BIT(29)
 #define MSCCDR_BUSY		BIT(28)
 #define MSCCDR_STOP_SHIFT	27
@@ -154,7 +153,6 @@ void t23_spl_putc(char c);
 void t23_spl_sfc_clk_init(void);
 void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 		      unsigned int bytes);
-void t23_tpl_msc_read(u32 skip, u32 *dst, u32 bytes);
 int ingenic_t31_ddr_bringup_from_fdt(void);
 
 #endif /* __T23_H__ */

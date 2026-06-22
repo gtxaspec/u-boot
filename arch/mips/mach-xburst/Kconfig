@@ -2,19 +2,22 @@ menu "Ingenic XBurst T-series platforms"
 	depends on ARCH_XBURST
 
 #
-# XBurst1 T-series boot shape is dictated by one hardware fact: the
-# mask-ROM SPI-NOR load cap. Two ROM generations exist in the family:
+# XBurst1 T-series boots a TPL chain on every SoC: a tiny cache-as-RAM
+# stage brings up PLL + DRAM, then chain-loads a DRAM-resident SPL that
+# carries the full DM SFC/MMC framework. Two independent hardware limits
+# force the split:
 #
-#   Capped (0x6800 = 26 KiB) - T10/T20/T21/T30. The gen-1/1.5 ROM loads
-#     only the first 0x6800 bytes of the boot image, too small for the
-#     DM SFC + spi-nor framework (~29 KiB on its own). These parts run a
-#     tiny DDR-only TPL (cache-as-RAM) that brings up PLL + DRAM and
-#     chain-loads a DRAM-resident SPL over a minimal 0x03 NOR read; the
-#     full SPI framework then lives in that SPL. They select SUPPORT_TPL.
+#   NOR load cap (0x6800 = 26 KiB) - T10/T20/T21/T30 (gen-1/1.5 ROM)
+#     load only the first 0x6800 bytes of the NOR boot image, too small
+#     for the DM SFC + spi-nor framework (~29 KiB on its own).
 #
-#   Uncapped - T23/T31. The later ROM loads the whole image, so these
-#     keep a single big DM SPL (SPL_SPI) and need no TPL or hand-rolled
-#     read.
+#   SD-card cache-as-RAM - the SD ROM on every XBurst1 SoC (incl. the
+#     NOR-uncapped T23/T31) runs the first stage inside a small cache-
+#     lock window, far too small for the full DM+MMC SPL. So MSC boot
+#     needs the TPL even where the NOR ROM alone would not.
+#
+# The ROM loads the headered TPL over a minimal 0x03 NOR read or a bare-
+# metal SD read; the full framework then lives in the DRAM-resident SPL.
 #
 # Either way the only per-SoC difference is DDR: the Innophy PHY
 # (drivers/ram/ingenic/ddr_t31.c; T21/T23/T30/T31) or the Synopsys DWC
@@ -148,9 +151,14 @@ config SOC_T31
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
 	select BINMAN
+	select SUPPORT_TPL
 	help
 	  Ingenic T31 XBurst1 camera SoC: 24 MHz EXTAL, APLL/MPLL/VPLL,
 	  Innophy DDR2/DDR3 PHY, SFC SPI-flash boot via on-chip mask ROM.
+	  Boots the shared XBurst1 TPL chain (cache-as-RAM PLL+DDR then a
+	  DRAM-resident SPL): the NOR ROM is uncapped, but the SD-card ROM
+	  runs the first stage in a cache-lock window too small for the
+	  full DM+MMC SPL, so all XBurst1 SoCs need the TPL.
 
 config SOC_T32
 	bool "Ingenic T32"

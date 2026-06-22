@@ -1,2 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
 #include "t21-isvp-uboot-common.dtsi"
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	/* MSC/SD boot config (isvp_t21_msc0) reuses the SFC-NOR board .dts. */
+	model = "Ingenic ISVP-T21N (MMC0)";
+};
+#endif

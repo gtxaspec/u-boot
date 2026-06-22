@@ -133,11 +133,11 @@ jobs:
           echo "==== ccache statistics ===="
           ccache --show-stats
           # Stage a FLAT artifact dir and derive the artifact name without the
-          # _defconfig suffix. The USB-boot stage1 loader is the TPL on the capped
-          # XBurst1 SoCs (T10/T20/T21/T30) and the SPL on every uncapped SoC - both
-          # load to 0x80001000, bring up DDR and return to the bootrom. (The capped
-          # SoCs also build a DRAM-resident SPL, but it is NOR-only and unused over
-          # USB, so it is not published.)
+          # _defconfig suffix. The USB-boot stage1 loader is the TPL on the XBurst1
+          # TPL-chain SoCs (T10/T20/T21/T23/T30) and the SPL on the rest - both load
+          # to 0x80001000, bring up DDR and return to the bootrom. (The TPL SoCs also
+          # build a DRAM-resident SPL, but it is NOR-only and unused over USB, so it
+          # is not published.)
           mkdir -p "$RUNNER_TEMP/artifact"
           if [ -f tpl/u-boot-tpl.bin ]; then
             stage1="tpl/u-boot-tpl.bin"
@@ -192,7 +192,7 @@ jobs:
 
       - name: Roll the "usbboot" pre-release
         run: |
-          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each SoC ships a stage1 loader (<soc>-u-boot-spl.bin, or <soc>-u-boot-tpl.bin on the capped T10/T20/T21/T30) plus <soc>-u-boot.bin, uploaded to RAM via the mask-ROM USB boot. Rolling release - replaced on every manual run of the usbboot workflow."
+          notes="Ingenic USB-boot (DFU) loaders for every SoC, built from $GITHUB_REF_NAME @ $GITHUB_SHA. Each SoC ships a stage1 loader (<soc>-u-boot-spl.bin, or <soc>-u-boot-tpl.bin on the TPL SoCs T10/T20/T21/T23/T30) plus <soc>-u-boot.bin, uploaded to RAM via the mask-ROM USB boot. Rolling release - replaced on every manual run of the usbboot workflow."
           # Drop the previous rolling release + tag (ignored on the first run),
           # then recreate it at the commit that was built.
           gh release delete usbboot -R "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true

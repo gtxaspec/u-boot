@@ -4,16 +4,21 @@
  *
  * On an SD (MSC) boot the first stage is the TPL. The mask ROM does the
  * full SD card init (CMD0/8/41/2/3/7), reads the headered TPL off the
- * card and jumps to it; by then the card is initialised and selected,
- * and that state survives the TPL's DDR bring-up (which touches the DDR
- * controller and PLLs, not MSC0 - the INGE-applied MSC0CDR divider
- * stays). So this reader reuses the live card instead of re-initialising
- * it: it re-asserts the 512-byte block length and streams blocks via
- * CMD18, exactly like the ROM's own reader. It reads from block 0 and
- * discards up to @skip bytes before storing, so it is addressing-
- * agnostic (works on byte- and block-addressed cards alike), mirroring
- * the ROM. Symmetric with t23_spl_nor_read() on the NOR path; built only
- * for the MSC TPL (CONFIG_SPL_MMC).
+ * card and jumps to it; by then the card is initialised and selected, and
+ * that card state survives the TPL's DDR bring-up. So this reader reuses
+ * the live card instead of re-initialising it: it re-asserts the 512-byte
+ * block length and streams blocks via CMD18, exactly like the ROM's own
+ * reader. It reads from block 0 and discards up to @skip bytes before
+ * storing, so it is addressing-agnostic (works on byte- and block-
+ * addressed cards alike), mirroring the ROM. (The SD *clock* does need
+ * reprogramming - see t23_tpl_msc_read() - because pll_init has moved
+ * MPLL out from under the ROM's divider.)
+ *
+ * The read is hand-rolled rather than going through DM MMC because the
+ * full MMC stack does not fit the bootrom's cache-as-RAM lock window in
+ * the TPL - the same reason the NOR path uses a bare-metal SFC read.
+ * Symmetric with t23_spl_nor_read(); built only for the MSC TPL
+ * (CONFIG_SPL_MMC).
  */
 
 #include <config.h>
@@ -87,6 +92,21 @@ void t23_tpl_msc_read(u32 skip, u32 *dst, u32 bytes)
 	u32 store_iters = (bytes + 63) >> 6;
 	u32 *p = dst;
 	u32 it, w, st;
+
+	/*
+	 * Program the SD read clock. The ROM's INGE block used to do this; with a
+	 * TPL the reader does it instead, because pll_init has by now moved MPLL
+	 * out from under the ROM's default divider (leaving it corrupts the read).
+	 * Source MPLL and divide by 64 (div = 31): that holds the SD clock at or
+	 * below 25 MHz (SD default-speed) for any MPLL these XBurst1 parts run
+	 * (~0.6-1.5 GHz) without decoding the per-SoC PLL register, and the SPL
+	 * read is small so the exact rate does not matter.
+	 * rate = MPLL / ((div + 1) * 2).
+	 */
+	writel(MSCCDR_SRC_MPLL | MSCCDR_CE | 31,
+	       (void __iomem *)(CPM_BASE + CPM_MSC0CDR));
+	while (readl((void __iomem *)(CPM_BASE + CPM_MSC0CDR)) & MSCCDR_BUSY)
+		;
 
 	msc_cmd(16, 512, CMDAT_RESPONSE_R1);		/* SET_BLOCKLEN */
 	msc_writel(512, MSC_BLKLEN);

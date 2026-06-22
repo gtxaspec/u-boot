@@ -20,4 +20,8 @@ const struct xburst_tpl_soc xburst_tpl_soc = {
 	.spl_nor_offs	= 0x8000,
 	.banner		= "\nT23 TPL\n",
 	.usb_boot	= IS_ENABLED(CONFIG_SPL_T23_USB_BOOT),
+#if IS_ENABLED(CONFIG_SPL_MMC)
+	.msc_read	= t23_tpl_msc_read,
+	.spl_msc_skip	= 0x10000,	/* SD byte offset of the SPL image */
+#endif
 };

@@ -153,6 +153,7 @@ void t23_spl_putc(char c);
 void t23_spl_sfc_clk_init(void);
 void t23_spl_nor_read(unsigned int nor_off, unsigned int *dst,
 		      unsigned int bytes);
+void t23_tpl_msc_read(u32 skip, u32 *dst, u32 bytes);
 int ingenic_t31_ddr_bringup_from_fdt(void);
 
 #endif /* __T23_H__ */

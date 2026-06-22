@@ -73,6 +73,23 @@ void board_init_f(ulong dummy)
 		hang();
 	soc->puts("TPL: DDR up\n");
 
+	/*
+	 * MSC/SD cold boot: the INGE block the mask ROM applied left the PLLs
+	 * and MSC0CDR live and the card initialised + selected (that state
+	 * survives DDR bring-up). Read the DRAM-resident SPL straight off the SD
+	 * through the uncached window - no SFC clock, no flush, like the T30 NOR
+	 * quirk - and jump past its 0x800 header. A NULL msc_read (the NOR and
+	 * USB SoCs) takes the SFC path below instead.
+	 */
+	if (soc->msc_read) {
+		unsigned int *dst =
+			(unsigned int *)(CONFIG_SPL_TEXT_BASE | 0x20000000);
+
+		soc->msc_read(soc->spl_msc_skip, dst, CONFIG_SPL_MAX_SIZE);
+		soc->puts("TPL: SPL loaded (MSC), jumping\n");
+		((void (*)(void))(CONFIG_SPL_TEXT_BASE + 0x800))();
+	}
+
 	soc->sfc_clk_init();
 
 	if (soc->usb_boot) {

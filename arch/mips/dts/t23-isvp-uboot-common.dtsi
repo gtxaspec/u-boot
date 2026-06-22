@@ -28,7 +28,57 @@
 };
 
 &binman {
-#ifdef CONFIG_TPL
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MSC/SD-card boot image (isvp_t23_msc0). The XBurst1 SD ROM
+	 * (msc_sd_boot -> FUN_bfc032d0) parses an INGE block at the first
+	 * stage's +0x100 to program APLL/MPLL/CPCCR + MSC0CDR (the SD read
+	 * clock) and learn the load size before the heavy read - there is no
+	 * usable default, unlike the XBurst2 T40/T41 ROM. With a TPL chain the
+	 * first stage the ROM reads is the TPL, so the INGE rides on the TPL
+	 * here (vendor T23 table from spl_params_fixer.c CONFIG_T23: APLL 600M,
+	 * MPLL 1200M, CPCCR, MSC0CDR -> 24 MHz; the etype appends the
+	 * 0xffffffff terminator). SD layout: TPL at sector 34 (0x4400), the
+	 * DRAM-resident SPL at 0x10000 (the TPL reads it bare-metal), U-Boot at
+	 * SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR (0x180 = byte 0x30000).
+	 */
+	u-boot-tpl-t23-msc {
+		filename = "u-boot-tpl-t23-msc.bin";
+
+		ingenic-t31-spl {
+			filename = "tpl/u-boot-tpl.bin";
+			ingenic,inge-descriptors = <
+				0xb0000010 0xb0000010 0x04b05901 0x00000008 0x00000000
+				0xb0000014 0xb0000014 0x06405101 0x00000008 0x00000000
+				0xb0000000 0xb00000d4 0x95773310 0x00000000 0x00000007
+				0xb0000000 0xffffffff 0x9a7b5510 0x00000000 0x00000000
+				0xb0000068 0xb0000068 0x60000018 0x00000000 0x10000000>;
+		};
+	};
+
+	mmc {
+		filename = "u-boot-with-tpl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		tpl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "u-boot-tpl-t23-msc.bin";
+		};
+
+		spl {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x30000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#elif defined(CONFIG_TPL)
 	u-boot-tpl-t23 {
 		filename = "u-boot-tpl-t23.bin";
 
@@ -96,8 +146,24 @@
 &gpb { bootph-pre-ram; bootph-some-ram; };
 &gpc { bootph-pre-ram; bootph-some-ram; };
 &gpd { bootph-pre-ram; bootph-some-ram; };
-&pins_sfc { bootph-pre-ram; bootph-some-ram; };
 &uart1 { bootph-pre-ram; bootph-some-ram; };
+
+#if defined(CONFIG_SPL_MMC)
+/*
+ * MSC/SD boot: the SPL probes the native jz_mmc controller (the TPL's SD
+ * read is bare-metal, so the TPL devicetree still needs only &ddr). msc0 is
+ * status="disabled" in t23.dtsi - the NOR boards never use it - so enable it
+ * here and tag it + its pins for the SPL and pre-reloc U-Boot phases.
+ */
+&msc0 {
+	bootph-pre-ram;
+	bootph-some-ram;
+	broken-cd;		/* the SD is the boot medium - always present */
+	status = "okay";
+};
+&pins_mmc0 { bootph-pre-ram; bootph-some-ram; };
+#else
+&pins_sfc { bootph-pre-ram; bootph-some-ram; };
 &sfc {
 	bootph-pre-ram;
 	bootph-some-ram;
@@ -106,3 +172,4 @@
 		bootph-some-ram;
 	};
 };
+#endif

@@ -168,6 +168,7 @@ config SOC_T32
 	select SYS_CACHE_SHIFT_5
 	select SYS_MIPS_CACHE_INIT_RAM_LOAD
 	select BINMAN
+	select SUPPORT_TPL
 	help
 	  Ingenic T32 (vendor PRJ007) XBurst1 "T31-extended" camera SoC:
 	  24 MHz EXTAL, APLL/MPLL/VPLL, Innophy DDR (DDR2/DDR3/LPDDR3),

@@ -4,13 +4,13 @@
  *
  * Forward-port of the vendor U-Boot 2022.10 PRJ pllsetting.c for the
  * T32 (PRJ007). T32 uses the M/N/OD0/OD1 CPAPCR/CPMPCR/CPVPCR form
- * (like T31/T23/T20). The per-SKU APLL/MPLL words and the two-stage
- * CPCCR programming words (dividers, then source selects) live in the
- * DDR variant struct (drivers/ram/ingenic/ddr_t32_types.c) and are
- * selected at runtime by matching the &ddr node's per-SKU compatible
- * (ingenic,t32<sku>-ddr-innophy) - the same of_match table the RAM
- * driver uses. soc.c calls fdtdec_setup() before pll_init() so the
- * FDT blob is available here, before driver model is up.
+ * (like T31/T23/T20). pll_init_params() takes the per-SKU APLL/MPLL words
+ * and the two-stage CPCCR programming words (dividers, then source
+ * selects) as arguments; the ddr_t32 UCLASS_RAM probe reads them from its
+ * platdata (the &ddr node's ingenic,sdram-params) and calls this before
+ * the DDR init - so the cache-as-RAM TPL never needs the FDT. It also runs
+ * the vendor pre-PLL pokes (OST gate / watchdog / MESTSEL) that the old
+ * single-stage soc.c did before pll_init().
  *
  * UNLIKE T33/PRJ008, T32/PRJ007 DOES program VPLL (vendor pll_sets()
  * skips it only for PRJ008); VPLL is SoC-fixed at 1188 MHz on every
@@ -20,7 +20,6 @@
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
 
-#include <hang.h>
 #include <asm/io.h>
 #include <mach/t32.h>
 
@@ -49,13 +48,18 @@ static void pll_set(unsigned int reg, u32 word)
 		;
 }
 
-void pll_init(void)
+/*
+ * Program the PLLs from the SKU setpoints (the ddr_t32 UCLASS_RAM probe
+ * passes these from its platdata). DDR is not up yet, so this is the
+ * earliest the TPL runs SoC code: first the vendor pre-PLL pokes - clear
+ * the OST gate bit within CLKGR0, disable the watchdog, set the low
+ * MESTSEL bits - then the PLLs and CPCCR.
+ */
+void pll_init_params(u32 cpapcr, u32 cpmpcr, u32 cpccr_div, u32 cpccr_sel)
 {
-	u32 cpapcr, cpmpcr, cpccr_div, cpccr_sel;
-
-	if (ingenic_t32_ddr_pll_setpoints(&cpapcr, &cpmpcr,
-					  &cpccr_div, &cpccr_sel))
-		hang();
+	cpm_w(cpm_r(CPM_CLKGR0) & ~CPM_CLKGR1_OST, CPM_CLKGR0);
+	writel(0, (void __iomem *)(WDT_BASE + WDT_TCER));
+	cpm_w(cpm_r(CPM_MESTSEL) | 0x7, CPM_MESTSEL);
 
 	/* cpccr_default: known state, wait CPCSR stable. */
 	cpm_w(T32_CPCCR_DEFAULT, CPM_CPCCR);

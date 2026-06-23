@@ -23,6 +23,7 @@
 #include <dfu.h>
 #include <dm.h>
 #include <env.h>
+#include <mmc.h>
 #include <mtd.h>
 #include <spi.h>
 #include <spi_flash.h>
@@ -127,33 +128,38 @@ int board_late_init(void)
 		return 0;
 	}
 
+	/*
+	 * Default alt list: the boot flash only (alt 0 "flash"), run via
+	 * "dfu 0 <ifc>". Also the fallback when MMC DFU is built in but no SD
+	 * card is present.
+	 */
+	snprintf(info, sizeof(info), "flash raw 0x0 0x%llx", size);
+	env_set("dfu_alt_info", info);
+	snprintf(info, sizeof(info), "dfu 0 %s", ifc);
+	env_set("dfubootcmd", info);
+
+	/*
+	 * With MMC DFU built in, additionally expose the SD on MSC0 as alt 1
+	 * "sdcard" - but ONLY when a card actually inits. dfu_mmc binds every
+	 * declared entity at "dfu 0" time, so declaring "sdcard" with no card
+	 * makes the whole enumeration fail (-ENODEV) and the gadget never comes
+	 * up: the loader would be unusable on any unit booted without a card. So
+	 * probe the card and only widen to the dual alt list when it answers.
+	 * (board init only registers the MMC; dfu_mmc does find_mmc_device()
+	 * without mmc_init(), so this probe also does the init the first SD
+	 * transfer needs - "mmc dev 0" in the bootcmd re-asserts it at run time.)
+	 */
 	if (IS_ENABLED(CONFIG_DFU_MMC)) {
-		/*
-		 * Expose the boot flash (alt 0 "flash") AND the SD on MSC0
-		 * (alt 1 "sdcard") as one multi-device alt list, run via
-		 * "dfu 0". The SD alt is ALWAYS declared, never probed here:
-		 * some boards gate the SD slot behind a GPIO this generic
-		 * loader doesn't drive, so a boot-time card probe would be
-		 * unreliable - the card is only touched at transfer time, and
-		 * an absent/unpowered card just fails that one transfer. The
-		 * host defaults to alt 0 (flash); the SD is opt-in via --alt.
-		 */
-		snprintf(info, sizeof(info),
-			 "%s=flash raw 0x0 0x%llx&mmc 0=sdcard raw 0x0 0x4000",
-			 ifc, size);
-		env_set("dfu_alt_info", info);
-		/*
-		 * Bring MSC0 up before entering DFU. board init only registers
-		 * the MMC; dfu_mmc does find_mmc_device() without mmc_init(), so
-		 * the card must be initialised here or the first DFU write to it
-		 * fails (and wedges the controller until the next rescan).
-		 */
-		env_set("dfubootcmd", "mmc dev 0; dfu 0");
-	} else {
-		snprintf(info, sizeof(info), "flash raw 0x0 0x%llx", size);
-		env_set("dfu_alt_info", info);
-		snprintf(info, sizeof(info), "dfu 0 %s", ifc);
-		env_set("dfubootcmd", info);
+		struct mmc *mmc = find_mmc_device(0);
+
+		if (mmc && !mmc_init(mmc)) {
+			/* size 0 => dfu_mmc spans the whole card (blk_dev->lba). */
+			snprintf(info, sizeof(info),
+				 "%s=flash raw 0x0 0x%llx&mmc 0=sdcard raw 0x0 0",
+				 ifc, size);
+			env_set("dfu_alt_info", info);
+			env_set("dfubootcmd", "mmc dev 0; dfu 0");
+		}
 	}
 	return 0;
 }

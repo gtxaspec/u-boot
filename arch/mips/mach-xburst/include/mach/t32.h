@@ -150,14 +150,15 @@
  * XBurst1 start.S can include this header for the register defines without
  * the C declarations reaching the assembler.
  */
-void pll_init(void);
+void pll_init_params(u32 cpapcr, u32 cpmpcr, u32 cpccr_div, u32 cpccr_sel);
+u32 t32_pll_rate(unsigned int cpxpcr_off);
 void clk_ungate_uart(unsigned int idx);
 void t32_spl_serial_init(void);
 void t32_spl_puts(const char *s);
 void t32_spl_putc(char c);
 void t32_spl_sfc_clk_init(void);
-int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
-				  u32 *cpccr_div, u32 *cpccr_sel);
+void t32_spl_nor_read(unsigned int nor_off, unsigned int *dst,
+		      unsigned int bytes);
 #endif /* __ASSEMBLY__ */
 
 #endif /* __T32_H__ */

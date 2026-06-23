@@ -292,11 +292,11 @@ struct ingenic_t32_ddr_params {
 	u32 ddr_ck_hz;			/* [2]  DDR CK = data rate / 2 */
 
 	/*
-	 * SPL PLL/CPCCR setpoints: CPAPCR/CPMPCR M/N/OD words and the
-	 * two-stage CPCCR programming words (dividers, then source
-	 * selects). Consumed by t32/pll.c in SPL via
-	 * ingenic_t32_ddr_pll_setpoints() before driver model is up.
-	 * (VPLL is SoC-fixed on every SKU and stays in pll.c.)
+	 * PLL/CPCCR setpoints: CPAPCR/CPMPCR M/N/OD words and the two-stage
+	 * CPCCR programming words (dividers, then source selects). The
+	 * ddr_t32 UCLASS_RAM probe passes these to pll_init_params() (t32/
+	 * pll.c) in the first loader stage. (VPLL is SoC-fixed on every SKU
+	 * and stays in pll.c.)
 	 */
 	u32 cpapcr;
 	u32 cpmpcr;
@@ -324,18 +324,7 @@ struct ingenic_t32_ddr_priv {
 	u32 ram_size;			/* total bytes, for ram_get_info() */
 };
 
-/* Top-level DDR bring-up (ddr_t32.c), run once from the SPL probe. */
+/* Top-level DDR bring-up (ddr_t32.c), run once from the first-stage probe. */
 int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_params *cfg);
-
-/*
- * SPL helper for t32/pll.c: find the T32 DDR node in the FDT (by the single
- * ingenic,t32-ddr-innophy compatible) and return that SKU's PLL/CPCCR
- * setpoints from its ingenic,sdram-params array. Runs before driver model,
- * so the caller must have set
- * gd->fdt_blob (via fdtdec_setup()). Returns 0 on success, negative on
- * error.
- */
-int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
-				  u32 *cpccr_div, u32 *cpccr_sel);
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T32_H */

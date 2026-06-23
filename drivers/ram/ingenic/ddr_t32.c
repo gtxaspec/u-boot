@@ -31,10 +31,8 @@
 #include <dt-structs.h>
 #include <log.h>
 #include <ram.h>
-#include <fdtdec.h>
 #include <dm/device_compat.h>
 #include <linux/delay.h>
-#include <linux/libfdt.h>
 #include <linux/types.h>
 #include <asm/io.h>
 #include <asm/global_data.h>
@@ -705,61 +703,18 @@ int ingenic_t32_ddr_sdram_init(const struct ingenic_t32_ddr_params *cfg)
 
 /*
  * DT compatible for the T32 DDR node - one binding for every T32 SKU; the
- * board leaf .dts supplies the per-SKU "ingenic,sdram-params" u32 array.
- * Shared by the pre-DM FDT read below and the driver of_match - no per-SKU
- * compatible, no of_match .data variant table.
+ * board leaf .dts supplies the per-SKU "ingenic,sdram-params" u32 array, read
+ * into platdata by of_to_plat. No per-SKU compatible, no of_match .data
+ * variant table.
  */
 #define INGENIC_T32_DDR_COMPATIBLE	"ingenic,t32-ddr-innophy"
-
-/*
- * Read the per-SKU params from the &ddr node's "ingenic,sdram-params" array in
- * the live FDT, before driver model is up. The struct is all-u32 and the
- * property order IS the field order, so it deserializes in one shot.
- */
-static int ddr_params_from_fdt(struct ingenic_t32_ddr_params *out)
-{
-	const void *blob = gd->fdt_blob;
-	int node;
-
-	if (!blob)
-		return -ENODEV;
-
-	node = fdt_node_offset_by_compatible(blob, -1,
-					     INGENIC_T32_DDR_COMPATIBLE);
-	if (node < 0)
-		return -ENODEV;
-
-	return fdtdec_get_int_array(blob, node, "ingenic,sdram-params",
-				    (u32 *)out, sizeof(*out) / sizeof(u32));
-}
-
-/*
- * SPL helper for t32/pll.c: hand back the SKU's PLL/CPCCR setpoints from the
- * DDR node's ingenic,sdram-params array. Runs before driver model is up.
- */
-int ingenic_t32_ddr_pll_setpoints(u32 *cpapcr, u32 *cpmpcr,
-				  u32 *cpccr_div, u32 *cpccr_sel)
-{
-	struct ingenic_t32_ddr_params p;
-	int ret;
-
-	ret = ddr_params_from_fdt(&p);
-	if (ret)
-		return ret;
-
-	*cpapcr = p.cpapcr;
-	*cpmpcr = p.cpmpcr;
-	*cpccr_div = p.cpccr_div;
-	*cpccr_sel = p.cpccr_sel;
-	return 0;
-}
 
 /* ------------------------------------------------------------------
  * UCLASS_RAM driver. The per-SKU params come from the &ddr node's
  * "ingenic,sdram-params" array, read into platdata by of_to_plat (the
- * mainline rk3328 DMC shape). The SPL probe brings DRAM up; the
- * U-Boot-proper probe just records the size (DRAM is already alive). PLL is
- * programmed earlier, in t32/pll.c, via ingenic_t32_ddr_pll_setpoints().
+ * mainline rk3328 DMC shape). In the first loader stage (the cache-as-RAM
+ * TPL) the probe brings up PLL + DDR from the platdata; in U-Boot proper it
+ * just records the size (DRAM is already alive).
  * ------------------------------------------------------------------
  */
 
@@ -800,11 +755,21 @@ static int ingenic_t32_ddr_probe(struct udevice *dev)
 	const struct ingenic_t32_ddr_params *params = &plat->params;
 #endif
 
+	/*
+	 * Bring DDR up in the first loader stage - the cache-as-RAM TPL
+	 * (CONFIG_TPL_BUILD). The SPL probe (an XPL build that has a TPL) and
+	 * U-Boot proper skip it and only record the size; the TPL already
+	 * brought DDR up from the same platdata. PLL is programmed here too,
+	 * just before DDR, so the TPL needs no separate pll_init() call.
+	 */
+#if defined(CONFIG_TPL_BUILD) || \
+	(defined(CONFIG_XPL_BUILD) && !defined(CONFIG_TPL))
+	pll_init_params(params->cpapcr, params->cpmpcr,
+			params->cpccr_div, params->cpccr_sel);
+	ingenic_t32_ddr_sdram_init(params);
+#endif
+
 	p->ram_size = params->size;
-
-	if (IS_ENABLED(CONFIG_XPL_BUILD))
-		return ingenic_t32_ddr_sdram_init(params);
-
 	return 0;
 }
 

@@ -2,15 +2,14 @@
 /*
  * Ingenic T32 SoC SPL bring-up
  *
- * The SPL runs from on-chip SRAM (>= 128 KB: the vendor BIG_SPL build
- * runs 100 KB SPLs pre-DDR and places BSS at 0x8001f000). It brings up
- * a minimal console, configures the PLLs, then brings driver model up:
- * the UCLASS_RAM driver (drivers/ram/ingenic/ddr_t32.c) probes off the
- * SPL devicetree and inits DDR, and U-Boot loading goes through the
- * standard SPL_SPI framework: board_init_r() reads U-Boot proper from
- * SPI-NOR via the DM SFC driver, LZMA-decompresses it and jumps. Full
- * U-Boot uses driver model. Forward-ported from the vendor U-Boot
- * 2022.10 T32 spl.c.
+ * This SPL is DRAM-resident: the TPL (tpl.c) runs first in the cache-as-RAM
+ * window, brings up PLL + DDR (the T32 uMCTL2/Innophy driver ddr_t32.c via the
+ * UCLASS_RAM probe), then loads this SPL from SPI-NOR (NOR cold boot) into real
+ * DRAM and jumps to it. So none of the cache-as-RAM gymnastics a single-stage
+ * SPL would need apply here: the flow is fdtdec + the DM scan, the UCLASS_RAM
+ * probe records the (already-up) DRAM size, and board_init_r() reads U-Boot
+ * proper from SPI-NOR via the DM SFC driver (SPL_SPI), LZMA-decompresses it and
+ * jumps. Full U-Boot uses driver model.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -84,83 +83,34 @@ gd_t gdata __section(".bss");
 
 void board_init_f(ulong dummy)
 {
-	/*
-	 * Zero BSS - start.S jumps straight here without clearing it.
-	 * DM-in-SPL needs a clean gd / BSS before spl_init() brings
-	 * driver model up.
-	 */
-	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
-	gd = &gdata;
+	struct udevice *dev;
+	struct ram_info ram;
 
 	/*
-	 * The mask ROM leaves a usable EXTAL-based clock, so the console
-	 * works before pll_init() - bring it up first so any later hang
-	 * still produces output.
+	 * The TPL has already brought up PLL + DDR (cache-as-RAM) and loaded
+	 * this SPL into real DRAM, then jumped here, so everything runs
+	 * DRAM-resident. Bring the console up first so any later hang still
+	 * produces output, then fdtdec + the DM scan; the UCLASS_RAM probe
+	 * records the (already-up) DRAM size (its bring-up is a no-op in the
+	 * SPL phase - the TPL was the first loader stage), and board_init_r()
+	 * loads U-Boot proper.
 	 */
 	clk_ungate_uart(T32_CONSOLE_UART);
 	t32_spl_serial_init();
 
-	/*
-	 * Vendor T32 spl.c pre-PLL pokes: clear the OST gate bit (the
-	 * vendor clears CPM_CLKGR1_OST within CLKGR0), disable the
-	 * watchdog, and set the low MESTSEL bits.
-	 */
-	writel(readl((void __iomem *)(CPM_BASE + CPM_CLKGR0)) &
-		   ~CPM_CLKGR1_OST,
-	       (void __iomem *)(CPM_BASE + CPM_CLKGR0));
-	writel(0, (void __iomem *)(WDT_BASE + WDT_TCER));
-	writel(readl((void __iomem *)(CPM_BASE + CPM_MESTSEL)) | 0x7,
-	       (void __iomem *)(CPM_BASE + CPM_MESTSEL));
+	memset(__bss_start, 0, (size_t)__bss_end - (size_t)__bss_start);
+	gd = &gdata;
 
-	/*
-	 * Make the FDT blob available (OF_SEPARATE: appended after the SPL)
-	 * so pll_init() can match the DDR node's per-SKU compatible and pick
-	 * the per-SKU PLL setpoints before driver model comes up.
-	 */
 	if (fdtdec_setup())
 		hang();
-
-	pll_init();
-
-	/*
-	 * Bring driver model up and probe the UCLASS_RAM driver, whose SPL
-	 * probe runs the uMCTL2/Innophy sdram_init to bring up DDR -
-	 * replaces the old direct sdram_init() call, mirroring the
-	 * T31/XBurst2 flow. spl_init here needs the enlarged SPL-f heap
-	 * (SYS_MALLOC_F_LEN) for the DM scan, since the DRAM malloc is not
-	 * up until board_init_r.
-	 */
 	if (spl_init())
 		hang();
-	{
-		struct udevice *dev;
-		struct ram_info ram;
+	if (uclass_first_device_err(UCLASS_RAM, &dev))
+		hang();
+	if (ram_get_info(dev, &ram))
+		hang();
+	dram_verify((u32)ram.size);
 
-		if (uclass_first_device_err(UCLASS_RAM, &dev))
-			hang();
-		if (ram_get_info(dev, &ram))
-			hang();
-		dram_verify((u32)ram.size);
-	}
-
-	if (IS_ENABLED(CONFIG_SPL_T32_USB_BOOT)) {
-		/*
-		 * USB-boot stage1: clocks and DDR are up. Set up the SFC
-		 * clock so U-Boot proper (uploaded to DRAM by the mask ROM)
-		 * can probe NOR, then return into the mask ROM USB loop
-		 * (start.S kept the bootrom sp, so a plain jr ra resumes it).
-		 */
-		t32_spl_sfc_clk_init();
-		return;
-	}
-
-	/*
-	 * NOR cold-boot: DDR is up, so hand off to the standard SPL
-	 * framework board_init_r(). It sets up the DRAM malloc heap and
-	 * loads u-boot-lzma.img from CONFIG_SYS_SPI_U_BOOT_OFFS via the
-	 * DM SFC driver (spl_boot_device() == BOOT_DEVICE_SPI),
-	 * LZMA-decompresses it and jumps. Does not return.
-	 */
 	preloader_console_init();
 	t32_spl_sfc_clk_init();
 	board_init_r(NULL, 0);

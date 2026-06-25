@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23N DFU/USB-boot loader (DDR2 64 MB, CPU 1188 MHz).
- *
- * Per-variant loader: its own clocks/DDR; do not reuse a loader across
- * variants (each T23 SKU has a distinct APLL/DDR config).
+ * Ingenic ISVP-T23N-HP DFU/USB-boot loader (DDR2 64 MB, CPU 1400 MHz).
+ * Per-variant loader: its own clocks/DDR; do not reuse across variants.
  */
 
 /dts-v1/;
@@ -11,13 +9,13 @@
 #include "t23-isvp-dfu.dtsi"
 
 / {
-	model = "Ingenic ISVP-T23N (DFU loader)";
+	model = "Ingenic ISVP-T23N-HP (DFU loader)";
 };
 
 &ddr {
-	/* T23N: DDR2 64 MB M14D5121632A (4-bank), CPU 1188 / DDR 600 MHz. */
+	/* T23N-HP: DDR2 64 MB M14D5121632A (4-bank), CPU 1400 / DDR 600 MHz. */
 	ingenic,sdram-params = <
-		0x1290d100 0x06405100 0x9a0b5510	/* APLL1188 MPLL1200 CPCCR */
+		0x15e0d100 0x06405100 0x9a0b5510	/* APLL1400 MPLL1200 CPCCR */
 		0 0					/* ddr_cdr (MPLL/2); DDR2 */
 		13 10 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x04000000				/* 64 MB */

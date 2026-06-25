@@ -158,7 +158,7 @@ _start:
 	 * before the console: the mask ROM does not mux the UART (and
 	 * other) pads, so without this the SPL runs but produces no
 	 * UART output on real silicon. Faithful transliteration of
-	 * the vendor T31 SPL start.S (isvp_t31_sfcnor_ddr128M,
+	 * the vendor T31 SPL start.S (isvp_t31x_sfcnor,
 	 * CONFIG_NET_GMAC path) - do not remove or "tidy"; order and
 	 * values are board-critical.
 	 */

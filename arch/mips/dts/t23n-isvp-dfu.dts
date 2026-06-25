@@ -2,10 +2,8 @@
 /*
  * Ingenic ISVP-T23N DFU/USB-boot loader (DDR2 64 MB, CPU 1188 MHz).
  *
- * The T23N DDR2-64M init brings up the low 64 MB of any 64 MB T23
- * part, so this loader doubles as the universal 64 MB DDR2 DFU loader
- * (T23N/ZN/X/N-HP/N-LP). The 32 MB parts (T23DL/DN) use their own
- * loader.
+ * Per-variant loader: its own clocks/DDR; do not reuse a loader across
+ * variants (each T23 SKU has a distinct APLL/DDR config).
  */
 
 /dts-v1/;

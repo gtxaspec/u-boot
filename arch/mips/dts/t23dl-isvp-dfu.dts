@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23 32 MB DFU/USB-boot loader (DDR2 32 MB M14D2561616A,
- * CPU 1188 MHz).
- *
- * The 32 MB DDR2 init for the T23DL/DN parts: the 64 MB t23n-isvp-dfu
- * loader programs a 64 MB geometry and cannot bring these 32 MB parts
- * up, so they need this loader. DDR params are the same M14D2561616A
- * set as t23dl-isvp.dts (production NOR), kept verbatim.
+ * Ingenic ISVP-T23DL DFU/USB-boot loader (DDR2 32 MB, CPU 1188 MHz).
+ * Per-variant loader: its own clocks/DDR; do not reuse across variants.
  */
 
 /dts-v1/;
@@ -14,7 +9,7 @@
 #include "t23-isvp-dfu.dtsi"
 
 / {
-	model = "Ingenic ISVP-T23 32MB (DFU loader)";
+	model = "Ingenic ISVP-T23DL (DFU loader)";
 };
 
 &ddr {

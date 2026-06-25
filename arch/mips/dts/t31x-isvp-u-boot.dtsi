@@ -3,7 +3,7 @@
 
 #if defined(CONFIG_SPL_MMC)
 / {
-	/* MSC/SD boot config (isvp_t31_msc0_ddr128M) reuses the SFC-NOR board .dts. */
+	/* MSC/SD boot config (isvp_t31x_msc0) reuses the SFC-NOR board .dts. */
 	model = "Ingenic ISVP-T31X (MMC0)";
 };
 #endif

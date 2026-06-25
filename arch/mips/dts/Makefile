@@ -40,7 +40,8 @@ dtb-$(CONFIG_TARGET_ISVP_T23) += t23n-isvp.dtb t23zn-isvp.dtb \
 	t23dn-isvp.dtb t23n-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T30) += t30n-isvp.dtb t30l-isvp.dtb \
 	t30x-isvp.dtb t30a-isvp.dtb \
-	t30l-isvp-dfu.dtb
+	t30l-isvp-dfu.dtb t30n-isvp-dfu.dtb t30x-isvp-dfu.dtb \
+	t30a-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T31) += t31x-isvp.dtb t31n-isvp.dtb t31l-isvp.dtb \
 	t31a-isvp.dtb t31l-isvp-dfu.dtb t31a-isvp-dfu.dtb \
 	t31n-isvp-dfu.dtb t31x-isvp-dfu.dtb

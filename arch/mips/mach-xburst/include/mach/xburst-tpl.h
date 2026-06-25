@@ -40,6 +40,7 @@ struct xburst_tpl_soc {
 	unsigned int console_uart;	/* clk_ungate_uart() index */
 	unsigned int spl_nor_offs;	/* NOR offset of the DRAM-resident SPL */
 	unsigned int spl_msc_skip;	/* SD byte offset of that SPL (MSC) */
+	unsigned int msc_base;		/* MSC0 base; 0 => 0xb3450000 (T32 = 0xb3060000) */
 	const char *banner;		/* e.g. "\nT20 TPL\n" */
 
 	/*

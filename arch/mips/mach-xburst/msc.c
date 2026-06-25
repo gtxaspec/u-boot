@@ -27,8 +27,13 @@
 #include <linux/types.h>
 #include <mach/xburst-tpl.h>
 
-/* MSC0 controller, KSEG1 (uncached - the TPL runs cache-as-RAM). */
-#define MSC_BASE		0xb3450000
+/*
+ * MSC0 controller base, KSEG1 (uncached - the TPL runs cache-as-RAM). Most
+ * XBurst1 SoCs place MSC0 at 0xb3450000, but T32's is at 0xb3060000, so the
+ * base is taken from the SoC hook (msc_base); 0 keeps the 0xb3450000 default.
+ * The CPM MSC0CDR clock divider (below) is shared across all of them.
+ */
+#define MSC_BASE	(xburst_tpl_soc.msc_base ? xburst_tpl_soc.msc_base : 0xb3450000)
 #define MSC_STAT		0x004
 #define MSC_CMDAT		0x00c
 #define MSC_BLKLEN		0x018

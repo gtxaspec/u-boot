@@ -59,3 +59,15 @@
 	status = "okay";
 	dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
 };
+
+/*
+ * Onboard RMII ethernet, enabled in the loader for tftp/dhcp recovery.
+ * Same PHY as the SFC-NOR boards; the 50 MHz RMII reference is derived
+ * from the per-variant MPLL, so each leaf DFU .dts supplies its own
+ * clocks (ingenic,sdram-params) - never share one loader across variants.
+ */
+&gmac {
+	status = "okay";
+	/* IP101G PHY reset (ISVP reference default = GPIO PB28). */
+	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
+};

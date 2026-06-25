@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23N DFU/USB-boot loader (DDR2 64 MB, CPU 1188 MHz).
- *
- * Per-variant loader: its own clocks/DDR; do not reuse a loader across
- * variants (each T23 SKU has a distinct APLL/DDR config).
+ * Ingenic ISVP-T23N-LP DFU/USB-boot loader (DDR2 64 MB, CPU 936 MHz).
+ * Per-variant loader: its own clocks/DDR; do not reuse across variants.
  */
 
 /dts-v1/;
@@ -11,21 +9,21 @@
 #include "t23-isvp-dfu.dtsi"
 
 / {
-	model = "Ingenic ISVP-T23N (DFU loader)";
+	model = "Ingenic ISVP-T23N-LP (DFU loader)";
 };
 
 &ddr {
-	/* T23N: DDR2 64 MB M14D5121632A (4-bank), CPU 1188 / DDR 600 MHz. */
+	/* T23N-LP: DDR2 64 MB M14D5121632A (4-bank), CPU 936 / DDR 400 MHz (MPLL/3). */
 	ingenic,sdram-params = <
-		0x1290d100 0x06405100 0x9a0b5510	/* APLL1188 MPLL1200 CPCCR */
-		0 0					/* ddr_cdr (MPLL/2); DDR2 */
+		0x0ea0d100 0x06405100 0x9a0b5510	/* APLL936 MPLL1200 CPCCR */
+		2 0					/* ddr_cdr (MPLL/3); DDR2 */
 		13 10 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x04000000				/* 64 MB */
 		0x0a288a40 0x0000d91e			/* DDRC_CFG DDRC_CTRL */
-		0x000020fc 0x00002400 0x00910003	/* MMAP0 MMAP1 REFCNT */
-		0x050f0a06 0x021c0a07 0x200a0722	/* TIMING1..3 */
-		0x26240031 0xff060405 0x321c0505	/* TIMING4..6 */
-		0x00000f73				/* MR0 */
+		0x000020fc 0x00002400 0x00c20001	/* MMAP0 MMAP1 REFCNT */
+		0x040d0606 0x02120607 0x20060418	/* TIMING1..3 */
+		0x14240031 0xff060405 0x32120505	/* TIMING4..6 */
+		0x00000b73				/* MR0 */
 	>;
 };
 

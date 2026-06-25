@@ -4,12 +4,13 @@
  *
  * This SPL is DRAM-resident: the TPL (tpl.c) runs first in the cache-as-RAM
  * window, brings up PLL + DDR (the T32 uMCTL2/Innophy driver ddr_t32.c via the
- * UCLASS_RAM probe), then loads this SPL from SPI-NOR (NOR cold boot) into real
- * DRAM and jumps to it. So none of the cache-as-RAM gymnastics a single-stage
- * SPL would need apply here: the flow is fdtdec + the DM scan, the UCLASS_RAM
- * probe records the (already-up) DRAM size, and board_init_r() reads U-Boot
- * proper from SPI-NOR via the DM SFC driver (SPL_SPI), LZMA-decompresses it and
- * jumps. Full U-Boot uses driver model.
+ * UCLASS_RAM probe), then loads this SPL - from SPI-NOR (NOR cold boot) or the
+ * SD card (MSC boot) - into real DRAM and jumps to it. So none of the
+ * cache-as-RAM gymnastics a single-stage SPL would need apply here: the flow is
+ * fdtdec + the DM scan, the UCLASS_RAM probe records the (already-up) DRAM size,
+ * and board_init_r() reads U-Boot proper - from SPI-NOR via the DM SFC driver
+ * (SPL_SPI) or from the SD via the DM MMC driver (SPL_MMC) - LZMA-decompresses
+ * it and jumps. Full U-Boot uses driver model.
  *
  * Copyright (c) 2024 Ingenic Semiconductor Co.,Ltd
  */
@@ -112,12 +113,17 @@ void board_init_f(ulong dummy)
 	dram_verify((u32)ram.size);
 
 	preloader_console_init();
-	t32_spl_sfc_clk_init();
+	if (!IS_ENABLED(CONFIG_SPL_MMC))
+		t32_spl_sfc_clk_init();
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
 }
 
 u32 spl_boot_device(void)
 {
+	/* MSC/SD cold-boot loads U-Boot from the SD via the SPL MMC path. */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
+		return BOOT_DEVICE_MMC1;
+
 	return BOOT_DEVICE_SPI;
 }

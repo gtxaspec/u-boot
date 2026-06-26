@@ -30,7 +30,8 @@ dtb-$(CONFIG_BOARD_SFR_NB4_SER) += sfr,nb4-ser.dtb
 dtb-$(CONFIG_BOARD_TPLINK_WDR4300) += tplink_wdr4300.dtb
 dtb-$(CONFIG_BOARD_VOCORE2) += vocore_vocore2.dtb
 dtb-$(CONFIG_TARGET_JZ4780_CI20) += ci20.dtb
-dtb-$(CONFIG_TARGET_ISVP_T10) += t10-isvp.dtb t10-isvp-dfu.dtb
+dtb-$(CONFIG_TARGET_ISVP_T10) += t10n-isvp.dtb t10l-isvp.dtb \
+	t10n-isvp-dfu.dtb t10l-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T20) += t20n-isvp.dtb t20x-isvp.dtb \
 	t20l-isvp-dfu.dtb t20n-isvp-dfu.dtb t20x-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T21) += t21n-isvp.dtb t21hp-isvp.dtb \

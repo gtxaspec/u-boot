@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /* Shared T41 binman image - SFC-NOR or MSC/SD-card per CONFIG_SPL_MMC. */
-#include "t41-isvp-u-boot.dtsi"
+#include "t41-isvp-uboot-common.dtsi"
 
 #if defined(CONFIG_SPL_MMC)
 / {

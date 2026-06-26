@@ -50,7 +50,8 @@ dtb-$(CONFIG_TARGET_ISVP_T31) += t31x-isvp.dtb t31n-isvp.dtb t31l-isvp.dtb \
 	t31n-isvp-dfu.dtb t31x-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T32) += t32lq-isvp.dtb t32nq-isvp.dtb \
 	t32vn-isvp.dtb t32xq-isvp.dtb t32vx-isvp.dtb t32vnp-isvp.dtb \
-	t32lq-isvp-dfu.dtb t32vn-isvp-dfu.dtb
+	t32lq-isvp-dfu.dtb t32vn-isvp-dfu.dtb t32nq-isvp-dfu.dtb \
+	t32vnp-isvp-dfu.dtb t32vx-isvp-dfu.dtb t32xq-isvp-dfu.dtb
 dtb-$(CONFIG_TARGET_ISVP_T33) += t33-isvp.dtb
 dtb-$(CONFIG_SOC_LUTON) += luton_pcb090.dtb luton_pcb091.dtb
 dtb-$(CONFIG_SOC_OCELOT) += ocelot_pcb120.dtb ocelot_pcb123.dtb

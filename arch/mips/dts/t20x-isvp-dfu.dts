@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Ingenic ISVP-T20X, DFU/USB-boot loader variant (DDR2 128 MB, CPU 860 MHz).
+ * Per-variant: its own clocks/DDR.
+ */
+
+/dts-v1/;
+
+#include "t20-isvp-dfu.dtsi"
+
+/ {
+	model = "Ingenic ISVP-T20X (DFU loader)";
+};
+
+&ddr {
+	/* T20X: DDR2 128 MB M14D1G1664A (8-bank), CPU 860 / DDR 500 MHz. */
+	ingenic,sdram-params = <
+		0x04708900 0x07d0c900 0x9a073310	/* APLL860 MPLL1000 CPCCR */
+		0x08000000				/* 128 MB */
+		0x0ae88a42 0x000020f8 0x00002800	/* CFG MMAP0 MMAP1 */
+		0x040e0806 0x02170807 0x2008051d	/* TIMING1..3 */
+		0x1f240031 0xff060505 0x32170505	/* TIMING4..6 */
+		0x0000000a 0x3ab7889a 0x004000b8	/* DCR DTPR0 DTPR1 */
+		0x030e0d0c 0x07060504 0x0b0a0908	/* REMAP1..3 */
+		0x0f020100 0x13121110			/* REMAP4..5 */
+		1					/* cdr (DDR = MPLL/2 = 500) */
+		0x00f20001				/* REFCNT */
+		0x00000e73 0x00228019 0x064186a0	/* MR0 PTR0 PTR1 */
+	>;
+};

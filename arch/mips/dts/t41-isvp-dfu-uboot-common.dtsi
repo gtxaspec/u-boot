@@ -44,3 +44,15 @@
 		};
 	};
 };
+
+/* SPL phase tags relocated from t41-isvp-dfu.dtsi (see t41-isvp-uboot-common.dtsi). */
+&ddr { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&gpe { bootph-all; };
+&pins_uart1 { bootph-all; };
+&uart1 { bootph-all; };

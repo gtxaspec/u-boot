@@ -28,6 +28,8 @@
  *                              at 0x10000 - flash at offset 0.
  */
 
+#include "t40-isvp-uboot-common.dtsi"
+
 / {
 	binman: binman {
 		multiple-images;
@@ -109,3 +111,12 @@
 	model = "Ingenic ISVP-T40N (MMC0)";
 };
 #endif
+
+/*
+ * The SFC-NOR flash@0 is an SPL node on the NOR boards, so tag it here
+ * (not in t40-isvp-uboot-common.dtsi - the NAND t40xp flash@0 is not an
+ * SPL node). Relocated from t40-isvp-nor.dtsi.
+ */
+&sfc {
+	flash@0 { bootph-all; };
+};

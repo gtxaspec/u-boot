@@ -37,14 +37,12 @@
 		compatible = "ingenic,t40-ddr-innophy";
 		reg = <0xb34f0000 0x3000>;
 		/* the leaf .dts supplies the per-SKU ingenic,sdram-params array. */
-		bootph-all;
 	};
 
 	cgu: clock-controller@b0000000 {
 		compatible = "ingenic,t40-cgu";
 		reg = <0xb0000000 0x1000>;
 		#clock-cells = <1>;
-		bootph-all;
 	};
 
 	pinctrl: pinctrl@b0010000 {
@@ -52,14 +50,12 @@
 		reg = <0xb0010000 0x8000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		bootph-all;
 
 		gpa: gpio@0 {
 			compatible = "ingenic,t40-gpio";
 			reg = <0>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpb: gpio@1 {
@@ -67,7 +63,6 @@
 			reg = <1>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpc: gpio@2 {
@@ -75,7 +70,6 @@
 			reg = <2>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpd: gpio@3 {
@@ -83,7 +77,6 @@
 			reg = <3>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		gpe: gpio@4 {
@@ -91,19 +84,16 @@
 			reg = <4>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			bootph-all;
 		};
 
 		pins_uart1: uart1 {
 			function = "uart1";
 			groups = "uart1-data";
-			bootph-all;
 		};
 
 		pins_sfc: sfc {
 			function = "sfc";
 			groups = "sfc-data";
-			bootph-all;
 		};
 
 		pins_mac0: mac0 {
@@ -114,7 +104,6 @@
 		pins_mmc0: mmc0 {
 			function = "mmc0";
 			groups = "mmc0-1bit", "mmc0-4bit";
-			bootph-all;
 		};
 	};
 
@@ -125,7 +114,6 @@
 		clock-frequency = <24000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_uart1>;
-		bootph-all;
 		status = "okay";
 	};
 
@@ -194,7 +182,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_sfc>;
 		spi-max-frequency = <50000000>;
-		bootph-all;
 		status = "okay";
 
 		/* flash@0 comes from the boot-media fragment (nor/nand). */
@@ -209,7 +196,6 @@
 		broken-cd;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_mmc0>;
-		bootph-all;
 		status = "okay";
 	};
 

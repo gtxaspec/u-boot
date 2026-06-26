@@ -24,12 +24,6 @@
 	>;
 };
 
-/* NAND SPL (mach-xburst/t40/sfc_nand.c) reads the flash in SPL, so the
- * SFC pins must be configured there. */
-&pins_sfc {
-	bootph-all;
-};
-
 &sfc {
 	flash@0 {
 		compatible = "spi-nand";

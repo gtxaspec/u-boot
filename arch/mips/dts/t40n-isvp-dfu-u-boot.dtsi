@@ -10,6 +10,8 @@
  * 0x8000) so a stray 'make' still produces a sensible flash image.
  */
 
+#include "t40-isvp-dfu-uboot-common.dtsi"
+
 / {
 	binman: binman {
 		multiple-images;

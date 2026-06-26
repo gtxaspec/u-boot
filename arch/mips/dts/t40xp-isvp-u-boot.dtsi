@@ -22,6 +22,8 @@
  * caches enough SRAM to back BSS during board_init_f.
  */
 
+#include "t40-isvp-uboot-common.dtsi"
+
 / {
 	binman: binman {
 		multiple-images;

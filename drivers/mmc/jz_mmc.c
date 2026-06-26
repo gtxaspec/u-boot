@@ -16,6 +16,7 @@
 #include <dm/device_compat.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
+#include <linux/iopoll.h>
 #include <time.h>
 #if !CONFIG_IS_ENABLED(DM_MMC)
 #include <mach/jz4780.h>	/* MSC0_BASE / jz_mmc_init() - legacy path only */
@@ -252,7 +253,8 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 			   struct mmc_cmd *cmd, struct mmc_data *data)
 {
 	u32 stat, mask, cmdat = 0;
-	int i, ret;
+	u32 done = MSC_IREG_END_CMD_RES | MSC_IREG_TIME_OUT_RES;
+	int ret;
 
 	/*
 	 * jz4780 stops the bus clock and waits for CLK_EN to drop before
@@ -342,16 +344,28 @@ static int jz_mmc_send_cmd(struct mmc *mmc, struct jz_mmc_priv *priv,
 		writel(MSC_STRPCL_START_OP | MSC_STRPCL_CLOCK_CONTROL_START,
 		       priv->regs + MSC_STRPCL);
 
-	/* wait for completion */
-	for (i = 0; i < 100; i++) {
-		stat = readl(priv->regs + MSC_IREG);
-		stat &= MSC_IREG_END_CMD_RES | MSC_IREG_TIME_OUT_RES;
-		if (stat)
-			break;
-		mdelay(1);
-	}
+	/*
+	 * Wait for the command/response phase to finish (END_CMD_RES) or for
+	 * the controller to flag a response timeout (TIME_OUT_RES). With no
+	 * card neither ever fires - the T31 MSC's response-timeout counter
+	 * (RESTO = 0xffff) outlasts this window at the slow init clock - so the
+	 * poll itself times out.
+	 */
+	ret = readl_poll_timeout(priv->regs + MSC_IREG, stat, stat & done,
+				 100 * 1000);
+	stat &= done;
 	writel(stat, priv->regs + MSC_IREG);
 	if (stat & MSC_IREG_TIME_OUT_RES)
+		return -ETIMEDOUT;
+	/*
+	 * The command did not complete and a response was expected: there is no
+	 * card. Fail here so the code below does not read a garbage response as
+	 * success - which made board_late_init() in the USB-boot loader see a
+	 * phantom card, declare the sdcard DFU alt, and wedge the gadget (it
+	 * never enumerated). Responseless commands (CMD0) lack MMC_RSP_PRESENT
+	 * and are unaffected.
+	 */
+	if (ret && (cmd->resp_type & MMC_RSP_PRESENT))
 		return -ETIMEDOUT;
 
 	if (cmd->resp_type & MMC_RSP_PRESENT) {

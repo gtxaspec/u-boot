@@ -3,8 +3,8 @@
 # toolchains - xburst1 for T10-T33, xburst2 for T40/T41/A1 - so the CI
 # builds with the exact compiler thingino ships. Each job compiles one
 # isvp_*_usbboot defconfig and uploads u-boot-spl.bin + u-boot.bin (flat, no
-# spl/ prefix) as a run artifact named after the SoC (defconfig minus the
-# _defconfig suffix, e.g. isvp_a1_usbboot). When every SoC build succeeds, a
+# spl/ prefix) as a run artifact named after the variant (defconfig minus the
+# _defconfig suffix, e.g. isvp_a1n_usbboot). When every SoC build succeeds, a
 # final "release" job rolls a single rolling "usbboot" pre-release carrying all
 # the loader binaries, SoC-prefixed (<soc>-u-boot-spl.bin / <soc>-u-boot.bin),
 # recreated on each manual run.
@@ -47,22 +47,40 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { defconfig: isvp_t10_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t20_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t21_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t23_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t23_usbboot_32mb_defconfig,  arch: xburst1 }
-          - { defconfig: isvp_t30_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t31_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t31_usbboot_ddr3_defconfig,  arch: xburst1 }
-          - { defconfig: isvp_t32_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t32_usbboot_ddr3_defconfig,  arch: xburst1 }
+          - { defconfig: isvp_t10l_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t10n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t20l_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t20n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t20x_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t21hp_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t21n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t23dl_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t23dn_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t23nhp_usbboot_defconfig,    arch: xburst1 }
+          - { defconfig: isvp_t23nlp_usbboot_defconfig,    arch: xburst1 }
+          - { defconfig: isvp_t23n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t23x_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t23zn_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t30a_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t30l_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t30n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t30x_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t31a_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t31l_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t31n_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t31x_usbboot_defconfig,      arch: xburst1 }
+          - { defconfig: isvp_t32lq_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t32nq_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t32vnp_usbboot_defconfig,    arch: xburst1 }
+          - { defconfig: isvp_t32vn_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t32vx_usbboot_defconfig,     arch: xburst1 }
+          - { defconfig: isvp_t32xq_usbboot_defconfig,     arch: xburst1 }
           - { defconfig: isvp_t33_usbboot_defconfig,       arch: xburst1 }
-          - { defconfig: isvp_t40_usbboot_defconfig,       arch: xburst2 }
-          - { defconfig: isvp_t40_usbboot_ddr3_defconfig,  arch: xburst2 }
-          - { defconfig: isvp_t41_usbboot_defconfig,       arch: xburst2 }
-          - { defconfig: isvp_t41_usbboot_ddr3_defconfig,  arch: xburst2 }
-          - { defconfig: isvp_a1_usbboot_defconfig,        arch: xburst2 }
+          - { defconfig: isvp_t40n_usbboot_defconfig,      arch: xburst2 }
+          - { defconfig: isvp_t40xp_usbboot_defconfig,     arch: xburst2 }
+          - { defconfig: isvp_t41lq_usbboot_defconfig,     arch: xburst2 }
+          - { defconfig: isvp_t41nq_usbboot_defconfig,     arch: xburst2 }
+          - { defconfig: isvp_a1n_usbboot_defconfig,       arch: xburst2 }
     name: ${{ matrix.defconfig }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -134,7 +152,7 @@ jobs:
           ccache --show-stats
           # Stage a FLAT artifact dir and derive the artifact name without the
           # _defconfig suffix. The USB-boot stage1 loader is the TPL on the XBurst1
-          # TPL-chain SoCs (T10/T20/T21/T23/T30) and the SPL on the rest - both load
+          # TPL-chain SoCs (T10/T20/T21/T23/T30/T32) and the SPL on the rest - both load
           # to 0x80001000, bring up DDR and return to the bootrom. (The TPL SoCs also
           # build a DRAM-resident SPL, but it is NOR-only and unused over USB, so it
           # is not published.)

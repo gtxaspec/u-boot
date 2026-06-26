@@ -16,7 +16,7 @@
 
 / {
 	compatible = "ingenic,isvp-t10", "ingenic,t10";
-	model = "Ingenic ISVP-T10 (DFU loader)";
+	model = "Ingenic ISVP-T10L (DFU loader)";
 
 	aliases {
 		serial1 = &uart1;
@@ -28,7 +28,7 @@
 
 	memory@0 {
 		device_type = "memory";
-		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T10N) */
+		reg = <0x0 0x04000000>;	/* 64 MB DDR2 (T10L) */
 	};
 };
 
@@ -58,9 +58,9 @@
 };
 
 &ddr {
-	/* T10N: DDR2 64 MB M14D5121632A (4-bank), CPU 860 / DDR 400 MHz. */
+	/* T10L: DDR2 64 MB M14D5121632A (4-bank), CPU 712 / DDR 400 MHz. */
 	ingenic,sdram-params = <
-		0x04708900 0x06405100 0x9a0b5510	/* APLL860 MPLL1200 CPCCR */
+		0x03b08900 0x06405100 0x9a0b5510	/* APLL712 MPLL1200 CPCCR */
 		0x04000000				/* 64 MB */
 		0x0a688a40 0x000020fc 0x00002400	/* CFG MMAP0 MMAP1 */
 		0x040d0606 0x02120607 0x20060418	/* TIMING1..3 */

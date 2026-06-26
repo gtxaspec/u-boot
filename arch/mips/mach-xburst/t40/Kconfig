@@ -15,8 +15,8 @@ config SPL_T40_USB_BOOT
 	  PLLs and DDR, then return to the bootrom (jr ra) instead of
 	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
-	  defconfigs (isvp_t40_usbboot_defconfig and
-	  isvp_t40_usbboot_ddr3_defconfig).
+	  defconfigs (isvp_t40n_usbboot_defconfig and
+	  isvp_t40xp_usbboot_defconfig).
 
 config SPL_T40_SFC_NAND_BOOT
 	bool "T40 SPL: load U-Boot proper from SPI-NAND via SFC"

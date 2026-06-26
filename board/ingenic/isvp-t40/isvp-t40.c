@@ -128,7 +128,5 @@ int board_init(void)
 
 int checkboard(void)
 {
-	if (IS_ENABLED(CONFIG_SPL_T40_USB_BOOT))
-		puts("Loader: USB-boot\n");
 	return 0;
 }

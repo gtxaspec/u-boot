@@ -140,8 +140,5 @@ int board_init(void)
 int checkboard(void)
 {
 	printf("Variant: %s\n", CONFIG_T33_VARIANT_NAME);
-#ifdef CONFIG_SPL_T33_USB_BOOT
-	puts("Loader: USB-boot\n");
-#endif
 	return 0;
 }

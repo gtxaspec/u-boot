@@ -165,7 +165,5 @@ int checkboard(void)
 	 * The per-SKU leaf DT's "Model:" line carries the SKU now (T20 is
 	 * DM-in-SPL, DT-selected), so no "Variant:" line here.
 	 */
-	if (IS_ENABLED(CONFIG_SPL_T20_USB_BOOT))
-		puts("Loader: USB-boot\n");
 	return 0;
 }

@@ -84,3 +84,27 @@
 	};
 #endif
 };
+
+/*
+ * SPL phase tags: bootph is U-Boot build-phase control (which nodes
+ * survive fdtgrep into the SPL DTB), not hardware - so it lives in the
+ * U-Boot overlay beside binman, keeping t41-isvp.dtsi a clean hardware
+ * description (mirrors the XBurst1 SoCs).
+ */
+&ddr { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&gpe { bootph-all; };
+&pins_uart1 { bootph-all; };
+&pins_sfc { bootph-all; };
+&pins_mmc0 { bootph-all; };
+&uart1 { bootph-all; };
+&sfc {
+	bootph-all;
+	flash@0 { bootph-all; };
+};
+&msc0 { bootph-all; };

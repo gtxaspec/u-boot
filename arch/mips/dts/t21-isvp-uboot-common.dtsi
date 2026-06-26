@@ -29,7 +29,7 @@
 &binman {
 #if defined(CONFIG_SPL_MMC)
 	/*
-	 * MSC/SD-card boot image (isvp_t21_msc0). The XBurst1 SD ROM reads the
+	 * MSC/SD-card boot image (isvp_t21n_msc0). The XBurst1 SD ROM reads the
 	 * headered first stage (the TPL) off the card, checks the MSPL magic and
 	 * jumps to it - no INGE/descriptor block needed; the reader sets the SD
 	 * clock itself (see mach-xburst/msc.c). So the image is just the plain

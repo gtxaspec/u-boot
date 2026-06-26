@@ -118,8 +118,14 @@
 		spi-max-frequency = <50000000>;
 		status = "okay";
 
+		/*
+		 * flash@0 declared spi-nand so the NAND stack binds on NAND
+		 * boards; the loader's board_late_init() (mach-xburst/dfu.c)
+		 * auto-detects NOR vs NAND - on a NOR board the spi-nand probe
+		 * fails, the node is unbound, and a SPI-NOR is probed on CS0.
+		 */
 		flash@0 {
-			compatible = "jedec,spi-nor";
+			compatible = "spi-nand";
 			reg = <0>;
 			spi-max-frequency = <50000000>;
 		};

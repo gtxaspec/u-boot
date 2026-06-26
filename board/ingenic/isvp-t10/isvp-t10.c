@@ -149,7 +149,5 @@ int checkboard(void)
 	 * No "Variant:" line: the SKU is carried by the leaf-DT Model: string
 	 * (params-in-DT, no compile-time variant). DM-SPL boards do not re-add it.
 	 */
-	if (IS_ENABLED(CONFIG_SPL_T10_USB_BOOT))
-		puts("Loader: USB-boot\n");
 	return 0;
 }

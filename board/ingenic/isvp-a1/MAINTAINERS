@@ -3,4 +3,4 @@ M:	Alfonso Gamboa <gtxent@gmail.com>
 S:	Maintained
 F:	board/ingenic/isvp-a1/
 F:	include/configs/isvp-a1.h
-F:	configs/isvp_a1_sfcnor_defconfig
+F:	configs/isvp_a1*_defconfig

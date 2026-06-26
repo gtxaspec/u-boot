@@ -15,7 +15,7 @@ config SPL_T41_USB_BOOT
 	  PLLs and DDR, then return to the bootrom (jr ra) instead of
 	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
-	  defconfigs (isvp_t41_usbboot_defconfig and
-	  isvp_t41_usbboot_ddr3_defconfig).
+	  defconfigs (isvp_t41lq_usbboot_defconfig and
+	  isvp_t41nq_usbboot_defconfig).
 
 endif

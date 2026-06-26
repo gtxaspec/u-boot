@@ -16,6 +16,6 @@ config SPL_A1_USB_BOOT
 	  PLLs and DDR, then return to the bootrom (jr ra) instead of
 	  loading U-Boot proper from SPI-NOR. The mask ROM then uploads
 	  U-Boot proper over USB. Used by the USB-boot / DFU loader
-	  defconfig (isvp_a1_usbboot_defconfig). Development only.
+	  defconfig (isvp_a1n_usbboot_defconfig). Development only.
 
 endif

@@ -59,7 +59,7 @@
 	status = "okay";
 	/* Host by default; USB-NIC and mass-storage commands need a
 	 * host controller. Switch to "peripheral" via the dedicated
-	 * isvp_t32_usbboot defconfig + DT pair for DFU loads. */
+	 * isvp_t32*_usbboot defconfigs + DT pairs for DFU loads. */
 	dr_mode = "host";
 };
 

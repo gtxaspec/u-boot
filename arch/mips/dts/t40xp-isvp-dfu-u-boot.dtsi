@@ -9,6 +9,8 @@
  * still produces a sensible flash image.
  */
 
+#include "t40-isvp-dfu-uboot-common.dtsi"
+
 / {
 	binman: binman {
 		multiple-images;
@@ -42,4 +44,11 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+};
+
+/* NAND SPL (mach-xburst/t40/sfc_nand.c) reads the flash in SPL, so the
+ * SFC pins must be configured there. Relocated from t40xp-isvp-dfu.dts.
+ */
+&pins_sfc {
+	bootph-all;
 };

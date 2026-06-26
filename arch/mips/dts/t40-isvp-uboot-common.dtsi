@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Shared T40 normal-boot SPL phase tags.
+ *
+ * bootph-* is U-Boot build-phase control (which nodes survive fdtgrep
+ * into the SPL DTB), not hardware - so it lives in the U-Boot overlay
+ * beside binman, keeping t40-isvp.dtsi a clean hardware description
+ * (mirrors the XBurst1 SoCs and the T41 sibling).
+ *
+ * Included by the per-SKU normal-boot overlays (t40n-isvp-u-boot.dtsi,
+ * t40xp-isvp-u-boot.dtsi, t40xp-nor-isvp-u-boot.dtsi); each carries its
+ * own binman image (the NOR/NAND layouts differ) but shares these tags.
+ * The boot-media flash@0 node is NOR-only, so its tag lives in the NOR
+ * overlays, not here (the NAND t40xp flash@0 is not an SPL node).
+ */
+&ddr { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&gpe { bootph-all; };
+&pins_uart1 { bootph-all; };
+&pins_sfc { bootph-all; };
+&pins_mmc0 { bootph-all; };
+&uart1 { bootph-all; };
+&sfc { bootph-all; };
+&msc0 { bootph-all; };

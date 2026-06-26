@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Shared T40 DFU-loader SPL phase tags.
+ *
+ * bootph-* is U-Boot build-phase control (which nodes survive fdtgrep
+ * into the SPL DTB), not hardware - so it lives in the U-Boot overlay
+ * beside binman, keeping t40-isvp-dfu.dtsi a clean hardware description
+ * (mirrors the XBurst1 SoCs and the T41 sibling).
+ *
+ * Included by the per-SKU DFU-loader overlays (t40n-isvp-dfu-u-boot.dtsi,
+ * t40xp-isvp-dfu-u-boot.dtsi). The DFU loader's SPL returns to the mask
+ * ROM, so the boot-media (sfc/flash) tags differ from the cold-boot DT
+ * and are carried per-leaf, not here.
+ */
+&ddr { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&gpe { bootph-all; };
+&pins_uart1 { bootph-all; };
+&uart1 { bootph-all; };

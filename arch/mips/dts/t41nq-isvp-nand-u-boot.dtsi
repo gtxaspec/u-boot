@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Binman image description for the Ingenic ISVP-T41NQ SFC-NAND boot.
+ *
+ * Mirrors the T40XP SFC-NAND layout (T41 is the XBurst2 sibling of T40,
+ * same SFC IP). The custom NAND U-Boot loader in
+ * arch/mips/mach-xburst/t41/sfc_nand.c reads the legacy mkimage header +
+ * LZMA payload from NAND offset T41_NAND_UBOOT_OFFSET (0x80000), so keep
+ * U-Boot at 0x80000 here. The 512 KiB SPL window is comfortable for the
+ * DM-in-SPL build.
+ *
+ * `ingenic,no-inge` selects the NAND-style 64-byte block alignment for
+ * the SPL boot header (the bootrom's SPI-NAND path expects no INGE block
+ * at SPL offset 0x100). `ingenic,min-spl-length` pads the SPL file (0xff)
+ * to cover the BSS region so the bootrom caches enough SRAM to back BSS
+ * during board_init_f.
+ *
+ * Not shared with t41-isvp-uboot-common.dtsi: that overlay carries the
+ * SFC-NOR binman (U-Boot at 0x14000, no NAND header tweaks), so the NAND
+ * config is self-contained here. The bootph phase tags below are copied
+ * from it (medium-agnostic; consolidate when the per-medium overlays are
+ * unified).
+ */
+
+/ {
+	binman: binman {
+		multiple-images;
+	};
+};
+
+&binman {
+	u-boot-spl-t41 {
+		filename = "u-boot-spl-t41.bin";
+
+		ingenic-t31-spl {
+			filename = "spl/u-boot-spl.bin";
+			ingenic,no-inge;
+			ingenic,min-spl-length = <0x16000>;
+		};
+	};
+
+	flash {
+		filename = "u-boot-with-spl-lzma.bin";
+		pad-byte = <0xff>;
+
+		spl {
+			type = "blob";
+			offset = <0x0>;
+			filename = "u-boot-spl-t41.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x80000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+};
+
+/*
+ * SPL phase tags: bootph is U-Boot build-phase control (which nodes
+ * survive fdtgrep into the SPL DTB), not hardware - so it lives in the
+ * U-Boot overlay beside binman, keeping t41-isvp.dtsi a clean hardware
+ * description.
+ */
+&ddr { bootph-all; };
+&cgu { bootph-all; };
+&pinctrl { bootph-all; };
+&gpa { bootph-all; };
+&gpb { bootph-all; };
+&gpc { bootph-all; };
+&gpd { bootph-all; };
+&gpe { bootph-all; };
+&pins_uart1 { bootph-all; };
+&pins_sfc { bootph-all; };
+&uart1 { bootph-all; };
+&sfc {
+	bootph-all;
+	flash@0 { bootph-all; };
+};

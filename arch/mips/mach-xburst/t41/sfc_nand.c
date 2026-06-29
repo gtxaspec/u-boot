@@ -61,6 +61,11 @@ static const struct spl_nand_param nand_table[] = {
 	{ .pagesize = 2048, .id_manufactory = 0xc8, .device_id = 0xb2,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 3,
 	  .eccstat_count = 1, .eccerrstatus = { 0x7 } },
+	/* GigaDevice GD5F1GM7 (1 Gbit, 2-KiB page; ECC status [6:4], 0x7
+	 * = uncorrectable - same layout as the GD5F1GQ4 above). */
+	{ .pagesize = 2048, .id_manufactory = 0xc8, .device_id = 0x91,
+	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 3,
+	  .eccstat_count = 1, .eccerrstatus = { 0x7 } },
 };
 
 static const struct spl_nand_param *curr_device;

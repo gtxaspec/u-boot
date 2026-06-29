@@ -4397,7 +4397,8 @@ static int spi_nor_init(struct spi_nor *nor)
 		 * NOR stack so make sure it is disabled, otherwise the
 		 * SPI NOR may appear locked for no obvious reason.
 		 */
-		if (JEDEC_MFR(nor->info) == SNOR_MFR_WINBOND) {
+		if (JEDEC_MFR(nor->info) == SNOR_MFR_WINBOND ||
+		    (nor->info->flags & SPI_NOR_HAS_SR3_WPS)) {
 			u8 cr;
 
 			err = read_sr3(nor);

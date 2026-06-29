@@ -62,9 +62,9 @@ _start:
 	.word 0xffff00aa
 	.word 0x00000000
 	.space 496, 0
-#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT)
+#elif defined(CONFIG_SPL_T40_SFC_NAND_BOOT) || defined(CONFIG_SPL_T41_SFC_NAND_BOOT)
 	/*
-	 * T40 SFC SPI-NAND boot header.
+	 * T40/T41 SFC SPI-NAND boot header (same XBurst2 mask-ROM contract).
 	 *
 	 * Byte 8 = 0x00: NOR/NAND flash-type discriminator the T40 mask
 	 * ROM checks in FUN_bfc02070 (0xaa = SPI NOR, 0x00 = SPI NAND).

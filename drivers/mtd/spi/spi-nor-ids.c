@@ -138,7 +138,8 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("fm25q64",    0xa14017, 0, 64 * 1024, 128,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO("fm25q128",   0xa14018, 0, 64 * 1024, 256,
-	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
+	       SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_HAS_SR3_WPS) },
 	{ INFO("fm25w128",   0xa12818, 0, 64 * 1024, 256,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 #endif
@@ -416,7 +417,8 @@ const struct flash_info spi_nor_ids[] = {
 	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO
 	 ("py25q128ha", 0x852018, 0, 64 * 1024, 256,
-	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
+	  SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_HAS_SR3_WPS) },
 	{ INFO
 	 ("py25f512hb", 0x85231a, 0, 64 * 1024, 1024,
 	  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
@@ -759,7 +761,8 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("zb25vq64",  0x5e4017, 0, 64 * 1024, 128,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO("zb25vq128", 0x5e4018, 0, 64 * 1024, 256,
-	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
+	       SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_HAS_SR3_WPS) },
 #endif
 	{ },
 };

@@ -181,6 +181,7 @@
 
 /* Status Register 2 bits. */
 #define SR2_QUAD_EN_BIT7	BIT(7)
+#define SR2_CMP			BIT(6)	/* Complement protect */
 
 /* Status Register 3 bits. */
 #define SR3_WPS			BIT(2)

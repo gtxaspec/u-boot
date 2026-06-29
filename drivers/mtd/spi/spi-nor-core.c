@@ -4398,10 +4398,30 @@ static int spi_nor_init(struct spi_nor *nor)
 		 * SPI NOR may appear locked for no obvious reason.
 		 */
 		if (JEDEC_MFR(nor->info) == SNOR_MFR_WINBOND) {
+			u8 cr;
+
 			err = read_sr3(nor);
 			if (err > 0 && err & SR3_WPS) {
 				write_enable(nor);
 				write_sr3(nor, err & ~SR3_WPS);
+				write_disable(nor);
+			}
+			/*
+			 * Also clear CMP (SR2 bit 6). CMP complements the
+			 * block-protect range, so with CMP=1 the write_sr(0)
+			 * above (BP=0) protects the entire array instead of
+			 * unprotecting it and the device appears locked for no
+			 * obvious reason. The block-protect code only supports
+			 * CMP=0 (see stm_lock()), so restore it with a 2-byte
+			 * WRSR, preserving QE and the other SR2 bits.
+			 */
+			err = nor->read_reg(nor, SPINOR_OP_RDCR, &cr, 1);
+			if (!err && (cr & SR2_CMP)) {
+				u8 sr_cr[2] = { 0, cr & ~SR2_CMP };
+
+				write_enable(nor);
+				nor->write_reg(nor, SPINOR_OP_WRSR, sr_cr, 2);
+				spi_nor_wait_till_ready(nor);
 				write_disable(nor);
 			}
 		}

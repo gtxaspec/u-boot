@@ -127,6 +127,15 @@ void board_init_f(ulong dummy)
 	 * to take control back after DRAM is up so it can upload U-Boot.
 	 */
 	return;
+#elif defined(CONFIG_SPL_T41_SFC_NAND_BOOT)
+	/* SFC NAND cold-boot (T41NQ NAND): DDR is up via UCLASS_RAM, the SPL
+	 * framework's malloc heap is in DRAM. Mainline U-Boot has no generic
+	 * DM SPI-NAND SPL loader, so call the custom NAND loader in sfc_nand.c
+	 * which reads the legacy mkimage header from the boot NAND,
+	 * LZMA-decompresses to CONFIG_TEXT_BASE, and jumps. Same path as T40XP.
+	 */
+	t41_spl_nand_load_uboot();
+	hang();
 #else
 	/* SFC NOR cold-boot: hand off to the standard SPL framework
 	 * board_init_r(). It runs boot_from_devices() against

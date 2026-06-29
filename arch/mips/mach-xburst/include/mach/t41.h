@@ -184,6 +184,9 @@ void clk_ungate_uart(unsigned int idx);
 int timer_init(void);
 void t41_spl_serial_init(void);
 void t41_spl_sfc_clk_init(void);
+void t41_spl_puts(const char *s);
+void t41_spl_putc(char c);
+void t41_spl_nand_load_uboot(void);
 #endif /* __ASSEMBLY__ */
 
 #endif /* __T41_H__ */

@@ -18,4 +18,15 @@ config SPL_T41_USB_BOOT
 	  defconfigs (isvp_t41lq_usbboot_defconfig and
 	  isvp_t41nq_usbboot_defconfig).
 
+config SPL_T41_SFC_NAND_BOOT
+	bool "T41 SPL: load U-Boot proper from SPI-NAND via SFC"
+	depends on SPL && !SPL_T41_USB_BOOT
+	help
+	  Build the SPL as a cold-boot stage1 that probes the SPI-NAND
+	  on SFC0, reads U-Boot proper out of the NAND at a fixed offset
+	  (T41_NAND_UBOOT_OFFSET, default 512 KiB), and jumps. Used by
+	  the production T41NQ SFC-NAND defconfig
+	  (isvp_t41nq_sfc0_nand_defconfig). The driver lives in
+	  arch/mips/mach-xburst/t41/sfc_nand.c (ported from T40).
+
 endif

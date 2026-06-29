@@ -2,3 +2,4 @@
 
 obj-$(CONFIG_XPL_BUILD)	+= soc.o
 obj-y	+= pll.o serial.o sfc.o timer.o
+obj-$(CONFIG_SPL_T41_SFC_NAND_BOOT)	+= sfc_nand.o

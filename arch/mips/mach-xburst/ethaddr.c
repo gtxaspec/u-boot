@@ -20,19 +20,8 @@
 #include <init.h>
 #include <net.h>
 #include <stdio.h>
-#include <asm/io.h>
+#include <mach/efuse.h>
 #include <linux/types.h>
-
-/*
- * eFUSE chip-serial words, uncached KSEG1. Identical across the XBurst
- * T-series and the same addresses the Linux side reads, keeping the two in
- * sync. (Physical 0x13540200.. ; KSEG1 base also defined as EFUSE_BASE in the
- * per-SoC mach headers.)
- */
-#define XBURST_EFUSE_SERIAL0	0xb3540200
-#define XBURST_EFUSE_SERIAL1	0xb3540204
-#define XBURST_EFUSE_SERIAL2	0xb3540208
-#define XBURST_EFUSE_SERIAL3	0xb354023c
 
 static void mac_from_serial(u8 *mac, u32 s0, u32 s1, u32 s2, u32 s3)
 {
@@ -54,23 +43,20 @@ static void mac_from_serial(u8 *mac, u32 s0, u32 s1, u32 s2, u32 s3)
 int misc_init_r(void)
 {
 	u8 mac[ARP_HLEN];
-	u32 s0, s1, s2, s3;
+	u32 s[4];
 
 	/* A MAC provisioned in the environment always wins. */
 	if (eth_env_get_enetaddr("ethaddr", mac))
 		return 0;
 
-	s0 = readl((void __iomem *)XBURST_EFUSE_SERIAL0);
-	s1 = readl((void __iomem *)XBURST_EFUSE_SERIAL1);
-	s2 = readl((void __iomem *)XBURST_EFUSE_SERIAL2);
-	s3 = readl((void __iomem *)XBURST_EFUSE_SERIAL3);
+	xburst_chip_serial(s);
 
-	if (!(s0 | s1 | s2 | s3)) {
+	if (!(s[0] | s[1] | s[2] | s[3])) {
 		/* Unfused part: nothing to derive from, use a random MAC. */
 		net_random_ethaddr(mac);
 		printf("Net:   no eFUSE serial, using random MAC address\n");
 	} else {
-		mac_from_serial(mac, s0, s1, s2, s3);
+		mac_from_serial(mac, s[0], s[1], s[2], s[3]);
 	}
 
 	eth_env_set_enetaddr("ethaddr", mac);

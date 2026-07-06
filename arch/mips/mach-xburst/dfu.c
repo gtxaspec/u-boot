@@ -32,12 +32,32 @@
 #include <linux/err.h>
 #include <linux/mtd/mtd.h>
 #include <linux/string.h>
+#include <mach/efuse.h>
 
 void set_dfu_alt_info(char *interface, char *devstr)
 {
 	struct udevice *dev;
 	struct spi_flash *flash;
 	char info[48];
+
+	/*
+	 * Give the DFU gadget a USB serial number derived from the SoC's per-die
+	 * eFUSE chip serial, via the standard serial# env var (g_dnl's on_serialno
+	 * callback picks it up before run_usb_dnl_gadget binds the gadget). WebUSB
+	 * only persists a device permission for a device that reports a serial
+	 * (Chromium's CanStorePersistentEntry), so this lets the web flasher keep
+	 * access across the bootrom->gadget re-enumeration instead of re-prompting.
+	 * A serial# provisioned elsewhere (console/env) always wins.
+	 */
+	if (!env_get("serial#")) {
+		u32 s[4];
+		char serial[33];
+
+		xburst_chip_serial(s);
+		snprintf(serial, sizeof(serial), "%08x%08x%08x%08x",
+			 s[0], s[1], s[2], s[3]);
+		env_set("serial#", serial);
+	}
 
 	/* A dfu_alt_info set by hand on the console (or by board_late_init) wins. */
 	if (env_get("dfu_alt_info"))

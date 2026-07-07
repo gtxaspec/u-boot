@@ -104,6 +104,8 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("en25qh64",   0x1c7017, 0, 64 * 1024,  128,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO("en25qh128",  0x1c7018, 0, 64 * 1024,  256, 0) },
+	{ INFO("en25qh256a", 0x1c7019, 0, 64 * 1024,  512,
+	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ | SPI_NOR_4B_OPCODES) },
 	{ INFO("en25qx128a", 0x1c7118, 0, 64 * 1024,  256,
 	       SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{ INFO("en25s64",    0x1c3817, 0, 64 * 1024,  128, SECT_4K) },

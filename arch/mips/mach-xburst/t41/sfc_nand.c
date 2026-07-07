@@ -46,11 +46,14 @@ static const struct spl_nand_param nand_table[] = {
 	{ .pagesize = 2048, .id_manufactory = 0x2c, .device_id = 0x24,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 3,
 	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
-	/* Winbond W25M02GV / W25N01GV - very common in T-series boards */
+	/* Winbond W25M02GV / W25N01GV / W25N01KV  - very common in T-series boards */
 	{ .pagesize = 2048, .id_manufactory = 0xef, .device_id = 0xab,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
 	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
 	{ .pagesize = 2048, .id_manufactory = 0xef, .device_id = 0xaa,
+	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
+	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
+	{ .pagesize = 2048, .id_manufactory = 0xef, .device_id = 0xae,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
 	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
 	/* GigaDevice GD5F1GQ4UC (1 Gbit) */

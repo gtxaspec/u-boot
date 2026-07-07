@@ -74,8 +74,14 @@
 #define MSC_STAT_DATA_FIFO_EMPTY	BIT(6)
 #define MSC_STAT_CRC_RES_ERR		BIT(5)
 #define MSC_STAT_CRC_READ_ERROR		BIT(4)
-#define MSC_STAT_CRC_WRITE_ERROR	BIT(2)
-#define MSC_STAT_CRC_WRITE_ERROR_NOSTS	BIT(4)
+/*
+ * The write-CRC status is a 2-bit encoded field, not flag bits:
+ * 0 = no error, 1 = card observed erroneous transmission,
+ * 2 = no CRC status was sent back (e.g. dead data lines).
+ * Any non-zero value is a failed write.
+ */
+#define MSC_STAT_CRC_WRITE_ERROR_BIT	2
+#define MSC_STAT_CRC_WRITE_ERROR_MASK	(0x3 << MSC_STAT_CRC_WRITE_ERROR_BIT)
 #define MSC_STAT_TIME_OUT_RES		BIT(1)
 #define MSC_STAT_TIME_OUT_READ		BIT(0)
 
@@ -191,7 +197,7 @@ static inline int jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *d
 		return ret;
 	writel(MSC_IREG_PRG_DONE, priv->regs + MSC_IREG);
 
-	if (readl(priv->regs + MSC_STAT) & MSC_STAT_CRC_WRITE_ERROR)
+	if (readl(priv->regs + MSC_STAT) & MSC_STAT_CRC_WRITE_ERROR_MASK)
 		return -EIO;
 
 	return 0;

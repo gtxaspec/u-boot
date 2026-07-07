@@ -203,7 +203,7 @@ static int jz_mmc_write_data(struct jz_mmc_priv *priv, struct mmc_data *data)
 }
 #endif
 
-/* Upper bound on a single PIO data transfer; see the read loop below. */
+/* Upper bound on a PIO transfer making no progress; see the read loop below. */
 #define JZ_MMC_DATA_TIMEOUT_MS	1000
 
 static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *data)
@@ -224,9 +224,11 @@ static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *da
 			/*
 			 * RDTO is programmed to the maximum, so the controller's
 			 * own read-timeout effectively never fires; bound the
-			 * wait here so a stalled transfer can never wedge the
-			 * boot (return -ETIMEDOUT and let the mmc core fail the
-			 * card instead of spinning forever).
+			 * stall here so a dead card can never wedge the boot
+			 * (return -ETIMEDOUT and let the mmc core fail the
+			 * card instead of spinning forever).  The timer is
+			 * re-armed each time the FIFO delivers data, so large
+			 * multi-block reads are not bounded as a whole.
 			 */
 			if (get_timer(start) > JZ_MMC_DATA_TIMEOUT_MS)
 				return -ETIMEDOUT;
@@ -245,6 +247,7 @@ static inline int jz_mmc_read_data(struct jz_mmc_priv *priv, struct mmc_data *da
 			sz -= 4;
 			stat = readl(priv->regs + MSC_STAT);
 		} while (!(stat & MSC_STAT_DATA_FIFO_EMPTY));
+		start = get_timer(0);	/* progress made - re-arm stall timeout */
 	} while (!(stat & MSC_STAT_DATA_TRAN_DONE));
 	return 0;
 }

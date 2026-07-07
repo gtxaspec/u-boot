@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * ISVP-T23N board variant with a 1-bit SD slot: only CLK/CMD/DAT0 are
+ * routed to the card, DAT1..DAT3 serve other board functions. Mirrors
+ * the isvp_t23n_*_mmc1bit configs thingino added to its U-Boot 2013
+ * fork for these boards (the Ingenic SDK itself never handled them).
+ *
+ * On these boards 4-bit negotiation "succeeds" (ACMD6 is CMD-line
+ * only) but every data block then reads back with the upper bits of
+ * each nibble missing, and the MSC raises no CRC error - the
+ * corruption is silent (MBR 55 AA reads as 11 22). The bus width is a
+ * board wiring fact, so it belongs here, not in the driver.
+ */
+
+#include "t23n-isvp.dts"
+
+/ {
+	model = "Ingenic ISVP-T23N (SFC NOR, 1-bit SD)";
+};
+
+&msc0 {
+	bus-width = <1>;
+};
+
+/*
+ * The full MSC pin group (incl. DAT1..3) stays muxed on purpose: the
+ * card samples DAT3 as SPI chip-select during CMD0, so if PB5 is left
+ * as a floating GPIO input the card latches into SPI mode at the first
+ * init attempt and stays unresponsive until power-cycled. Keeping the
+ * pads on the MSC holds DAT3 high through identification; the unused
+ * data lines are harmless in 1-bit operation.
+ */

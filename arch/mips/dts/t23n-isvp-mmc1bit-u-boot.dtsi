@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
+#include "t23n-isvp-u-boot.dtsi"
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	/* Keep the 1-bit marker when the MSC/SD boot config reuses this DT. */
+	model = "Ingenic ISVP-T23N (MMC0, 1-bit SD)";
+};
+#endif

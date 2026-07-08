@@ -53,6 +53,14 @@ static const struct spl_nand_param nand_table[] = {
 	{ .pagesize = 2048, .id_manufactory = 0xef, .device_id = 0xaa,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
 	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
+	/*
+	 * Winbond W25N01KV (1 Gbit). SR-3 ECC status [5:4]: only 10b is
+	 * uncorrectable; 11b means corrected-above-threshold, so listing
+	 * 0x2 alone is correct (datasheet rev F, 7.3.1).
+	 */
+	{ .pagesize = 2048, .id_manufactory = 0xef, .device_id = 0xae,
+	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
+	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
 	/* GigaDevice GD5F1GQ4UC (1 Gbit) */
 	{ .pagesize = 2048, .id_manufactory = 0xc8, .device_id = 0xb1,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 3,

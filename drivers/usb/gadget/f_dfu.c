@@ -496,6 +496,20 @@ static int state_dfu_manifest(struct f_dfu *f_dfu,
 
 	switch (ctrl->bRequest) {
 	case USB_REQ_DFU_GETSTATUS:
+		/*
+		 * Hold dfuMANIFEST while the deferred flush is still pending
+		 * or running: a slow flush_medium (e.g. the whole-chip erase
+		 * of the "erase" virt alt) pumps the gadget while it works,
+		 * so a GETSTATUS can arrive DURING the flush - reporting
+		 * dfuIDLE then releases the host before the medium is done.
+		 * The reply carries the entity poll_timeout (handle_getstatus
+		 * in dfuMANIFEST), so the host just re-polls until the main
+		 * loop has completed the flush and cleared the defer.
+		 */
+		if (dfu_get_defer_flush()) {
+			value = handle_getstatus(req);
+			break;
+		}
 		/* We're MainfestationTolerant */
 		f_dfu->dfu_state = DFU_STATE_dfuIDLE;
 		value = handle_getstatus(req);

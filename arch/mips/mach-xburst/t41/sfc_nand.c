@@ -74,6 +74,14 @@ static const struct spl_nand_param nand_table[] = {
 	{ .pagesize = 2048, .id_manufactory = 0xc8, .device_id = 0x91,
 	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 3,
 	  .eccstat_count = 1, .eccerrstatus = { 0x7 } },
+	/*
+	 * GigaDevice GD5F1GQ5UE (1 Gbit). Q5-series ECC status is 2 bits
+	 * at [5:4]: 10b = uncorrectable, 01b = corrected (1-4 bits), so
+	 * only 0x2 is an error - same layout as the Winbond W25N01KV.
+	 */
+	{ .pagesize = 2048, .id_manufactory = 0xc8, .device_id = 0x51,
+	  .addrlen = 2, .ecc_bit = 4, .bit_counts = 2,
+	  .eccstat_count = 1, .eccerrstatus = { 0x2 } },
 };
 
 static const struct spl_nand_param *curr_device;

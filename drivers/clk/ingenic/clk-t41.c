@@ -53,6 +53,33 @@
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
 #define CDR_DIV_MASK		0xffu
 
+/*
+ * MSC0/MSC1 CDR extras. The card clock is the CDR divider output / 4
+ * (H_FREQ high mode) - the SDHCI core's internal SDCLK divider is not
+ * wired on this IP (writing any divisor leaves the card clock
+ * unchanged, HW-verified on T40XP), so the CDR is the only real clock
+ * control and every vendor stack programs it at 4x the card clock
+ * (vendor clk.c: cdr = pll/rate/4 - 1; its EXTCLK init path likewise
+ * divides by 4). set_rate() takes the target CARD clock, programs the
+ * divider at 4x, and get_rate() reports the /4 card clock so the MMC
+ * core's max_clk matches what the card actually receives.
+ *
+ * The CDR data-launch phase field ([16:15]) is only known-safe at
+ * this vendor operating point: at a 2x module clock the T40 reset
+ * phase corrupts every write data phase (DATA CRC + END_BIT,
+ * HW-verified on T40XP).
+ *
+ * EXT_SEL (bit 21) is the vendor MSC_EXCLKEN low-rate EXTCLK mux -
+ * the bootrom can leave it set, and running from it corrupts
+ * host->card (write) data on the bus. H_FREQ (bit 20) is the vendor
+ * "high frequency" (>= ~500 kHz card clock) mode; both are forced to
+ * the PLL-path state here. Because the SDHCI divider is inert, card
+ * init runs at the operating clock rather than 400 kHz; a real
+ * low-rate init would need the EXTCLK mux (future work).
+ */
+#define MSC_CDR_EXT_SEL		BIT(21)
+#define MSC_CDR_H_FREQ		BIT(20)
+
 struct t41_clk_desc {
 	u16 cdr;	/* CPM CDR register offset, 0 = no divider */
 	u8 ce;		/* clock-change-enable bit in cdr */
@@ -61,6 +88,7 @@ struct t41_clk_desc {
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
 	u8 src;		/* CDR source select [31:30]: 1=MPLL on T41 */
+	u8 msc;		/* MSC-type CDR: fixed /2, EXT_SEL/H_FREQ bits */
 };
 
 #define NO_GATE 0xffff
@@ -75,8 +103,8 @@ struct t41_clk_desc {
 static const struct t41_clk_desc t41_clks[T41_CLK_COUNT] = {
 	[T41_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 21, 1 },
 	[T41_CLK_SFC1]  = { CPM_SFC1CDR, 29, 28, 27, CPM_CLKGR1, 12, 1 },
-	[T41_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
-	[T41_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
+	[T41_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4, 0, 1 },
+	[T41_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5, 0, 1 },
 	[T41_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
 	[T41_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T41_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 16 },
@@ -171,7 +199,7 @@ static ulong t41_clk_get_rate(struct clk *clk)
 		return EXT_RATE;
 
 	return t41_parent_rate(p, d->cdr) /
-	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1);
+	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1) / (d->msc ? 4 : 1);
 }
 
 static ulong t41_clk_set_rate(struct clk *clk, ulong rate)
@@ -203,7 +231,8 @@ static ulong t41_clk_set_rate(struct clk *clk, ulong rate)
 		break;
 	}
 
-	div = DIV_ROUND_CLOSEST(parent, rate);
+	/* MSC: rate is the card clock - run the module at 4x (see above). */
+	div = DIV_ROUND_CLOSEST(parent, d->msc ? rate * 4 : rate);
 	if (!div)
 		div = 1;
 	if (div > 256)
@@ -211,13 +240,17 @@ static ulong t41_clk_set_rate(struct clk *clk, ulong rate)
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
+	if (d->msc) {
+		v &= ~MSC_CDR_EXT_SEL;
+		v |= MSC_CDR_H_FREQ;
+	}
 	v |= ((u32)d->src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
 	cpm_w(p, d->cdr, v);
 
 	while (cpm_r(p, d->cdr) & BIT(d->busy))
 		;
 
-	return parent / div;
+	return parent / div / (d->msc ? 4 : 1);
 }
 
 static int t41_clk_gate(struct clk *clk, bool enable)

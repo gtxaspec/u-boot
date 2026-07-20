@@ -290,6 +290,17 @@ int board_late_init(void)
 	int i;
 
 	/*
+	 * Cap the DFU transfer buffer for the USB-boot loaders. The uncapped
+	 * backends - mmc ("sdcard") and virt ("erase") - otherwise request the
+	 * full CONFIG_SYS_DFU_DATA_BUF_SIZE (8 MiB), which no longer memaligns
+	 * from the 16 MiB malloc pool: the gadget then comes up bufferless and
+	 * every DFU transfer fails. 2 MiB fits with room to spare and is plenty
+	 * (the flash backends already cap themselves to erasesize/sector). It
+	 * uses less RAM than the default, so it is safe on small-DRAM parts too.
+	 */
+	env_set("dfu_bufsiz", "0x200000");
+
+	/*
 	 * Detect the boot flash (DFU alt 0): SPI-NAND on either SFC first
 	 * (T41 has two and the boot NAND may sit on either), else SPI-NOR.
 	 * flash@0 is declared spi-nand, so mtd_probe_devices() probes that;

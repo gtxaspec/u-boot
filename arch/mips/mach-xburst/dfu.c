@@ -26,8 +26,16 @@
  * only erases the range it writes - so the host erases first, then writes.
  * On NOR it is a convenience (full images are chip-sized and erase as they
  * write): a fast way to blank a chip or clear a stale env.
+ *
+ * A second virt alt "reboot" resets the SoC: downloading the exact token
+ * XBURST_REBOOT_TOKEN calls do_reset() from the manifest flush, so a host
+ * tool can power-cycle the board straight into the freshly written image
+ * with no operator touching it. Like erase it is token-gated and armed only
+ * for its own alt, so nothing else - a bare USB reset, a firmware write -
+ * can trigger it.
  */
 
+#include <command.h>
 #include <dfu.h>
 #include <dm.h>
 #include <env.h>
@@ -98,6 +106,7 @@ void set_dfu_alt_info(char *interface, char *devstr)
 
 #if IS_ENABLED(CONFIG_DFU_VIRT)
 #define XBURST_ERASE_TOKEN "XBURST-FLASH-WIPE"
+#define XBURST_REBOOT_TOKEN "XBURST-REBOOT"
 
 /* Set by write_medium when the wipe token arrives; the erase itself runs
  * in flush_medium. dfu_write() drains the buffer INSIDE the zero-length
@@ -108,6 +117,11 @@ void set_dfu_alt_info(char *interface, char *devstr)
  * pumping the gadget keeps GETSTATUS answered.
  */
 static bool xburst_erase_armed;
+
+/* Set by write_medium when the reboot token arrives; do_reset() then runs
+ * from the manifest flush (xburst_reboot_flush), never the irq-context ZLP.
+ */
+static bool xburst_reboot_armed;
 
 /* While the erase runs, tell the host to re-poll GETSTATUS at this pace
  * (well inside its per-transfer timeout, well under its total poll budget).
@@ -181,13 +195,25 @@ static int xburst_erase_nor(struct udevice *udc)
 }
 
 /*
- * DFU alt "erase" (virt 0), data stage: validate the wipe token and arm.
- * Runs in the ZLP completion (irq context), so it must not block - the
- * erase itself runs in xburst_erase_flush below.
+ * Virt alts, data stage: validate the token and arm. virt 0 = "erase"
+ * (wipe token), virt 1 = "reboot" (reboot token). Runs in the ZLP
+ * completion (irq context), so it must not block - the erase/reset itself
+ * runs in the matching flush below.
  */
 int dfu_write_medium_virt(struct dfu_entity *dfu, u64 offset, void *buf,
 			  long *len)
 {
+	if (dfu->data.virt.dev_num == 1) {
+		if (offset != 0 ||
+		    *len < (long)strlen(XBURST_REBOOT_TOKEN) ||
+		    memcmp(buf, XBURST_REBOOT_TOKEN,
+			   strlen(XBURST_REBOOT_TOKEN))) {
+			printf("dfu reboot: bad token, not rebooting\n");
+			return -EINVAL;
+		}
+		xburst_reboot_armed = true;
+		return 0;
+	}
 	if (dfu->data.virt.dev_num != 0)
 		return -EINVAL;
 	if (offset != 0 || *len < (long)strlen(XBURST_ERASE_TOKEN) ||
@@ -226,6 +252,21 @@ static int xburst_erase_flush(struct dfu_entity *dfu)
 	return -ENODEV;
 }
 
+/* Manifest stage for the "reboot" virt alt: reset the SoC. Runs from the
+ * deferred dfu_flush() in the gadget main loop (same context as the erase),
+ * so it is safe here - the DFU transfer has already been acknowledged and
+ * the device simply drops off the bus as it resets.
+ */
+static int xburst_reboot_flush(struct dfu_entity *dfu)
+{
+	if (!xburst_reboot_armed)
+		return 0;
+	xburst_reboot_armed = false;
+	printf("dfu: rebooting\n");
+	do_reset(NULL, 0, 0, NULL);
+	return 0;
+}
+
 /*
  * Wire up the virt ("erase") entity when a transaction starts:
  * dfu_fill_entity_virt() gives us no hook, and both fields must be in
@@ -239,16 +280,19 @@ void dfu_initiated_callback(struct dfu_entity *dfu)
 	if (dfu->dev_type != DFU_DEV_VIRT)
 		return;
 	dfu->poll_timeout = xburst_erase_poll_timeout;
-	dfu->flush_medium = xburst_erase_flush;
+	dfu->flush_medium = dfu->data.virt.dev_num == 1 ?
+			    xburst_reboot_flush : xburst_erase_flush;
 }
 
 /* A failed/aborted transaction never reaches the flush: drop the arming so
- * a stale token can't erase on some later flush.
+ * a stale token can't erase (or reboot) on some later flush.
  */
 void dfu_error_callback(struct dfu_entity *dfu, const char *msg)
 {
-	if (dfu->dev_type == DFU_DEV_VIRT)
+	if (dfu->dev_type == DFU_DEV_VIRT) {
 		xburst_erase_armed = false;
+		xburst_reboot_armed = false;
+	}
 }
 #endif
 
@@ -283,7 +327,7 @@ int board_late_init(void)
 	static const char * const nand[] = { "spi-nand0", "spi-nand1" };
 	struct spi_flash *flash;
 	struct mtd_info *mtd;
-	const char *erase_alt = "";
+	const char *virt_alts = "";
 	char ifc[24] = "";
 	char info[160];
 	unsigned long long size = 0;
@@ -337,18 +381,18 @@ int board_late_init(void)
 	}
 
 	/*
-	 * Default alt list: the boot flash (alt 0 "flash"), plus the "erase"
-	 * virt alt (see dfu_write_medium_virt) when the backend is built in.
+	 * Default alt list: the boot flash (alt 0 "flash"), plus the erase +
+	 * reboot virt alts (see dfu_write_medium_virt) when the backend is in.
 	 * The multi-alt list needs the interface-prefixed alt-info form and a
 	 * bare "dfu 0"; without DFU_VIRT the exact single-alt strings the
 	 * loaders always used are kept.
 	 */
 	if (IS_ENABLED(CONFIG_DFU_VIRT))
-		erase_alt = "&virt 0=erase";
+		virt_alts = "&virt 0=erase&virt 1=reboot";
 
-	if (erase_alt[0]) {
+	if (virt_alts[0]) {
 		snprintf(info, sizeof(info), "%s=flash raw 0x0 0x%llx%s",
-			 ifc, size, erase_alt);
+			 ifc, size, virt_alts);
 		env_set("dfu_alt_info", info);
 		env_set("dfubootcmd", "dfu 0");
 	} else {
@@ -376,7 +420,7 @@ int board_late_init(void)
 			/* size 0 => dfu_mmc spans the whole card (blk_dev->lba). */
 			snprintf(info, sizeof(info),
 				 "%s=flash raw 0x0 0x%llx&mmc 0=sdcard raw 0x0 0%s",
-				 ifc, size, erase_alt);
+				 ifc, size, virt_alts);
 			env_set("dfu_alt_info", info);
 			env_set("dfubootcmd", "mmc dev 0; dfu 0");
 		}

@@ -32,5 +32,7 @@
 #define A1_CLK_EFUSE		21
 #define A1_CLK_OTG1		22
 #define A1_CLK_OTG2		23
+#define A1_CLK_GMAC0_TX		24
+#define A1_CLK_GMAC0_PTP	25
 
 #endif /* __DT_BINDINGS_CLOCK_A1_CGU_H__ */

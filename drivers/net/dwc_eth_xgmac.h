@@ -272,6 +272,8 @@ struct xgmac_priv {
 	struct reset_ctl reset_ctl;
 	struct reset_ctl_bulk reset_bulk;
 	struct clk clk_common;
+	struct clk clk_tx;
+	struct clk clk_ptp_ref;
 	struct mii_dev *mii;
 	struct phy_device *phy;
 	ofnode phy_of_node;

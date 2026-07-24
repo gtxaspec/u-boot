@@ -20,6 +20,7 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
@@ -59,8 +60,13 @@
 /* CDR source field [31:30]: 0=sclka(~apll) 1=mpll 2=vpll */
 #define CDR_SRC_SHIFT		30
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
-#define CDR_SRC_MPLL		(1u << CDR_SRC_SHIFT)
+#define CDR_SRC_SCLKA		0
+#define CDR_SRC_MPLL		1
+#define CDR_SRC_VPLL		2
 #define CDR_DIV_MASK		0xffu
+
+/* CPxPCR PLL lock status (bit 3 = PLL stable). */
+#define PLL_ON			BIT(3)
 
 struct t31_clk_desc {
 	u16 cdr;	/* CPM CDR register offset, 0 = no divider */
@@ -69,6 +75,7 @@ struct t31_clk_desc {
 	u8 stop;	/* clock-stop bit in cdr */
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, 0xffff = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
+	u8 exact;	/* rate must divide exactly; may retarget the source */
 };
 
 #define NO_GATE 0xffff
@@ -85,7 +92,14 @@ static const struct t31_clk_desc t31_clks[T31_CLK_COUNT] = {
 	[T31_CLK_SFC]  = { CPM_SSICDR, 28, 27, 26, CPM_CLKGR0, 20 },
 	[T31_CLK_MSC0] = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
 	[T31_CLK_MSC1] = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
-	[T31_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4 },
+	/*
+	 * The GMAC leaf feeds the RMII PHY reference, which tolerates
+	 * only +-50 ppm: the divider must land the rate exactly, and
+	 * the source mux may be retargeted to whichever PLL divides
+	 * exactly (MPLL preferred for vendor parity, then VPLL - the
+	 * SPL pins VPLL at 1200 MHz on every T31 variant).
+	 */
+	[T31_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
 	[T31_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T31_CLK_OTG]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
 	[T31_CLK_TCU]  = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
@@ -168,12 +182,47 @@ static ulong t31_clk_get_rate(struct clk *clk)
 	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1);
 }
 
+/*
+ * Rate of a CDR source-mux input, gated on the PLL lock bit so an
+ * absent or idle PLL can never be selected as a clock source.
+ */
+static ulong t31_src_rate(struct t31_cgu_priv *p, u32 src)
+{
+	static const u16 pll_reg[] = {
+		[CDR_SRC_SCLKA] = CPM_CPAPCR,
+		[CDR_SRC_MPLL] = CPM_CPMPCR,
+		[CDR_SRC_VPLL] = CPM_CPVPCR,
+	};
+
+	if (src >= ARRAY_SIZE(pll_reg))
+		return 0;
+	if (!(cpm_r(p, pll_reg[src]) & PLL_ON))
+		return 0;
+
+	return pll_rate(p, pll_reg[src]);
+}
+
+/* Program a CDR leaf: source mux + divider, one CE/BUSY sequence. */
+static void t31_cdr_program(struct t31_cgu_priv *p,
+			    const struct t31_clk_desc *d, u32 src, u32 div)
+{
+	u32 v = cpm_r(p, d->cdr);
+
+	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
+	v |= (src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
+	cpm_w(p, d->cdr, v);
+
+	while (cpm_r(p, d->cdr) & BIT(d->busy))
+		;
+	/* CE stays set - clearing it kills the clock on real silicon. */
+}
+
 static ulong t31_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct t31_cgu_priv *p = dev_get_priv(clk->dev);
 	const struct t31_clk_desc *d;
 	ulong parent;
-	u32 div, v;
+	u32 src, div;
 
 	if (clk->id >= T31_CLK_COUNT)
 		return -EINVAL;
@@ -182,24 +231,84 @@ static ulong t31_clk_set_rate(struct clk *clk, ulong rate)
 	if (!d->cdr || !rate)
 		return -ENOSYS;
 
-	/* Source the leaf clock from MPLL (matches the vendor cgu_clks_set). */
-	parent = pll_rate(p, CPM_CPMPCR);
+	src = CDR_SRC_MPLL;
+	parent = t31_src_rate(p, src);
+
+	if (d->exact && (!parent || parent % rate)) {
+		/*
+		 * MPLL is a per-variant DDR-driven setpoint and cannot
+		 * always divide exactly (T31X 1200 MHz can, T31N/L 1008
+		 * and T31A 1500 cannot land 50 MHz). Retarget the mux:
+		 * try VPLL, then SCLKA, requiring a locked PLL and an
+		 * exact division.
+		 */
+		static const u8 alt[] = { CDR_SRC_VPLL, CDR_SRC_SCLKA };
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(alt); i++) {
+			ulong r = t31_src_rate(p, alt[i]);
+
+			if (r >= rate && !(r % rate)) {
+				src = alt[i];
+				parent = r;
+				break;
+			}
+		}
+	}
+
+	if (!parent)
+		return -ENODEV;
 
 	div = DIV_ROUND_CLOSEST(parent, rate);
 	if (!div)
 		div = 1;
 	if (div > 256)
 		div = 256;
+	if (d->exact && parent % rate)
+		dev_warn(clk->dev,
+			 "clk %lu: no exact divider, %lu Hz off target %lu Hz\n",
+			 clk->id, parent / div, rate);
 
-	v = cpm_r(p, d->cdr);
-	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
-	v |= CDR_SRC_MPLL | BIT(d->ce) | (div - 1);
-	cpm_w(p, d->cdr, v);
-
-	while (cpm_r(p, d->cdr) & BIT(d->busy))
-		;
+	t31_cdr_program(p, d, src, div);
 
 	return parent / div;
+}
+
+static int t31_clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	struct t31_cgu_priv *p = dev_get_priv(clk->dev);
+	const struct t31_clk_desc *d;
+	u32 src, div;
+
+	if (clk->id >= T31_CLK_COUNT)
+		return -EINVAL;
+
+	d = &t31_clks[clk->id];
+	if (!d->cdr)
+		return -ENOSYS;
+
+	switch (parent->id) {
+	case T31_CLK_APLL:
+		src = CDR_SRC_SCLKA;
+		break;
+	case T31_CLK_MPLL:
+		src = CDR_SRC_MPLL;
+		break;
+	case T31_CLK_VPLL:
+		src = CDR_SRC_VPLL;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (!t31_src_rate(p, src))
+		return -ENODEV;
+
+	/* Keep the current divider; the consumer re-rates afterwards. */
+	div = (cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1;
+	t31_cdr_program(p, d, src, div);
+
+	return 0;
 }
 
 static int t31_clk_gate(struct clk *clk, bool enable)
@@ -247,6 +356,7 @@ static const struct clk_ops t31_clk_ops = {
 	.of_xlate = t31_clk_of_xlate,
 	.get_rate = t31_clk_get_rate,
 	.set_rate = t31_clk_set_rate,
+	.set_parent = t31_clk_set_parent,
 	.enable	  = t31_clk_enable,
 	.disable  = t31_clk_disable,
 };

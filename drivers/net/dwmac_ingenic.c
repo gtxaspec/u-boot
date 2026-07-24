@@ -479,7 +479,10 @@ static int t21_gmac_ephy_init(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	v = macphy_clk_init(pdata);		/* 25 MHz (DT macphy-rate) */
+	if (pdata->socdata->cgu_rate)
+		v = macphy_clk_init_cgu(dev, pdata->macphy_rate);
+	else
+		v = macphy_clk_init(pdata);	/* 25 MHz (DT macphy-rate) */
 	if (v) {
 		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", (int)v);
 		return v;
@@ -599,11 +602,8 @@ static const struct dwmac_ingenic_data t32_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t21_gmac_data = {
-	.mpll_hz = 0,			/* read at runtime: T21N runs MPLL at
-					 * 900 MHz but T21HP at 1000 MHz; a
-					 * static 900 put 27.8 MHz on the HP
-					 * ePHY's 25 MHz reference */
-	.t21_pll = true,
+	.cgu_rate = true,		/* clk-t21 owns MACCDR (per-profile
+					 * MPLL: T21N 900 / T21HP 1000 MHz) */
 	.inner_phy = true,
 };
 

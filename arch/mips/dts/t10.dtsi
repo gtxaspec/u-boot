@@ -194,7 +194,7 @@
 	 * GMAC-PHY-control register (CPM + 0xe8). Same glue as T31.
 	 */
 	gmac: ethernet@134b0000 {
-		compatible = "ingenic,t31-gmac";
+		compatible = "ingenic,t10-gmac";
 		reg = <0x134b0000 0x2000>;
 		phy-mode = "rmii";
 		max-speed = <100>;

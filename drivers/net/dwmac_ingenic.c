@@ -15,13 +15,17 @@
  *    and uses a 25 MHz MAC-PHY clock. This mirrors the vendor
  *    jz4775-9161.c PHY_TYPE_OMNI path (branch T21-1.0.33).
  *
- * The vendor calls _clk_set_rate(MACPHY, rate); mainline has no such
- * API, so program CPM_MACCDR directly using the same CE/BUSY sequence
- * that the (hardware-proven) MSC clock setup uses - and, like that
- * one, never clear CE afterwards or the clock dies on real silicon.
+ * The MAC-PHY clock: on SoCs whose CGU clk driver implements real
+ * set_rate/set_parent ops (T31 today), this glue just asks the clk
+ * API for the rate and the CGU driver owns CPM_MACCDR. The remaining
+ * SoCs still take the legacy direct-CPM path below (same CE/BUSY
+ * sequence as the hardware-proven MSC setup; never clear CE afterwards
+ * or the clock dies on real silicon) until their clk drivers grow the
+ * same ops.
  */
 
 #include <asm/io.h>
+#include <clk.h>
 #include <dm.h>
 #include <phy.h>
 #include <malloc.h>
@@ -103,6 +107,7 @@ struct dwmac_ingenic_data {
 	bool t40_pll;		/* T40 CPMPCR layout (vs T41/A1) for the runtime read */
 	bool xb1_pll;		/* XBurst1 T31/T23/T20 CPxPCR layout + VPLL fallback */
 	bool t21_pll;		/* XBurst1 T21/T30 CPxPCR layout (single OD) */
+	bool cgu_rate;		/* MAC-PHY clock via the CGU clk API (no CPM pokes) */
 };
 
 struct dwmac_ingenic_plat {
@@ -138,27 +143,6 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 	return designware_eth_of_to_plat(dev);
 }
 
-/*
- * Read live MPLL rate from CPM_CPMPCR. The XBurst2 PLL register has two
- * INCOMPATIBLE layouts - the integer params live in different bit fields
- * and combine with different formulas:
- *
- *  - T41 / A1: PLLM@20(9b), PLLN@14(6b), PLLOD0@11(3b), PLLOD1@7(4b);
- *    rate = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
- *    (T41NQ M=0x15d,N=2,OD0=1,OD1=1 -> 24M*350*2/(3*2*2) = 1400 MHz.)
- *
- *  - T40: PLLM@20(9b), PLLN@14(6b), PLLOD1@11(3b), PLLOD0@8(3b);
- *    rate = EXTAL * M / (N * OD1 * OD0)  - raw dividers, no +1, no 2x.
- *    (T40N M=125,N=1,OD1=3,OD0=1 -> 24M*125/(1*3*1) = 1000 MHz;
- *     T40XP M=100,N=1,OD1=2,OD0=1 -> 1200 MHz.)
- *
- * Running the T40 register through the T41 formula yields 126 MHz, which
- * mis-sizes the MACCDR divider so the RMII reference clock comes out ~10x
- * too fast and the PHY never completes auto-negotiation. Pick the layout
- * per SoC. Reading at runtime (vs a static mpll_hz) lets the many SKUs
- * that share one DT compatible (T40N 1000 / T40XP 1200 / T40A 1400; the
- * T41 matrix 1400/1500/...) all resolve their own MPLL.
- */
 /*
  * Read an XBurst1 (T31-family) PLL: M@20(12b), N@14(6b), OD1@11(3b),
  * OD0@8(3b); rate = EXTAL * M / (N * OD1 * OD0). Returns 0 when the
@@ -203,6 +187,27 @@ static unsigned long t21_pll_hz(void __iomem *cpm, u32 off)
 	return (unsigned long)(rate / ((n + 1) * (od ? (1u << od) : 1u)));
 }
 
+/*
+ * Read live MPLL rate from CPM_CPMPCR. The XBurst2 PLL register has two
+ * INCOMPATIBLE layouts - the integer params live in different bit fields
+ * and combine with different formulas:
+ *
+ *  - T41 / A1: PLLM@20(9b), PLLN@14(6b), PLLOD0@11(3b), PLLOD1@7(4b);
+ *    rate = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
+ *    (T41NQ M=0x15d,N=2,OD0=1,OD1=1 -> 24M*350*2/(3*2*2) = 1400 MHz.)
+ *
+ *  - T40: PLLM@20(9b), PLLN@14(6b), PLLOD1@11(3b), PLLOD0@8(3b);
+ *    rate = EXTAL * M / (N * OD1 * OD0)  - raw dividers, no +1, no 2x.
+ *    (T40N M=125,N=1,OD1=3,OD0=1 -> 24M*125/(1*3*1) = 1000 MHz;
+ *     T40XP M=100,N=1,OD1=2,OD0=1 -> 1200 MHz.)
+ *
+ * Running the T40 register through the T41 formula yields 126 MHz, which
+ * mis-sizes the MACCDR divider so the RMII reference clock comes out ~10x
+ * too fast and the PHY never completes auto-negotiation. Pick the layout
+ * per SoC. Reading at runtime (vs a static mpll_hz) lets the many SKUs
+ * that share one DT compatible (T40N 1000 / T40XP 1200 / T40A 1400; the
+ * T41 matrix 1400/1500/...) all resolve their own MPLL.
+ */
 static unsigned long read_mpll_hz(void __iomem *cpm, bool t40_pll)
 {
 	u32 cpmpcr = readl(cpm + T31_CPM_CPMPCR);
@@ -293,6 +298,34 @@ static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 				 false, 100, false);
 }
 
+/*
+ * Preferred path: the SoC's CGU clk driver owns MACCDR (source-mux
+ * selection, exact-divider policy, gate) and this glue only asks for a
+ * rate. SoCs migrate to this per-SoC as their clk drivers grow real
+ * set_rate/set_parent ops; the legacy direct-CPM path above serves the
+ * rest in the meantime.
+ */
+static int macphy_clk_init_cgu(struct udevice *dev, unsigned long rate)
+{
+	struct clk clk;
+	ulong ret;
+	int err;
+
+	err = clk_get_by_index(dev, 0, &clk);
+	if (err)
+		return err;
+
+	err = clk_enable(&clk);
+	if (err)
+		return err;
+
+	ret = clk_set_rate(&clk, rate);
+	if (IS_ERR_VALUE(ret))
+		return (int)ret;
+
+	return 0;
+}
+
 /* Mux the GMAC RMII pins to device function 0 on GPIO port B. */
 static void t31_gmac_pinmux(void)
 {
@@ -322,7 +355,10 @@ static int t31_gmac_rmii_init(struct udevice *dev)
 	/* Vendor jz_net_initialize order: clk_set_rate(MACPHY,50M),
 	 * 50 ms settle, mux the RMII pins, then select RMII in the CPM
 	 * GMAC-PHY-control register. */
-	ret = macphy_clk_init(pdata);
+	if (pdata->socdata->cgu_rate)
+		ret = macphy_clk_init_cgu(dev, pdata->macphy_rate);
+	else
+		ret = macphy_clk_init(pdata);
 	if (ret) {
 		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", ret);
 		return ret;
@@ -541,10 +577,16 @@ static int dwmac_ingenic_probe(struct udevice *dev)
 }
 
 static const struct dwmac_ingenic_data t31_gmac_data = {
-	.mpll_hz = 0,			/* read at runtime: per-variant MPLL
-					 * (T31X 1200 / T31N,T31L 1008 MHz);
-					 * VPLL fallback when MPLL is inexact */
-	.xb1_pll = true,		/* T31/T23/T20 CPxPCR M/N/OD1/OD0 */
+	.cgu_rate = true,		/* clk-t31 owns MACCDR: per-variant
+					 * MPLL runtime read + exact-source
+					 * (VPLL) retarget live there */
+	.inner_phy = false,
+};
+
+static const struct dwmac_ingenic_data t23_gmac_data = {
+	.mpll_hz = 0,			/* read at runtime (all SKU MPLLs
+					 * divide 50 MHz exactly) */
+	.xb1_pll = true,		/* T23/T20/T10 CPxPCR M/N/OD1/OD0 */
 	.inner_phy = false,
 };
 
@@ -586,6 +628,9 @@ static const struct dwmac_ingenic_data t41_gmac_data = {
 
 static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
+	{ .compatible = "ingenic,t23-gmac", .data = (ulong)&t23_gmac_data },
+	{ .compatible = "ingenic,t20-gmac", .data = (ulong)&t23_gmac_data },
+	{ .compatible = "ingenic,t10-gmac", .data = (ulong)&t23_gmac_data },
 	{ .compatible = "ingenic,t32-gmac", .data = (ulong)&t32_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
 	{ .compatible = "ingenic,t30-gmac", .data = (ulong)&t30_gmac_data },

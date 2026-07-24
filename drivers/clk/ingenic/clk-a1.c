@@ -16,11 +16,12 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <dt-bindings/clock/ingenic,a1-cgu.h>
 
-#define A1_CLK_COUNT		(A1_CLK_OTG2 + 1)
+#define A1_CLK_COUNT		(A1_CLK_GMAC0_PTP + 1)
 
 /* CPM at physical 0x10000000, reached through the uncached KSEG1 window. */
 #define A1_CPM_BASE		0xb0000000
@@ -33,6 +34,8 @@
 #define CPM_CLKGR1		0x38
 #define CPM_SFC0CDR		0x90
 #define CPM_MAC0CDR		0xc0
+#define CPM_MAC0TXCDR		0xc4
+#define CPM_MAC0PTPCDR		0xcc
 #define CPM_MAC1CDR		0xd0
 
 #define EXT_RATE		24000000UL
@@ -51,6 +54,7 @@ struct a1_clk_desc {
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
 	u8 src;		/* CDR source select [31:30]: 1=MPLL, 3=EPLL */
+	u8 exact;	/* rate must divide the fixed source exactly */
 };
 
 #define NO_GATE 0xffff
@@ -75,7 +79,15 @@ static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
 	[A1_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 5 },
 	[A1_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR0, 6 },
 	[A1_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
-	[A1_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 8, 3 },
+	/*
+	 * The three GMAC dividers all source from EPLL by the vendor
+	 * design (fixed src): MAC0CDR = RMII 50 MHz refclk, MAC0TXCDR =
+	 * 25 MHz, MAC0PTPCDR = 50 MHz. Exact division required - the
+	 * refclk feeds the RMII PHY (+-50 ppm).
+	 */
+	[A1_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 8, 3, 1 },
+	[A1_CLK_GMAC0_TX] = { CPM_MAC0TXCDR, 29, 28, 27, NO_GATE, 0, 3, 1 },
+	[A1_CLK_GMAC0_PTP] = { CPM_MAC0PTPCDR, 29, 28, 27, NO_GATE, 0, 3, 1 },
 	[A1_CLK_GMAC1] = { CPM_MAC1CDR, 29, 28, 27, CPM_CLKGR1, 10, 3 },
 	[A1_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR1, 3 },
 	[A1_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 4 },
@@ -198,6 +210,10 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 		div = 1;
 	if (div > 256)
 		div = 256;
+	if (d->exact && parent % rate)
+		dev_warn(clk->dev,
+			 "clk %lu: no exact divider, %lu Hz off target %lu Hz\n",
+			 clk->id, parent / div, rate);
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);

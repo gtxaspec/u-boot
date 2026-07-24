@@ -15,13 +15,10 @@
  *    and uses a 25 MHz MAC-PHY clock. This mirrors the vendor
  *    jz4775-9161.c PHY_TYPE_OMNI path (branch T21-1.0.33).
  *
- * The MAC-PHY clock: on SoCs whose CGU clk driver implements real
- * set_rate/set_parent ops (T31 today), this glue just asks the clk
- * API for the rate and the CGU driver owns CPM_MACCDR. The remaining
- * SoCs still take the legacy direct-CPM path below (same CE/BUSY
- * sequence as the hardware-proven MSC setup; never clear CE afterwards
- * or the clock dies on real silicon) until their clk drivers grow the
- * same ops.
+ * The MAC-PHY clock is owned by each SoC's CGU clk driver (real
+ * set_rate with exact-division source policy); this glue only asks
+ * the clk API for the topology-derived rate: 50 MHz for the RMII
+ * reference, 25 MHz for the T21 embedded ePHY.
  */
 
 #include <asm/io.h>
@@ -50,25 +47,20 @@
 #define INGENIC_ETH_EPHY_RESET		BIT(3)		/* soft-reset pulse */
 #define INGENIC_ETH_EPHY_RSTSTAT	BIT(24)		/* reset-done status */
 
-/* CPM (0xb0000000): GMAC gate in CLKGR1, MAC clock divider MACCDR. */
-#define T31_CPM_BASE			0xb0000000
-#define T31_CPM_CPMPCR			0x14		/* MPLL config */
-#define T31_CPM_CLKGR1			0x28
-#define T31_CPM_CLKGR1_GMAC		BIT(4)
-#define T31_CPM_MACCDR			0x54
-#define MACCDR_SRC_MPLL			(1u << 30)	/* {APLL,MPLL,VPLL} idx 1 */
-#define MACCDR_CE			BIT(29)
-#define MACCDR_BUSY			BIT(28)
-#define MACCDR_STOP_SHIFT		27
-#define MACCDR_DIV_MASK			0xffu
+/*
+ * MAC-PHY clock targets: the RMII reference is 50 MHz by spec; the T21
+ * embedded ePHY runs 25 MHz (vendor OMNI path).
+ */
+#define MACPHY_RATE_RMII		50000000
+#define MACPHY_RATE_EPHY		25000000
 
-#define EXTAL_HZ			24000000u
 
 /*
  * Undocumented CPM word the vendor OMNI path writes before enabling
  * the embedded PHY (ePHY analog/clock seed). Not in any T21 CPM
  * header; replicated verbatim from vendor jz4775-9161.c.
  */
+#define T21_CPM_BASE			0xb0000000
 #define T21_CPM_EPHY_SEED_OFF		0x50
 #define T21_CPM_EPHY_SEED_VAL		0xc8007016u
 
@@ -97,16 +89,12 @@
 #define T21_EPHY_PB_PINS		(BIT(7) | BIT(15))
 
 struct dwmac_ingenic_data {
-	u32 mpll_hz;		/* MACCDR parent (MPLL) rate, 0 = read at runtime */
 	bool inner_phy;		/* T21 embedded ePHY (no ext PHY/reset) */
-	bool t40_pll;		/* T40 CPMPCR layout (vs T41/A1) for the runtime read */
-	bool cgu_rate;		/* MAC-PHY clock via the CGU clk API (no CPM pokes) */
 };
 
 struct dwmac_ingenic_plat {
 	struct dw_eth_pdata dw_eth_pdata;
 	const struct dwmac_ingenic_data *socdata;
-	unsigned int macphy_rate;
 	unsigned int max_speed;
 	void __iomem *cpm_phyc_reg;
 	void __iomem *mac_base;
@@ -121,7 +109,6 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 
 	pdata->socdata = (const struct dwmac_ingenic_data *)
 			 dev_get_driver_data(dev);
-	pdata->macphy_rate = dev_read_u32_default(dev, "macphy-rate", 50000000);
 	pdata->max_speed = dev_read_u32_default(dev, "max-speed", 100);
 	cpm_reg = dev_read_u32_default(dev, "ingenic,mode-reg", 0);
 	if (!cpm_reg)
@@ -137,90 +124,8 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 }
 
 /*
- * Read live MPLL rate from CPM_CPMPCR. The XBurst2 PLL register has two
- * INCOMPATIBLE layouts - the integer params live in different bit fields
- * and combine with different formulas:
- *
- *  - T41 / A1: PLLM@20(9b), PLLN@14(6b), PLLOD0@11(3b), PLLOD1@7(4b);
- *    rate = EXTAL * (M+1) * 2 / ((N+1) * 2^OD0 * (OD1+1)).
- *    (T41NQ M=0x15d,N=2,OD0=1,OD1=1 -> 24M*350*2/(3*2*2) = 1400 MHz.)
- *
- *  - T40: PLLM@20(9b), PLLN@14(6b), PLLOD1@11(3b), PLLOD0@8(3b);
- *    rate = EXTAL * M / (N * OD1 * OD0)  - raw dividers, no +1, no 2x.
- *    (T40N M=125,N=1,OD1=3,OD0=1 -> 24M*125/(1*3*1) = 1000 MHz;
- *     T40XP M=100,N=1,OD1=2,OD0=1 -> 1200 MHz.)
- *
- * Running the T40 register through the T41 formula yields 126 MHz, which
- * mis-sizes the MACCDR divider so the RMII reference clock comes out ~10x
- * too fast and the PHY never completes auto-negotiation. Pick the layout
- * per SoC. Reading at runtime (vs a static mpll_hz) lets the many SKUs
- * that share one DT compatible (T40N 1000 / T40XP 1200 / T40A 1400; the
- * T41 matrix 1400/1500/...) all resolve their own MPLL.
- */
-static unsigned long read_mpll_hz(void __iomem *cpm, bool t40_pll)
-{
-	u32 cpmpcr = readl(cpm + T31_CPM_CPMPCR);
-	unsigned int m = (cpmpcr >> 20) & 0x1ff;
-	unsigned int n = (cpmpcr >> 14) & 0x3f;
-
-	if (t40_pll) {
-		unsigned int od1 = (cpmpcr >> 11) & 0x7;
-		unsigned int od0 = (cpmpcr >> 8) & 0x7;
-
-		return (unsigned long)((u64)EXTAL_HZ * m / (n * od1 * od0));
-	} else {
-		unsigned int od0 = (cpmpcr >> 11) & 0x7;
-		unsigned int od1 = (cpmpcr >> 7) & 0xf;
-		/* EXTAL*(M+1)*2 can exceed 2^32 (T41NQ 24M*350*2 = 16.8G);
-		 * compute in u64 then divide back into 32-bit range. */
-		u64 vco = (u64)EXTAL_HZ * (m + 1) * 2;
-
-		return (unsigned long)(vco / ((n + 1) * (1u << od0) * (od1 + 1)));
-	}
-}
-
-static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
-{
-	void __iomem *cpm = (void __iomem *)T31_CPM_BASE;
-	unsigned long parent_hz;
-	u32 src, div, v;
-
-	/* Ungate the GMAC functional clock. */
-	clrbits_le32(cpm + T31_CPM_CLKGR1, T31_CPM_CLKGR1_GMAC);
-
-	/*
-	 * Legacy path (XBurst2 SoCs whose CGU drivers do not yet implement
-	 * set_rate): MAC-PHY clock from the runtime-read MPLL, vendor
-	 * clk_set_rate form (cdr = pll/rate - 1), same CE/BUSY dance as the
-	 * MSC clock; leave CE set. The poll is bounded so a board where the
-	 * clock cannot lock does not hang U-Boot at "Net:".
-	 */
-	parent_hz = pdata->socdata->mpll_hz;
-	if (!parent_hz)
-		parent_hz = read_mpll_hz(cpm, pdata->socdata->t40_pll);
-	if (parent_hz < pdata->macphy_rate)
-		return -EINVAL;
-
-	src = MACCDR_SRC_MPLL;
-	div = DIV_ROUND_CLOSEST(parent_hz, pdata->macphy_rate);
-	if (parent_hz % pdata->macphy_rate)
-		printf("dwmac: no exact MAC-PHY divider, %lu Hz off target %u Hz\n",
-		       parent_hz / div, pdata->macphy_rate);
-	v = readl(cpm + T31_CPM_MACCDR);
-	v &= ~((3u << 30) | (3u << MACCDR_STOP_SHIFT) | MACCDR_DIV_MASK);
-	v |= src | MACCDR_CE | ((div - 1) & MACCDR_DIV_MASK);
-	writel(v, cpm + T31_CPM_MACCDR);
-
-	return wait_for_bit_le32(cpm + T31_CPM_MACCDR, MACCDR_BUSY,
-				 false, 100, false);
-}
-
-/*
- * Preferred path: the SoC's CGU clk driver owns MACCDR (source-mux
- * selection, exact-divider policy, gate) and this glue only asks for a
- * rate. SoCs migrate to this per-SoC as their clk drivers grow real
- * set_rate/set_parent ops; the legacy direct-CPM path above serves the
- * rest in the meantime.
+ * The SoC's CGU clk driver owns the MAC clock (source-mux selection,
+ * exact-divider policy, gate); this glue only asks for a rate.
  */
 static int macphy_clk_init_cgu(struct udevice *dev, unsigned long rate)
 {
@@ -272,10 +177,7 @@ static int t31_gmac_rmii_init(struct udevice *dev)
 	/* Vendor jz_net_initialize order: clk_set_rate(MACPHY,50M),
 	 * 50 ms settle, mux the RMII pins, then select RMII in the CPM
 	 * GMAC-PHY-control register. */
-	if (pdata->socdata->cgu_rate)
-		ret = macphy_clk_init_cgu(dev, pdata->macphy_rate);
-	else
-		ret = macphy_clk_init(pdata);
+	ret = macphy_clk_init_cgu(dev, MACPHY_RATE_RMII);
 	if (ret) {
 		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", ret);
 		return ret;
@@ -396,10 +298,7 @@ static int t21_gmac_ephy_init(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	if (pdata->socdata->cgu_rate)
-		v = macphy_clk_init_cgu(dev, pdata->macphy_rate);
-	else
-		v = macphy_clk_init(pdata);	/* 25 MHz (DT macphy-rate) */
+	v = macphy_clk_init_cgu(dev, MACPHY_RATE_EPHY);	/* 25 MHz */
 	if (v) {
 		dev_err(dev, "MAC-PHY clock did not lock (%d)\n", (int)v);
 		return v;
@@ -418,7 +317,7 @@ static int t21_gmac_ephy_init(struct udevice *dev)
 
 	/* ePHY analog/clock seed (undocumented CPM word, vendor verbatim). */
 	writel(T21_CPM_EPHY_SEED_VAL,
-	       (void __iomem *)(T31_CPM_BASE + T21_CPM_EPHY_SEED_OFF));
+	       (void __iomem *)(T21_CPM_BASE + T21_CPM_EPHY_SEED_OFF));
 
 	/* Enable the embedded PHY. */
 	v = readl(phyc);
@@ -497,50 +396,33 @@ static int dwmac_ingenic_probe(struct udevice *dev)
 }
 
 static const struct dwmac_ingenic_data t31_gmac_data = {
-	.cgu_rate = true,		/* clk-t31 owns MACCDR: per-variant
-					 * MPLL runtime read + exact-source
-					 * (VPLL) retarget live there */
 	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t23_gmac_data = {
-	.cgu_rate = true,		/* clk-t23 owns MACCDR (per-SKU MPLL
-					 * 1200/1000, all 50 MHz-exact) */
 	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t20_gmac_data = {
-	.cgu_rate = true,		/* clk-t20/t10 own MACCDR */
 	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t32_gmac_data = {
-	.cgu_rate = true,		/* clk-t32 owns MACCDR */
 	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t21_gmac_data = {
-	.cgu_rate = true,		/* clk-t21 owns MACCDR (per-profile
-					 * MPLL: T21N 900 / T21HP 1000 MHz) */
 	.inner_phy = true,
 };
 
 static const struct dwmac_ingenic_data t30_gmac_data = {
-	.cgu_rate = true,		/* clk-t30 owns MACCDR (per-SKU MPLL
-					 * 1000/1200, all 50 MHz-exact) */
 };
 
 static const struct dwmac_ingenic_data t40_gmac_data = {
-	.cgu_rate = true,		/* clk-t40 owns MAC0CDR (fixed MPLL,
-					 * per-SKU 1000/1200/1400, all
-					 * 50 MHz-exact) */
 	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t41_gmac_data = {
-	.cgu_rate = true,		/* clk-t41 owns MAC0CDR (fixed MPLL,
-					 * per-SKU 1400/1500, all
-					 * 50 MHz-exact) */
 	.inner_phy = false,
 };
 

@@ -106,7 +106,6 @@ struct dwmac_ingenic_data {
 	bool inner_phy;		/* T21 embedded ePHY (no ext PHY/reset) */
 	bool t40_pll;		/* T40 CPMPCR layout (vs T41/A1) for the runtime read */
 	bool xb1_pll;		/* XBurst1 T31/T23/T20 CPxPCR layout + VPLL fallback */
-	bool t21_pll;		/* XBurst1 T21/T30 CPxPCR layout (single OD) */
 	bool cgu_rate;		/* MAC-PHY clock via the CGU clk API (no CPM pokes) */
 };
 
@@ -168,23 +167,6 @@ static unsigned long xb1_pll_hz(void __iomem *cpm, u32 off)
 		od0 = 1;
 
 	return (unsigned long)((u64)EXTAL_HZ * m / n / od1 / od0);
-}
-
-/*
- * Read an XBurst1 T21/T30 PLL: M@20(9b), N@14(6b), OD@11(3b);
- * rate = EXTAL * 2 * (M+1) / ((N+1) * 2^OD). Mirrors the clk-t21/t30
- * pll_rate decode; these two SoCs share neither the T31-family fields
- * (12-bit M, two ODs) nor the XBurst2 layouts.
- */
-static unsigned long t21_pll_hz(void __iomem *cpm, u32 off)
-{
-	u32 v = readl(cpm + off);
-	u32 m = (v >> 20) & 0x1ff;
-	u32 n = (v >> 14) & 0x3f;
-	u32 od = (v >> 11) & 0x7;
-	u64 rate = (u64)EXTAL_HZ * 2 * (m + 1);
-
-	return (unsigned long)(rate / ((n + 1) * (od ? (1u << od) : 1u)));
 }
 
 /*
@@ -266,8 +248,6 @@ static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 	if (!parent_hz) {
 		if (pdata->socdata->xb1_pll)
 			parent_hz = xb1_pll_hz(cpm, T31_CPM_CPMPCR);
-		else if (pdata->socdata->t21_pll)
-			parent_hz = t21_pll_hz(cpm, T31_CPM_CPMPCR);
 		else
 			parent_hz = read_mpll_hz(cpm, pdata->socdata->t40_pll);
 	}
@@ -615,10 +595,8 @@ static const struct dwmac_ingenic_data t21_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t30_gmac_data = {
-	.mpll_hz = 0,			/* read at runtime: all T30 SKUs run
-					 * MPLL at 1000 MHz (the shared static
-					 * 1200 made the RMII ref 41.7 MHz) */
-	.t21_pll = true,		/* T30 shares the T21 CPxPCR layout */
+	.cgu_rate = true,		/* clk-t30 owns MACCDR (per-SKU MPLL
+					 * 1000/1200, all 50 MHz-exact) */
 };
 
 static const struct dwmac_ingenic_data t40_gmac_data = {

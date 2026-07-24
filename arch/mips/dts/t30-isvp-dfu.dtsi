@@ -57,3 +57,14 @@
 	status = "okay";
 	dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
 };
+
+/*
+ * Ethernet in the DFU loader, like the T31/T21/T23 loaders: the
+ * per-variant loader carries its own MPLL plan and the MAC-PHY clock
+ * derives from it via the CGU clk driver. No PHY reset GPIO here: it
+ * is board-specific (PB28 is taken on some T30 boards - EBUSY), so a
+ * wired-ethernet board DT declares its own ingenic,reset-gpio.
+ */
+&gmac {
+	status = "okay";
+};

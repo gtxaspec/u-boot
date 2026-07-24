@@ -16,6 +16,7 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <dt-bindings/clock/ingenic,t40-cgu.h>
@@ -80,6 +81,7 @@ struct t40_clk_desc {
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
 	u8 src;		/* CDR source select [31:30]: 1=MPLL */
 	u8 msc;		/* MSC-type CDR: fixed /2, EXT_SEL/H_FREQ bits */
+	u8 exact;	/* rate must divide the fixed source exactly */
 };
 
 #define NO_GATE 0xffff
@@ -104,7 +106,12 @@ static const struct t40_clk_desc t40_clks[T40_CLK_COUNT] = {
 	[T40_CLK_TCU]   = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
 	[T40_CLK_OST]   = { 0, 0, 0, 0, CPM_CLKGR1, 11 },
 	[T40_CLK_AIC]   = { 0, 0, 0, 0, CPM_CLKGR0, 11 },
-	[T40_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
+	/*
+	 * GMAC0 feeds the RMII PHY 50 MHz reference (+-50 ppm): exact
+	 * division required. Every T40 SKU MPLL (T40N 1000 / T40XP 1200
+	 * / T40A 1400 MHz) divides 50 MHz exactly.
+	 */
+	[T40_CLK_GMAC0] = { CPM_MAC0CDR, 29, 28, 27, CPM_CLKGR1, 4, 1, 0, 1 },
 	[T40_CLK_GMAC1] = { 0, 0, 0, 0, NO_GATE, 0 },	/* T40 has one GMAC */
 	[T40_CLK_DMAC]  = { 0, 0, 0, 0, CPM_CLKGR0, 22 },	/* PDMA */
 	[T40_CLK_EFUSE] = { 0, 0, 0, 0, CPM_CLKGR0, 1 },
@@ -228,6 +235,10 @@ static ulong t40_clk_set_rate(struct clk *clk, ulong rate)
 		div = 1;
 	if (div > 256)
 		div = 256;
+	if (d->exact && parent % rate)
+		dev_warn(clk->dev,
+			 "clk %lu: no exact divider, %lu Hz off target %lu Hz\n",
+			 clk->id, parent / div, rate);
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);

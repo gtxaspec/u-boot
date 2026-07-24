@@ -216,7 +216,6 @@
 		phy-handle = <&gmac0_phy>;
 		ingenic,mode-reg = <0xb00000e8>;
 		max-speed = <100>;
-		macphy-rate = <50000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_mac0>;
 		status = "okay";

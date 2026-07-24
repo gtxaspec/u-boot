@@ -531,9 +531,10 @@ static const struct dwmac_ingenic_data t30_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t40_gmac_data = {
-	.mpll_hz = 0,			/* read MPLL from CPM at runtime */
-	.inner_phy = false,		/* external RMII PHY */
-	.t40_pll = true,		/* T40 CPMPCR layout */
+	.cgu_rate = true,		/* clk-t40 owns MAC0CDR (fixed MPLL,
+					 * per-SKU 1000/1200/1400, all
+					 * 50 MHz-exact) */
+	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t41_gmac_data = {

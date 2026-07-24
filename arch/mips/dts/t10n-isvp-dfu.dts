@@ -73,3 +73,13 @@
 		0x00000a73 0x00220014 0x05013880	/* MR0 PTR0 PTR1 */
 	>;
 };
+
+/*
+ * Ethernet in the DFU loader, like the other XBurst1 loaders: the
+ * MAC-PHY clock derives from the per-variant MPLL via the CGU clk
+ * driver. No PHY reset GPIO here - board-specific; a wired-ethernet
+ * board DT declares its own ingenic,reset-gpio.
+ */
+&gmac {
+	status = "okay";
+};

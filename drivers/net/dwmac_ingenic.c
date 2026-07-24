@@ -587,9 +587,16 @@ static const struct dwmac_ingenic_data t31_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t23_gmac_data = {
-	.mpll_hz = 0,			/* read at runtime (all SKU MPLLs
-					 * divide 50 MHz exactly) */
-	.xb1_pll = true,		/* T23/T20/T10 CPxPCR M/N/OD1/OD0 */
+	.cgu_rate = true,		/* clk-t23 owns MACCDR (per-SKU MPLL
+					 * 1200/1000, all 50 MHz-exact) */
+	.inner_phy = false,
+};
+
+/* T10/T20: legacy direct-MACCDR path until their clk drivers grow the
+ * set_rate/set_parent ops (no ethernet boards exist for either). */
+static const struct dwmac_ingenic_data t20_gmac_data = {
+	.mpll_hz = 0,			/* read at runtime */
+	.xb1_pll = true,		/* T20/T10 CPxPCR M/N/OD1/OD0 */
 	.inner_phy = false,
 };
 
@@ -629,8 +636,8 @@ static const struct dwmac_ingenic_data t41_gmac_data = {
 static const struct udevice_id dwmac_ingenic_ids[] = {
 	{ .compatible = "ingenic,t31-gmac", .data = (ulong)&t31_gmac_data },
 	{ .compatible = "ingenic,t23-gmac", .data = (ulong)&t23_gmac_data },
-	{ .compatible = "ingenic,t20-gmac", .data = (ulong)&t23_gmac_data },
-	{ .compatible = "ingenic,t10-gmac", .data = (ulong)&t23_gmac_data },
+	{ .compatible = "ingenic,t20-gmac", .data = (ulong)&t20_gmac_data },
+	{ .compatible = "ingenic,t10-gmac", .data = (ulong)&t20_gmac_data },
 	{ .compatible = "ingenic,t32-gmac", .data = (ulong)&t32_gmac_data },
 	{ .compatible = "ingenic,t21-gmac", .data = (ulong)&t21_gmac_data },
 	{ .compatible = "ingenic,t30-gmac", .data = (ulong)&t30_gmac_data },

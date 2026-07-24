@@ -515,11 +515,8 @@ static const struct dwmac_ingenic_data t20_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t32_gmac_data = {
-	.mpll_hz = 0,			/* read MPLL from CPM at runtime:
-					 * 1200 MHz (LQ/NQ/XQ classes) vs
-					 * 1400 MHz (VN/VX/VNP @700) */
-	.inner_phy = false,		/* external RMII PHY */
-	.t40_pll = true,		/* T32 CPMPCR is the raw M/N/OD form */
+	.cgu_rate = true,		/* clk-t32 owns MACCDR */
+	.inner_phy = false,
 };
 
 static const struct dwmac_ingenic_data t21_gmac_data = {

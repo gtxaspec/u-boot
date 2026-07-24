@@ -14,7 +14,7 @@
 &ddr {
 	/* T30N: DDR2 64 MB M14D5121632A (4-bank), CPU 864 / DDR 500 MHz. */
 	ingenic,sdram-params = <
-		0x04704840 0x07c08820 0x9a073310	/* APLL864 MPLL1000 CPCCR */
+		0x04a04840 0x07c08820 0x9a073310	/* APLL900 MPLL1000 CPCCR */
 		0 0					/* ddr_cdr (MPLL/2); DDR2 */
 		13 10 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x04000000				/* 64 MB */

@@ -53,19 +53,14 @@
 /* CPM (0xb0000000): GMAC gate in CLKGR1, MAC clock divider MACCDR. */
 #define T31_CPM_BASE			0xb0000000
 #define T31_CPM_CPMPCR			0x14		/* MPLL config */
-#define T31_CPM_CPVPCR			0xe0		/* VPLL config (XBurst1) */
 #define T31_CPM_CLKGR1			0x28
 #define T31_CPM_CLKGR1_GMAC		BIT(4)
 #define T31_CPM_MACCDR			0x54
 #define MACCDR_SRC_MPLL			(1u << 30)	/* {APLL,MPLL,VPLL} idx 1 */
-#define MACCDR_SRC_VPLL			(2u << 30)	/* {APLL,MPLL,VPLL} idx 2 */
 #define MACCDR_CE			BIT(29)
 #define MACCDR_BUSY			BIT(28)
 #define MACCDR_STOP_SHIFT		27
 #define MACCDR_DIV_MASK			0xffu
-
-/* XBurst1 CPxPCR status bits (T31-family M/N/OD1/OD0 PLL registers). */
-#define XB1_PLL_ON			BIT(3)		/* PLL stable/lock */
 
 #define EXTAL_HZ			24000000u
 
@@ -105,7 +100,6 @@ struct dwmac_ingenic_data {
 	u32 mpll_hz;		/* MACCDR parent (MPLL) rate, 0 = read at runtime */
 	bool inner_phy;		/* T21 embedded ePHY (no ext PHY/reset) */
 	bool t40_pll;		/* T40 CPMPCR layout (vs T41/A1) for the runtime read */
-	bool xb1_pll;		/* XBurst1 T31/T23/T20 CPxPCR layout + VPLL fallback */
 	bool cgu_rate;		/* MAC-PHY clock via the CGU clk API (no CPM pokes) */
 };
 
@@ -140,33 +134,6 @@ static int dwmac_ingenic_of_to_plat(struct udevice *dev)
 	pdata->mac_base = map_physmem(mac, 0x20, MAP_NOCACHE);
 
 	return designware_eth_of_to_plat(dev);
-}
-
-/*
- * Read an XBurst1 (T31-family) PLL: M@20(12b), N@14(6b), OD1@11(3b),
- * OD0@8(3b); rate = EXTAL * M / (N * OD1 * OD0). Returns 0 when the
- * PLL is not locked (XB1_PLL_ON clear), so an absent or idle PLL can
- * never be chosen as a clock source.
- */
-static unsigned long xb1_pll_hz(void __iomem *cpm, u32 off)
-{
-	u32 v = readl(cpm + off);
-	u32 m = (v >> 20) & 0xfff;
-	u32 n = (v >> 14) & 0x3f;
-	u32 od1 = (v >> 11) & 0x7;
-	u32 od0 = (v >> 8) & 0x7;
-
-	if (!(v & XB1_PLL_ON))
-		return 0;
-
-	if (!n)
-		n = 1;
-	if (!od1)
-		od1 = 1;
-	if (!od0)
-		od0 = 1;
-
-	return (unsigned long)((u64)EXTAL_HZ * m / n / od1 / od0);
 }
 
 /*
@@ -222,49 +189,19 @@ static int macphy_clk_init(struct dwmac_ingenic_plat *pdata)
 	clrbits_le32(cpm + T31_CPM_CLKGR1, T31_CPM_CLKGR1_GMAC);
 
 	/*
-	 * MAC-PHY clock source + divider. Vendor clk_set_rate (non-MSC):
-	 * cdr = pll/rate - 1. External RMII wants 50 MHz; the T21
-	 * inner ePHY wants 25 MHz. Same CE/BUSY dance as the MSC clock;
-	 * leave CE set.
-	 *
-	 * The RMII reference tolerates only +-50 ppm, so the divider must
-	 * land the target rate EXACTLY; on the T31 family MPLL is a
-	 * per-variant DDR-driven setpoint that cannot always do that
-	 * (T31X 1200 MHz / 24 = 50.0, but T31N/T31L run MPLL at 1008 MHz
-	 * and 1008/20 = 50.4 MHz - 8000 ppm off, the PHY drops to 10M
-	 * with dead RX). The SPL pins VPLL at 1200 MHz on every T31
-	 * variant, so when MPLL cannot divide exactly, source from VPLL
-	 * (MACCDR source index 2, vendor route {APLL, MPLL, VPLL}).
-	 * MPLL stays preferred for vendor parity; the fallback only
-	 * engages for a locked VPLL that divides exactly, so SoCs that
-	 * share this compatible without a VPLL MAC route (e.g. T23,
-	 * route {APLL, MPLL, -1}) keep their MPLL behavior.
-	 *
-	 * The poll is bounded: on a board where the MAC-PHY clock can't
-	 * lock, an unbounded wait would hang U-Boot forever at "Net:".
-	 * Time out instead so the boot continues without ethernet.
+	 * Legacy path (XBurst2 SoCs whose CGU drivers do not yet implement
+	 * set_rate): MAC-PHY clock from the runtime-read MPLL, vendor
+	 * clk_set_rate form (cdr = pll/rate - 1), same CE/BUSY dance as the
+	 * MSC clock; leave CE set. The poll is bounded so a board where the
+	 * clock cannot lock does not hang U-Boot at "Net:".
 	 */
 	parent_hz = pdata->socdata->mpll_hz;
-	if (!parent_hz) {
-		if (pdata->socdata->xb1_pll)
-			parent_hz = xb1_pll_hz(cpm, T31_CPM_CPMPCR);
-		else
-			parent_hz = read_mpll_hz(cpm, pdata->socdata->t40_pll);
-	}
+	if (!parent_hz)
+		parent_hz = read_mpll_hz(cpm, pdata->socdata->t40_pll);
 	if (parent_hz < pdata->macphy_rate)
 		return -EINVAL;
 
 	src = MACCDR_SRC_MPLL;
-	if (pdata->socdata->xb1_pll && parent_hz % pdata->macphy_rate) {
-		unsigned long vpll_hz = xb1_pll_hz(cpm, T31_CPM_CPVPCR);
-
-		if (vpll_hz >= pdata->macphy_rate &&
-		    !(vpll_hz % pdata->macphy_rate)) {
-			src = MACCDR_SRC_VPLL;
-			parent_hz = vpll_hz;
-		}
-	}
-
 	div = DIV_ROUND_CLOSEST(parent_hz, pdata->macphy_rate);
 	if (parent_hz % pdata->macphy_rate)
 		printf("dwmac: no exact MAC-PHY divider, %lu Hz off target %u Hz\n",
@@ -572,11 +509,8 @@ static const struct dwmac_ingenic_data t23_gmac_data = {
 	.inner_phy = false,
 };
 
-/* T10/T20: legacy direct-MACCDR path until their clk drivers grow the
- * set_rate/set_parent ops (no ethernet boards exist for either). */
 static const struct dwmac_ingenic_data t20_gmac_data = {
-	.mpll_hz = 0,			/* read at runtime */
-	.xb1_pll = true,		/* T20/T10 CPxPCR M/N/OD1/OD0 */
+	.cgu_rate = true,		/* clk-t20/t10 own MACCDR */
 	.inner_phy = false,
 };
 

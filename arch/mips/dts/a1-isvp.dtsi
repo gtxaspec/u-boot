@@ -184,7 +184,9 @@
 	gmac0: ethernet@b30b0000 {
 		compatible = "ingenic,a1-gmac";
 		reg = <0xb30b0000 0x10000>;
-		clocks = <&cgu A1_CLK_GMAC0>;
+		clocks = <&cgu A1_CLK_GMAC0>,
+			 <&cgu A1_CLK_GMAC0_TX>,
+			 <&cgu A1_CLK_GMAC0_PTP>;
 		phy-mode = "rmii";
 		phy-handle = <&gmac0_phy>;
 		ingenic,mode-reg = <0xb00000c8>;

@@ -32,61 +32,13 @@
 
 /*
  * The GMAC needs three CGU dividers running, all sourced from EPLL,
- * or its register/MDIO block is unresponsive. clk-a1 drives MAC0CDR
- * via the DT clock; MAC0TXCDR and MAC0PTPCDR are poked here. RMII
- * rates: MAC0CDR 50 MHz refclk, MAC0TXCDR 25 MHz, MAC0PTPCDR 50 MHz.
+ * or its register/MDIO block is unresponsive. All three are DT clocks
+ * owned by clk-a1 (MAC0CDR, MAC0TXCDR, MAC0PTPCDR). RMII rates:
+ * 50 MHz refclk, 25 MHz TX, 50 MHz PTP.
  */
 #define A1_XGMAC_RMII_REFCLK	50000000
 #define A1_XGMAC_TX_CLK		25000000
 #define A1_XGMAC_PTP_CLK	50000000
-
-#define A1_CPM_BASE		0xb0000000
-#define A1_CPM_CPEPCR		0x18		/* EPLL config */
-#define A1_CPM_MAC0TXCDR	0xc4
-#define A1_CPM_MAC0PTPCDR	0xcc
-#define A1_CDR_SRC_EPLL		(3u << 30)	/* CDR source select [31:30] */
-#define A1_CDR_CE		BIT(29)		/* clock-change enable */
-#define A1_CDR_BUSY		BIT(28)
-#define A1_CDR_STOP		BIT(27)
-
-static ulong a1_epll_rate(void)
-{
-	u32 v = readl((void __iomem *)(A1_CPM_BASE + A1_CPM_CPEPCR));
-	u32 m = (v >> 20) & 0xfff;
-	u32 n = (v >> 14) & 0x3f;
-	u32 od1 = (v >> 11) & 0x7;
-	u32 od0 = (v >> 8) & 0x7;
-
-	if (!n)
-		n = 1;
-	if (!od1)
-		od1 = 1;
-	if (!od0)
-		od0 = 1;
-
-	return (ulong)((u64)24000000 * m / n / od1 / od0);
-}
-
-/* Program one EPLL-sourced GMAC CGU divider for the requested rate. */
-static void a1_xgmac_set_cdr(u32 cdr_off, ulong rate)
-{
-	void __iomem *cdr = (void __iomem *)(A1_CPM_BASE + cdr_off);
-	u32 div = a1_epll_rate() / rate;
-	u32 v;
-
-	if (!div)
-		div = 1;
-	if (div > 256)
-		div = 256;
-
-	v = readl(cdr);
-	v &= ~(A1_CDR_SRC_EPLL | A1_CDR_BUSY | A1_CDR_STOP | 0xff);
-	v |= A1_CDR_SRC_EPLL | A1_CDR_CE | (div - 1);
-	writel(v, cdr);
-
-	while (readl(cdr) & A1_CDR_BUSY)
-		;
-}
 
 static int xgmac_probe_resources_a1(struct udevice *dev)
 {
@@ -125,6 +77,16 @@ static int xgmac_probe_resources_a1(struct udevice *dev)
 		dev_err(dev, "failed to get GMAC clock: %d\n", ret);
 		return ret;
 	}
+	ret = clk_get_by_index(dev, 1, &xgmac->clk_tx);
+	if (ret) {
+		dev_err(dev, "failed to get GMAC TX clock: %d\n", ret);
+		return ret;
+	}
+	ret = clk_get_by_index(dev, 2, &xgmac->clk_ptp_ref);
+	if (ret) {
+		dev_err(dev, "failed to get GMAC PTP clock: %d\n", ret);
+		return ret;
+	}
 
 	/*
 	 * The A1 has no cache-coherent DMA path. Re-point the XGMAC
@@ -150,10 +112,9 @@ static int xgmac_start_clks_a1(struct udevice *dev)
 	if (ret && ret != -ENOSYS && ret != -ENOTSUPP)
 		return ret;
 
-	/* MAC0CDR (the RMII refclk) via the DT clock; the other two direct. */
 	clk_set_rate(&xgmac->clk_common, A1_XGMAC_RMII_REFCLK);
-	a1_xgmac_set_cdr(A1_CPM_MAC0TXCDR, A1_XGMAC_TX_CLK);
-	a1_xgmac_set_cdr(A1_CPM_MAC0PTPCDR, A1_XGMAC_PTP_CLK);
+	clk_set_rate(&xgmac->clk_tx, A1_XGMAC_TX_CLK);
+	clk_set_rate(&xgmac->clk_ptp_ref, A1_XGMAC_PTP_CLK);
 
 	return 0;
 }

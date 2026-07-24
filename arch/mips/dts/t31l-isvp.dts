@@ -12,9 +12,9 @@
 };
 
 &ddr {
-	/* T31L: DDR2 64 MB M14D5121632A (4-bank), CPU 1008 / DDR 504 MHz. */
+	/* T31L: DDR2 64 MB M14D5121632A (4-bank), CPU 1008 / DDR 500 MHz. */
 	ingenic,sdram-params = <
-		0x05405100 0x05405100 0x9a073310	/* APLL1008 MPLL1008 CPCCR */
+		0x05405100 0x07d05900 0x9a073310	/* APLL1008 MPLL1000 CPCCR */
 		0 0					/* ddr_cdr (MPLL/2); DDR2 */
 		13 10 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x04000000				/* 64 MB */

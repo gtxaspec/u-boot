@@ -182,10 +182,12 @@
 
 	/*
 	 * GMAC: Synopsys DesignWare MAC. ingenic,mode-reg is the CPM
-	 * GMAC-PHY-control register (CPM + 0xe8). Same glue as T31.
+	 * GMAC-PHY-control register (CPM + 0xe8). Same glue as T31, but
+	 * T30 uses the T21-style CPxPCR encoding, so it carries its own
+	 * compatible for the runtime MPLL read.
 	 */
 	gmac: ethernet@134b0000 {
-		compatible = "ingenic,t31-gmac";
+		compatible = "ingenic,t30-gmac";
 		reg = <0x134b0000 0x2000>;
 		phy-mode = "rmii";
 		max-speed = <100>;

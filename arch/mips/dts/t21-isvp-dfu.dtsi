@@ -59,3 +59,12 @@
 	status = "okay";
 	dr_mode = "peripheral";		/* gadget bind for DFU/g_dnl */
 };
+
+/*
+ * Ethernet in the DFU loader, like the T31 loaders: the per-variant
+ * loader carries its own MPLL plan, and the MAC-PHY clock derives from
+ * it at runtime. T21 embedded ePHY: no external PHY chip, no reset GPIO.
+ */
+&gmac {
+	status = "okay";
+};

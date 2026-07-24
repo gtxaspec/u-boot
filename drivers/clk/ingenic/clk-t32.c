@@ -20,6 +20,7 @@
 
 #include <clk-uclass.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
@@ -47,7 +48,12 @@
 /* CDR source field [31:30]: 0=APLL 1=MPLL 2=VPLL */
 #define CDR_SRC_SHIFT		30
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
-#define CDR_SRC_MPLL		(1u << CDR_SRC_SHIFT)
+#define CDR_SRC_SCLKA		0
+#define CDR_SRC_MPLL		1
+#define CDR_SRC_VPLL		2
+
+/* CPxPCR PLL lock status (bit 3 = PLL stable). */
+#define PLL_ON			BIT(3)
 #define CDR_DIV_MASK		0xffu
 
 struct t32_clk_desc {
@@ -58,6 +64,7 @@ struct t32_clk_desc {
 	u8 h_freq;	/* extra /2 bit position (NO_HFREQ = none) */
 	u16 gate_reg;	/* CLKGR0/CLKGR1 offset, NO_GATE = no gate */
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
+	u8 exact;	/* rate must divide exactly; may retarget the source */
 };
 
 #define NO_GATE  0xffff
@@ -75,7 +82,8 @@ static const struct t32_clk_desc t32_clks[T32_CLK_COUNT] = {
 	[T32_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, NO_HFREQ, CPM_CLKGR0, 17 },
 	[T32_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, 20,       CPM_CLKGR0, 3 },
 	[T32_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, 20,       CPM_CLKGR0, 4 },
-	[T32_CLK_GMAC]  = { CPM_MACCDR,  29, 28, 27, NO_HFREQ, CPM_CLKGR1, 0 },
+	/* GMAC feeds the RMII PHY 50 MHz ref: exact division required. */
+	[T32_CLK_GMAC]  = { CPM_MACCDR,  29, 28, 27, NO_HFREQ, CPM_CLKGR1, 0, 1 },
 	[T32_CLK_UART0] = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 11 },
 	[T32_CLK_UART1] = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 12 },
 	[T32_CLK_OTG]   = { 0, 0, 0, 0, NO_HFREQ, CPM_CLKGR0, 2 },
@@ -165,12 +173,32 @@ static ulong t32_clk_get_rate(struct clk *clk)
 	return rate;
 }
 
+/*
+ * Rate of a CDR source-mux input, gated on the PLL lock bit so an
+ * absent or idle PLL can never be selected as a clock source.
+ */
+static ulong t32_src_rate(struct t32_cgu_priv *p, u32 src)
+{
+	static const u16 pll_reg[] = {
+		[CDR_SRC_SCLKA] = CPM_CPAPCR,
+		[CDR_SRC_MPLL] = CPM_CPMPCR,
+		[CDR_SRC_VPLL] = CPM_CPVPCR,
+	};
+
+	if (src >= ARRAY_SIZE(pll_reg))
+		return 0;
+	if (!(cpm_r(p, pll_reg[src]) & PLL_ON))
+		return 0;
+
+	return pll_rate(p, pll_reg[src]);
+}
+
 static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
 {
 	struct t32_cgu_priv *p = dev_get_priv(clk->dev);
 	const struct t32_clk_desc *d;
 	ulong parent;
-	u32 div, v;
+	u32 src, div, v;
 	bool use_hfreq = false;
 
 	if (clk->id >= T32_CLK_COUNT)
@@ -180,8 +208,27 @@ static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
 	if (!d->cdr || !rate)
 		return -ENOSYS;
 
-	/* Source the leaf clock from MPLL (matches the vendor cgu table). */
-	parent = pll_rate(p, CPM_CPMPCR);
+	src = CDR_SRC_MPLL;
+	parent = t32_src_rate(p, src);
+
+	if (d->exact && (!parent || parent % rate)) {
+		/* Retarget the mux to a locked PLL that divides exactly. */
+		static const u8 alt[] = { CDR_SRC_VPLL, CDR_SRC_SCLKA };
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(alt); i++) {
+			ulong r = t32_src_rate(p, alt[i]);
+
+			if (r >= rate && !(r % rate)) {
+				src = alt[i];
+				parent = r;
+				break;
+			}
+		}
+	}
+
+	if (!parent)
+		return -ENODEV;
 
 	div = DIV_ROUND_CLOSEST(parent, rate);
 	if (!div)
@@ -201,20 +248,68 @@ static ulong t32_clk_set_rate(struct clk *clk, ulong rate)
 	}
 	if (div > 256)
 		div = 256;
+	if (d->exact && parent % rate)
+		dev_warn(clk->dev,
+			 "clk %lu: no exact divider, %lu Hz off target %lu Hz\n",
+			 clk->id, parent / div, rate);
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
 	if (d->h_freq != NO_HFREQ)
 		v &= ~BIT(d->h_freq);
-	v |= CDR_SRC_MPLL | BIT(d->ce) | (div - 1);
+	v |= (src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
 	if (use_hfreq)
 		v |= BIT(d->h_freq);
 	cpm_w(p, d->cdr, v);
 
 	while (cpm_r(p, d->cdr) & BIT(d->busy))
 		;
+	/* CE stays set - clearing it kills the clock on real silicon. */
 
 	return use_hfreq ? parent / div / 2 : parent / div;
+}
+
+static int t32_clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	struct t32_cgu_priv *p = dev_get_priv(clk->dev);
+	const struct t32_clk_desc *d;
+	u32 src, div, v;
+
+	if (clk->id >= T32_CLK_COUNT)
+		return -EINVAL;
+
+	d = &t32_clks[clk->id];
+	if (!d->cdr)
+		return -ENOSYS;
+
+	switch (parent->id) {
+	case T32_CLK_APLL:
+		src = CDR_SRC_SCLKA;
+		break;
+	case T32_CLK_MPLL:
+		src = CDR_SRC_MPLL;
+		break;
+	case T32_CLK_VPLL:
+		src = CDR_SRC_VPLL;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (!t32_src_rate(p, src))
+		return -ENODEV;
+
+	/* Keep the current divider/hfreq; the consumer re-rates afterwards. */
+	v = cpm_r(p, d->cdr);
+	div = (v & CDR_DIV_MASK) + 1;
+	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
+	v |= (src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
+	cpm_w(p, d->cdr, v);
+
+	while (cpm_r(p, d->cdr) & BIT(d->busy))
+		;
+
+	return 0;
 }
 
 static int t32_clk_gate(struct clk *clk, bool enable)
@@ -262,6 +357,7 @@ static const struct clk_ops t32_clk_ops = {
 	.of_xlate = t32_clk_of_xlate,
 	.get_rate = t32_clk_get_rate,
 	.set_rate = t32_clk_set_rate,
+	.set_parent = t32_clk_set_parent,
 	.enable	  = t32_clk_enable,
 	.disable  = t32_clk_disable,
 };

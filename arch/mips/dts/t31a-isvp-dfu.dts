@@ -12,9 +12,9 @@
 };
 
 &ddr {
-	/* T31A: DDR3 128 MB M15T1G1664A (8-bank), CPU 1512 / DDR 756 MHz. */
+	/* T31A: DDR3 128 MB M15T1G1664A (8-bank), CPU 1512 / DDR 750 MHz. */
 	ingenic,sdram-params = <
-		0x07e05100 0x07e05100 0x9a0b5510	/* APLL1512 MPLL1512 CPCCR */
+		0x07e05100 0x07d05100 0x9a0b5510	/* APLL1512 MPLL1500 CPCCR */
 		0 1					/* ddr_cdr (MPLL/2); DDR3 */
 		13 10 1 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x08000000				/* 128 MB */

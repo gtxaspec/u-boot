@@ -178,6 +178,7 @@ struct ingenic_t20_ddr_params {
 	u32 ddrp_mr0;			/* [23] DWC PHY MR0 */
 	u32 ddrp_ptr0;			/* [24] DWC PHY PTR0 */
 	u32 ddrp_ptr1;			/* [25] DWC PHY PTR1 */
+	u32 apll_frac;			/* [26] CPAPACR fraction (0 = integer APLL) */
 };
 
 #endif /* _DRIVERS_RAM_INGENIC_DDR_T20_H */

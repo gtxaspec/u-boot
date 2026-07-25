@@ -25,5 +25,6 @@
 		1					/* cdr (DDR = MPLL/2 = 500) */
 		0x00f20001				/* REFCNT */
 		0x00000e73 0x00228019 0x064186a0	/* MR0 PTR0 PTR1 */
+		0x00ae147a				/* APLL frac -> 860.16 MHz */
 	>;
 };

@@ -363,7 +363,8 @@ static int ingenic_t20_ddr_probe(struct udevice *dev)
 	 * params, then loads the DRAM-resident SPL. (rk3328 DMC pattern; in the
 	 * SPL/U-Boot phases the probe only records the size, DDR is already up.)
 	 */
-	pll_init_params(params->apll_mnod, params->mpll_mnod, params->cpccr);
+	pll_init_params(params->apll_mnod, params->apll_frac,
+			params->mpll_mnod, params->cpccr);
 	ingenic_t20_ddr_sdram_init_params(params);
 #endif
 

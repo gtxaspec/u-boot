@@ -23,7 +23,7 @@
 #include <linux/delay.h>
 #include <dt-bindings/clock/ingenic,t30-cgu.h>
 
-#define T30_CLK_COUNT		(T30_CLK_CE_I2SR + 1)
+#define T30_CLK_COUNT		(T30_CLK_VPU + 1)
 
 /* CPM via the uncached MIPS KSEG1 window (as the other proven drivers). */
 #define T30_CPM_BASE		0xb0000000
@@ -33,9 +33,12 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
+#define CPM_HELIXCDR		0x30
 #define CPM_MACCDR		0x54
 #define CPM_MSC0CDR		0x68
 #define CPM_SSICDR		0x74
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPCDR		0x80
 #define CPM_MSC1CDR		0xa4
 #define CPM_CPVPCR		0xe0	/* VPLL */
 
@@ -71,6 +74,18 @@ struct t30_clk_desc {
  * MAC-PHY divider + GMAC gate.
  */
 static const struct t30_clk_desc t30_clks[T30_CLK_COUNT] = {
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor contract (HELIX/ISP on MPLL, CIM on VPLL, same
+	 * table as T21). The 3.10 kernel computes leaf rates against
+	 * whatever parent it inherits (its cgu_set_parent drops
+	 * parent-only changes), so the inherited selector is the
+	 * contract. Parents only; rates stay the OS's business.
+	 */
+	[T30_CLK_VPU]  = { CPM_HELIXCDR, 29, 28, 27, NO_GATE, 0 },
+	[T30_CLK_ISP]  = { CPM_ISPCDR, 29, 28, 27, NO_GATE, 0 },
+	[T30_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, NO_GATE, 0 },
 	[T30_CLK_SFC]  = { CPM_SSICDR, 28, 27, 26, CPM_CLKGR0, 20 },
 	[T30_CLK_MSC0] = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 4 },
 	[T30_CLK_MSC1] = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 5 },
@@ -340,6 +355,22 @@ static int t30_cgu_probe(struct udevice *dev)
 	struct t30_cgu_priv *p = dev_get_priv(dev);
 
 	p->base = (void __iomem *)T30_CPM_BASE;
+
+	/*
+	 * Bring up VPLL if the SPL left it down. The vendor loader runs
+	 * VPLL and parks CIM (and I2S) on it; the kernel's sensor
+	 * drivers retune it for 27 MHz MCLKs. Without a live VPLL the
+	 * CIM assigned-clock-parents pin would fail (a dead PLL rates
+	 * 0). T30 shares the T21 CPxPCR encoding; 0x0310086d is the
+	 * vendor register word for 1200.000 MHz from the 24 MHz
+	 * crystal (measured on T21 silicon, same PLL block).
+	 */
+	if (!(cpm_r(p, CPM_CPVPCR) & PLL_ON)) {
+		cpm_w(p, CPM_CPVPCR, 0x0310086d);
+		while (!(cpm_r(p, CPM_CPVPCR) & PLL_ON))
+			;
+	}
+
 	return 0;
 }
 

@@ -37,7 +37,7 @@
 #include <linux/delay.h>
 #include <dt-bindings/clock/ingenic,t10-cgu.h>
 
-#define T10_CLK_COUNT		(T10_CLK_CE_I2SR + 1)
+#define T10_CLK_COUNT		(T10_CLK_VPU + 1)
 
 /*
  * CPM is at physical 0x10000000; access it through the uncached MIPS
@@ -51,9 +51,12 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
+#define CPM_VPUCDR		0x30
 #define CPM_MACCDR		0x54
 #define CPM_MSC0CDR		0x68
 #define CPM_SSICDR		0x74
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPCDR		0x80
 
 
 /* CPxPCR PLL lock status (bit 3 = PLL stable). */
@@ -94,6 +97,18 @@ static const struct t10_clk_desc t10_clks[T10_CLK_COUNT] = {
 	[T10_CLK_SFC]  = { CPM_SSICDR, 29, 28, 27, 31, 0, CPM_CLKGR0, 20 },
 	[T10_CLK_MSC0] = { CPM_MSC0CDR, 29, 28, 27, 31, 0, CPM_CLKGR0, 4 },
 	/* GMAC feeds the RMII PHY 50 MHz ref: exact division required. */
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor contract (vendor cgu_clk_sel: VPU, ISP, CIM and
+	 * MACPHY all from MPLL; T10 routes no VPLL to leaves and every
+	 * mux is the single-bit geometry at bit 31). The 3.10 kernel
+	 * computes leaf rates against whatever parent it inherits, so
+	 * the inherited selector is the contract. Parents only.
+	 */
+	[T10_CLK_VPU]  = { CPM_VPUCDR, 29, 28, 27, 31, 0, NO_GATE, 0 },
+	[T10_CLK_ISP]  = { CPM_ISPCDR, 29, 28, 27, 31, 0, NO_GATE, 0 },
+	[T10_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, 31, 0, NO_GATE, 0 },
 	[T10_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, 31, 0, CPM_CLKGR1, 4, 1 },
 	[T10_CLK_UART1] = { 0, 0, 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T10_CLK_OTG]  = { 0, 0, 0, 0, 0, 0, CPM_CLKGR0, 3 },

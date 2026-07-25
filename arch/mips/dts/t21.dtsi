@@ -52,6 +52,24 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed leaf muxes to the vendor
+		 * contract, measured on silicon (bench T21N, legacy
+		 * loader): HELIX (VPU) and ISP from MPLL, CIM from
+		 * VPLL (the cgu probe brings VPLL up at 1200 MHz like
+		 * the vendor loader; sensor drivers retune it for
+		 * 27 MHz MCLKs). The 3.10 kernel computes leaf rates
+		 * on whatever parent it inherits, so the inherited
+		 * selector is the contract. Parents only, no rates.
+		 */
+		assigned-clocks = <&cgu T21_CLK_VPU>,
+				  <&cgu T21_CLK_ISP>,
+				  <&cgu T21_CLK_CIM>,
+				  <&cgu T21_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T21_CLK_MPLL>,
+					 <&cgu T21_CLK_MPLL>,
+					 <&cgu T21_CLK_VPLL>,
+					 <&cgu T21_CLK_MPLL>;
 	};
 
 	/*

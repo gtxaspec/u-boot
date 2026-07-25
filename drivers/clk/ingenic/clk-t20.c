@@ -36,7 +36,7 @@
 #include <linux/delay.h>
 #include <dt-bindings/clock/ingenic,t20-cgu.h>
 
-#define T20_CLK_COUNT		(T20_CLK_CE_I2SR + 1)
+#define T20_CLK_COUNT		(T20_CLK_VPU + 1)
 
 /*
  * CPM is at physical 0x10000000; access it through the uncached MIPS
@@ -50,9 +50,12 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
+#define CPM_VPUCDR		0x30
 #define CPM_MACCDR		0x54
 #define CPM_MSC0CDR		0x68
 #define CPM_SSICDR		0x74
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPCDR		0x80
 
 #define CPM_CPVPCR		0xe0	/* VPLL */
 
@@ -94,6 +97,19 @@ static const struct t20_clk_desc t20_clks[T20_CLK_COUNT] = {
 	[T20_CLK_SFC]  = { CPM_SSICDR, 29, 28, 27, 31, 0, CPM_CLKGR0, 20 },
 	[T20_CLK_MSC0] = { CPM_MSC0CDR, 29, 28, 27, 31, 0, CPM_CLKGR0, 4 },
 	/* GMAC feeds the RMII PHY 50 MHz ref: exact division required. */
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor contract, measured on silicon (bench Wyze V2
+	 * T20X, legacy loader): VPU and ISP parked on MPLL, CIM on
+	 * VPLL. The 3.10 kernel computes leaf rates against whatever
+	 * parent it inherits (its cgu_set_parent drops parent-only
+	 * changes), so the inherited selector is the contract. Parents
+	 * only; rates stay the OS's business.
+	 */
+	[T20_CLK_VPU]  = { CPM_VPUCDR, 29, 28, 27, 30, 1, NO_GATE, 0 },
+	[T20_CLK_ISP]  = { CPM_ISPCDR, 29, 28, 27, 30, 1, NO_GATE, 0 },
+	[T20_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, 30, 1, NO_GATE, 0 },
 	[T20_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, 30, 1, CPM_CLKGR1, 4, 1 },
 	[T20_CLK_UART1] = { 0, 0, 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T20_CLK_OTG]  = { 0, 0, 0, 0, 0, 0, CPM_CLKGR0, 3 },
@@ -365,6 +381,21 @@ static int t20_cgu_probe(struct udevice *dev)
 	struct t20_cgu_priv *p = dev_get_priv(dev);
 
 	p->base = (void __iomem *)T20_CPM_BASE;
+
+	/*
+	 * Bring up VPLL if the SPL left it down. The vendor loader runs
+	 * VPLL at 1200 MHz and parks CIM on it (sensor MCLKs divide
+	 * from it: 1200/50 = 24.000 exact); without a live VPLL the CIM
+	 * assigned-clock-parents pin would fail (a dead PLL rates 0).
+	 * 0x0320490d is the register word the vendor loader programs,
+	 * measured on T20X silicon = 1200.000 MHz.
+	 */
+	if (!(cpm_r(p, CPM_CPVPCR) & PLL_ON)) {
+		cpm_w(p, CPM_CPVPCR, 0x0320490d);
+		while (!(cpm_r(p, CPM_CPVPCR) & PLL_ON))
+			;
+	}
+
 	return 0;
 }
 

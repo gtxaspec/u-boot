@@ -52,6 +52,23 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed source muxes to the vendor
+		 * bootloader contract (vendor cgu_clks_set): the 3.10
+		 * kernel computes dividers from the parent it inherits
+		 * and its clk_set_parent drops parent-only changes, so
+		 * these must agree with the kernel drivers' defaults
+		 * (AVPU/ISP/MACPHY = MPLL, CIM = VPLL). Parents only -
+		 * rates remain the OS's requests.
+		 */
+		assigned-clocks = <&cgu T31_CLK_VPU>,
+				  <&cgu T31_CLK_ISP>,
+				  <&cgu T31_CLK_CIM>,
+				  <&cgu T31_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T31_CLK_MPLL>,
+					 <&cgu T31_CLK_MPLL>,
+					 <&cgu T31_CLK_VPLL>,
+					 <&cgu T31_CLK_MPLL>;
 	};
 
 	/*

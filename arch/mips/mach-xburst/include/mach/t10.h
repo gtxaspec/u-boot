@@ -55,6 +55,7 @@
 #define CPM_CPCCR	0x00
 #define CPM_CPAPCR	0x10	/* APLL */
 #define CPM_CPMPCR	0x14	/* MPLL */
+#define CPM_CPAPACR	0x18	/* APLL fractional */
 #define CPM_CLKGR0	0x20
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
@@ -146,7 +147,7 @@
  * setpoints (the UCLASS_RAM probe feeds it the DT params; VPLL left at reset).
  */
 void clk_ungate_uart(unsigned int idx);
-void pll_init_params(u32 apll, u32 mpll, u32 cpccr);
+void pll_init_params(u32 apll, u32 apll_frac, u32 mpll, u32 cpccr);
 void t10_spl_serial_init(void);
 void t10_spl_putc(char c);
 void t10_spl_puts(const char *s);

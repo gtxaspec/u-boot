@@ -52,6 +52,22 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed leaf muxes to the vendor
+		 * contract (vendor cgu_clk_sel: VPU, ISP, CIM and MACPHY
+		 * all from MPLL; single-bit muxes, no VPLL routing). The
+		 * 3.10 kernel computes leaf rates on whatever parent it
+		 * inherits, so the inherited selector is the contract.
+		 * Parents only, no rates.
+		 */
+		assigned-clocks = <&cgu T10_CLK_VPU>,
+				  <&cgu T10_CLK_ISP>,
+				  <&cgu T10_CLK_CIM>,
+				  <&cgu T10_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T10_CLK_MPLL>,
+					 <&cgu T10_CLK_MPLL>,
+					 <&cgu T10_CLK_MPLL>,
+					 <&cgu T10_CLK_MPLL>;
 	};
 
 	/*

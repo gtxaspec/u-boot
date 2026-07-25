@@ -52,6 +52,23 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed leaf muxes to the vendor
+		 * contract, measured on silicon (bench Wyze V2 T20X,
+		 * legacy loader): VPU and ISP from MPLL, CIM from VPLL
+		 * (the cgu probe brings VPLL up at 1200 MHz with the
+		 * measured vendor word). The 3.10 kernel computes leaf
+		 * rates on whatever parent it inherits, so the inherited
+		 * selector is the contract. Parents only, no rates.
+		 */
+		assigned-clocks = <&cgu T20_CLK_VPU>,
+				  <&cgu T20_CLK_ISP>,
+				  <&cgu T20_CLK_CIM>,
+				  <&cgu T20_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T20_CLK_MPLL>,
+					 <&cgu T20_CLK_MPLL>,
+					 <&cgu T20_CLK_VPLL>,
+					 <&cgu T20_CLK_MPLL>;
 	};
 
 	/*

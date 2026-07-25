@@ -33,7 +33,7 @@
  * defines IDs up to T31_CLK_CE_I2SR; U-Boot only implements the leaf
  * clocks its drivers consume.
  */
-#define T31_CLK_COUNT		(T31_CLK_CE_I2SR + 1)
+#define T31_CLK_COUNT		(T31_CLK_VPU + 1)
 
 /*
  * CPM is at physical 0x10000000; access it through the uncached MIPS
@@ -46,6 +46,9 @@
 #define CPM_CPCCR		0x00
 #define CPM_CPAPCR		0x10	/* APLL */
 #define CPM_CPMPCR		0x14	/* MPLL */
+#define CPM_AVPUCDR		0x30	/* VPU */
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPCDR		0x80
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
 #define CPM_MACCDR		0x54
@@ -100,6 +103,18 @@ static const struct t31_clk_desc t31_clks[T31_CLK_COUNT] = {
 	 * SPL pins VPLL at 1200 MHz on every T31 variant).
 	 */
 	[T31_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor bootloader contract (AVPU/ISP = MPLL, CIM =
+	 * VPLL) that the 3.10 kernel's clock code was designed against -
+	 * its cgu_set_parent silently drops parent-only changes, so a
+	 * driver's parent request only lands when the inherited selector
+	 * already agrees. Parents only; rates stay the OS's business.
+	 */
+	[T31_CLK_VPU]  = { CPM_AVPUCDR, 29, 28, 27, NO_GATE, 0 },
+	[T31_CLK_ISP]  = { CPM_ISPCDR, 29, 28, 27, NO_GATE, 0 },
+	[T31_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, NO_GATE, 0 },
 	[T31_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T31_CLK_OTG]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
 	[T31_CLK_TCU]  = { 0, 0, 0, 0, CPM_CLKGR0, 30 },

@@ -50,6 +50,27 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed leaf muxes to the vendor
+		 * contract, measured from the shipping stock loader on
+		 * T32LQ silicon: HELIX (VPU), ISPM and CIM all from MPLL
+		 * (T32 stock parks CIM on MPLL, unlike the VPLL parking
+		 * of the other XBurst1 parts). The vendor kernels compute
+		 * leaf rates on whatever parent they inherit, so the
+		 * inherited selector is the contract. GMAC pins to APLL:
+		 * the stock loader parks MACPHY on APLL and the stock
+		 * kernel runs the internal ePHY at APLL/36 = 25 MHz
+		 * (measured; T21-style ePHY, not 50 MHz RMII). Parents
+		 * only.
+		 */
+		assigned-clocks = <&cgu T32_CLK_VPU>,
+				  <&cgu T32_CLK_ISP>,
+				  <&cgu T32_CLK_CIM>,
+				  <&cgu T32_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T32_CLK_MPLL>,
+					 <&cgu T32_CLK_MPLL>,
+					 <&cgu T32_CLK_MPLL>,
+					 <&cgu T32_CLK_APLL>;
 	};
 
 	/*

@@ -26,7 +26,7 @@
 #include <linux/delay.h>
 #include <dt-bindings/clock/ingenic,t32-cgu.h>
 
-#define T32_CLK_COUNT		(T32_CLK_USBPHY + 1)
+#define T32_CLK_COUNT		(T32_CLK_VPU + 1)
 
 /* CPM at physical 0x10000000, accessed through the uncached KSEG1 window. */
 #define T32_CPM_BASE		0xb0000000
@@ -36,8 +36,11 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
+#define CPM_HELIXCDR		0x30
 #define CPM_MACCDR		0x54
 #define CPM_SFC0CDR		0x58
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPMCDR		0x80
 #define CPM_MSC0CDR		0x68
 #define CPM_MSC1CDR		0xa4
 #define CPM_CPVPCR		0xe0	/* VPLL */
@@ -79,6 +82,18 @@ struct t32_clk_desc {
  * 11, UART1 12, TCU 26; CLKGR1 - GMAC 0, OST 7.
  */
 static const struct t32_clk_desc t32_clks[T32_CLK_COUNT] = {
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor contract, measured from the shipping stock
+	 * loader on T32LQ silicon (2013.07-H20250211a register dump):
+	 * HELIX (VPU), ISPM and CIM all parked on MPLL. Unlike the
+	 * other XBurst1 parts, T32 stock parks CIM on MPLL, not VPLL.
+	 * Parents only; rates stay the OS's business.
+	 */
+	[T32_CLK_VPU]  = { CPM_HELIXCDR, 29, 28, 27, NO_HFREQ, NO_GATE, 0 },
+	[T32_CLK_ISP]  = { CPM_ISPMCDR, 29, 28, 27, NO_HFREQ, NO_GATE, 0 },
+	[T32_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, NO_HFREQ, NO_GATE, 0 },
 	[T32_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, NO_HFREQ, CPM_CLKGR0, 17 },
 	[T32_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, 20,       CPM_CLKGR0, 3 },
 	[T32_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, 20,       CPM_CLKGR0, 4 },

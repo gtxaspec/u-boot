@@ -52,6 +52,28 @@
 		clocks = <&exclk>, <&rtclk>;
 		clock-names = "ext", "rtc";
 		bootph-pre-ram;
+		/*
+		 * Pin the kernel-consumed leaf muxes to the vendor
+		 * RUNTIME contract, measured on silicon (bench T23DL,
+		 * legacy loader + stock kernel): the vendor loader
+		 * parks ISP/CIM at MPLL but with mismatching parked
+		 * dividers, so the kernel's own re-parenting to sclka
+		 * (tx-isp clk_name=sclka; sclka 1188 divides 27 MHz
+		 * sensor MCLKs exactly) always lands. The kernel's
+		 * cgu_set_parent silently drops parent-only changes,
+		 * so pin ISP/CIM to SCLKA (what the kernel requests)
+		 * and VPU/MAC to MPLL (where both loaders' kernels
+		 * really end up: VPU true MPLL/2 = 600). Parents
+		 * only, no rates.
+		 */
+		assigned-clocks = <&cgu T23_CLK_VPU>,
+				  <&cgu T23_CLK_ISP>,
+				  <&cgu T23_CLK_CIM>,
+				  <&cgu T23_CLK_GMAC>;
+		assigned-clock-parents = <&cgu T23_CLK_MPLL>,
+					 <&cgu T23_CLK_SCLKA>,
+					 <&cgu T23_CLK_SCLKA>,
+					 <&cgu T23_CLK_MPLL>;
 	};
 
 	/*

@@ -23,7 +23,7 @@
 #include <linux/delay.h>
 #include <dt-bindings/clock/ingenic,t23-cgu.h>
 
-#define T23_CLK_COUNT		(T23_CLK_CE_I2SR + 1)
+#define T23_CLK_COUNT		(T23_CLK_VPU + 1)
 
 /*
  * CPM is at physical 0x10000000; access it through the uncached MIPS
@@ -37,9 +37,12 @@
 #define CPM_CPMPCR		0x14	/* MPLL */
 #define CPM_CLKGR0		0x20
 #define CPM_CLKGR1		0x28
+#define CPM_AVPUCDR		0x30
 #define CPM_MACCDR		0x54
 #define CPM_MSC0CDR		0x68
 #define CPM_SSICDR		0x74
+#define CPM_CIMCDR		0x7c
+#define CPM_ISPCDR		0x80
 
 #define EXT_RATE		24000000UL
 #define RTC_RATE		32768UL
@@ -83,6 +86,19 @@ static const struct t23_clk_desc t23_clks[T23_CLK_COUNT] = {
 	 * safety net.
 	 */
 	[T23_CLK_GMAC] = { CPM_MACCDR, 29, 28, 27, CPM_CLKGR1, 4, 1 },
+	/*
+	 * Kernel-consumed leaves with no U-Boot driver: modeled so the
+	 * cgu node's assigned-clock-parents can pin their source muxes
+	 * to the vendor bootloader contract (AVPU/ISP/CIM = MPLL, per
+	 * the vendor cgu_clk_sel table; T23 has no VPLL). The 3.10
+	 * kernel's cgu_set_parent silently drops parent-only changes,
+	 * so a driver's parent request only lands when the inherited
+	 * selector already agrees. Parents only; rates stay the OS's
+	 * business.
+	 */
+	[T23_CLK_VPU]  = { CPM_AVPUCDR, 29, 28, 27, NO_GATE, 0 },
+	[T23_CLK_ISP]  = { CPM_ISPCDR, 29, 28, 27, NO_GATE, 0 },
+	[T23_CLK_CIM]  = { CPM_CIMCDR, 29, 28, 27, NO_GATE, 0 },
 	[T23_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
 	[T23_CLK_OTG]  = { 0, 0, 0, 0, CPM_CLKGR0, 3 },
 	[T23_CLK_TCU]  = { 0, 0, 0, 0, CPM_CLKGR0, 30 },
@@ -254,6 +270,7 @@ static int t23_clk_set_parent(struct clk *clk, struct clk *parent)
 
 	switch (parent->id) {
 	case T23_CLK_APLL:
+	case T23_CLK_SCLKA:
 		src = CDR_SRC_SCLKA;
 		break;
 	case T23_CLK_MPLL:

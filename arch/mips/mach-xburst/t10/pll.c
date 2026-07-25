@@ -57,8 +57,16 @@ static void cpccr_init(u32 cpccr_cfg)
  * Bring up APLL/MPLL + the CPCCR dividers from explicit setpoints, before DDR
  * is brought up. VPLL is left at reset (not needed for the SPL console/DDR).
  */
-void pll_init_params(u32 apll, u32 mpll, u32 cpccr)
+void pll_init_params(u32 apll, u32 apll_frac, u32 mpll, u32 cpccr)
 {
+	/*
+	 * Vendor order: program the APLL fractional register before the
+	 * M/N/OD + enable write. The stock APLL grades are fractional
+	 * (860.16 MHz = 0xae147a, 712.704 MHz = 0x645a1c); 0 leaves the
+	 * fraction at reset for integer setpoints.
+	 */
+	if (apll_frac)
+		cpm_writel(apll_frac, CPM_CPAPACR);
 	pll_set(CPM_CPAPCR, apll);
 	pll_set(CPM_CPMPCR, mpll);
 	cpccr_init(cpccr);

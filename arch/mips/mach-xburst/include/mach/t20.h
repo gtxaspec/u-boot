@@ -55,6 +55,7 @@
 #define CPM_CPCCR	0x00
 #define CPM_CPAPCR	0x10	/* APLL */
 #define CPM_CPMPCR	0x14	/* MPLL */
+#define CPM_CPAPACR	0x18	/* APLL fractional */
 #define CPM_CLKGR0	0x20
 #define CPM_OPCR	0x24
 #define CPM_CLKGR1	0x28
@@ -145,7 +146,8 @@
  * re-declared extern in each user.
  */
 void clk_ungate_uart(unsigned int idx);
-void pll_init_params(u32 apll_mnod, u32 mpll_mnod, u32 cpccr);
+void pll_init_params(u32 apll_mnod, u32 apll_frac, u32 mpll_mnod,
+		     u32 cpccr);
 void t20_spl_serial_init(void);
 void t20_spl_putc(char c);
 void t20_spl_puts(const char *s);

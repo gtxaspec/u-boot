@@ -67,5 +67,6 @@
 #define T32_CLK_OST		48
 #define T32_CLK_RTC		49
 #define T32_CLK_USBPHY		50
+#define T32_CLK_VPU		51
 
 #endif /* __DT_BINDINGS_CLOCK_T32_CGU_H__ */

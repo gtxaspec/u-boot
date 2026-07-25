@@ -74,5 +74,6 @@
 #define T23_CLK_DIV_I2SR	55
 #define T23_CLK_CE_I2ST		56
 #define T23_CLK_CE_I2SR		57
+#define T23_CLK_VPU		58
 
 #endif /* __DT_BINDINGS_CLOCK_T23_CGU_H__ */

@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
+#include "t31-isvp-uboot-common.dtsi"
+
+#if defined(CONFIG_SPL_MMC)
+/ {
+	/* MSC/SD boot config (isvp_t31lc_msc0) reuses the SFC-NOR board .dts. */
+	model = "Ingenic ISVP-T31LC (MMC0)";
+};
+#endif

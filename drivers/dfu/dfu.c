@@ -303,6 +303,23 @@ void dfu_transaction_cleanup(struct dfu_entity *dfu)
 	dfu->inited = 0;
 }
 
+/*
+ * Abort an open transaction on the entity, if any.
+ *
+ * For use by the transport (e.g. the DFU gadget) when the host abandons a
+ * transfer: DFU_ABORT, DFU_CLRSTATUS, an alt-setting switch or a bus reset.
+ * Without this the entity keeps its block sequence counter and buffer fill,
+ * and the host's next transfer is refused with a sequence-number mismatch
+ * even though the state machine reports dfuIDLE.
+ */
+void dfu_transaction_abort(struct dfu_entity *dfu)
+{
+	if (!dfu->inited)
+		return;
+
+	dfu_transaction_cleanup(dfu);
+}
+
 int dfu_transaction_initiate(struct dfu_entity *dfu, bool read)
 {
 	int ret = 0;

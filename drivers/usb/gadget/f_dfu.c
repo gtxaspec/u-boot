@@ -311,6 +311,25 @@ static int state_app_detach(struct f_dfu *f_dfu,
 	return value;
 }
 
+/*
+ * Abort any open transaction on the currently selected entity.
+ *
+ * The DFU state machine and the dfu_entity hold separate state: DFU_ABORT,
+ * DFU_CLRSTATUS, an alt-setting switch or a bus reset put the state machine
+ * back in dfuIDLE, but the entity keeps its block sequence counter and
+ * buffer fill. A host that walks away from a transfer (interrupted upload,
+ * error recovery via USB reset) and then starts fresh would have its block 0
+ * refused with "Wrong sequence number! [N] [0]". Tell the DFU core the
+ * transaction is abandoned whenever that happens.
+ */
+static void f_dfu_abort_transaction(struct f_dfu *f_dfu)
+{
+	struct dfu_entity *dfu = dfu_get_entity(f_dfu->altsetting);
+
+	if (dfu)
+		dfu_transaction_abort(dfu);
+}
+
 static int state_dfu_idle(struct f_dfu *f_dfu,
 			  const struct usb_ctrlrequest *ctrl,
 			  struct usb_gadget *gadget,
@@ -345,6 +364,7 @@ static int state_dfu_idle(struct f_dfu *f_dfu,
 		}
 		break;
 	case USB_REQ_DFU_ABORT:
+		f_dfu_abort_transaction(f_dfu);
 		/* no zlp? */
 		value = RET_ZLP;
 		break;
@@ -443,6 +463,7 @@ static int state_dfu_dnload_idle(struct f_dfu *f_dfu,
 		break;
 	case USB_REQ_DFU_ABORT:
 		f_dfu->dfu_state = DFU_STATE_dfuIDLE;
+		f_dfu_abort_transaction(f_dfu);
 		value = RET_ZLP;
 		break;
 	case USB_REQ_DFU_GETSTATUS:
@@ -550,6 +571,7 @@ static int state_dfu_upload_idle(struct f_dfu *f_dfu,
 		break;
 	case USB_REQ_DFU_ABORT:
 		f_dfu->dfu_state = DFU_STATE_dfuIDLE;
+		f_dfu_abort_transaction(f_dfu);
 		/* no zlp? */
 		value = RET_ZLP;
 		break;
@@ -585,6 +607,7 @@ static int state_dfu_error(struct f_dfu *f_dfu,
 	case USB_REQ_DFU_CLRSTATUS:
 		f_dfu->dfu_state = DFU_STATE_dfuIDLE;
 		f_dfu->dfu_status = DFU_STATUS_OK;
+		f_dfu_abort_transaction(f_dfu);
 		/* no zlp? */
 		value = RET_ZLP;
 		break;
@@ -802,6 +825,13 @@ static int dfu_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 	struct f_dfu *f_dfu = func_to_dfu(f);
 
 	debug("%s: intf:%d alt:%d\n", __func__, intf, alt);
+
+	/*
+	 * Selecting an alt (including re-selecting after a bus reset - the
+	 * composite layer calls set_alt on every SET_CONFIGURATION) abandons
+	 * whatever transfer was in flight on the previous one.
+	 */
+	f_dfu_abort_transaction(f_dfu);
 
 	f_dfu->altsetting = alt;
 	f_dfu->dfu_state = DFU_STATE_dfuIDLE;

@@ -408,6 +408,7 @@ void dfu_error_callback(struct dfu_entity *dfu, const char *msg);
 
 int dfu_transaction_initiate(struct dfu_entity *dfu, bool read);
 void dfu_transaction_cleanup(struct dfu_entity *dfu);
+void dfu_transaction_abort(struct dfu_entity *dfu);
 
 /*
  * dfu_defer_flush - pointer to store dfu_entity for deferred flashing.

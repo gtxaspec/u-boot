@@ -78,16 +78,17 @@ static void ddr_die(const char *what)
 /*
  * DDR clock divider: the DDR branch of the vendor clk_set_rate(). cfg->ddr_cdr
  * is the CPM_DDRCDR divider (DDR = MPLL/(cdr+1)): T20 cdr 1 (MPLL 1000 / 500),
- * T10 cdr 2 (MPLL 1200 / 400). Leave the PLL-select bits [31:30] as the mask ROM
- * set them (DDR already runs off a PLL to have reached here); only clear the
- * divider field and set CE (bit 29) + cdr, then poll BUSY (bit 28).
+ * T10 cdr 2 (MPLL 1200 / 400). Select MPLL explicitly ([31:30] = 2): the vendor
+ * SPL writes the full word (T10L stock 0xa0000002) and the reset default is
+ * APLL - inheriting it ran T10L DDR at APLL/3 = 237.6 MHz on a USB boot
+ * (bench-measured DDRCDR 0x60000002). Set CE (bit 29) + cdr, poll BUSY (28).
  */
 static void ddr_clk_set_rate(const struct ingenic_t20_ddr_params *cfg)
 {
 	u32 regval = cpm_readl(CPM_DDRCDR);
 
-	regval &= ~(0xf | (0x3f << 24));
-	regval |= ((1 << 29) | (cfg->ddr_cdr & 0xff));	/* ce = bit 29 */
+	regval &= ~((0x3u << 30) | (0x3f << 24) | 0xf);
+	regval |= ((2u << 30) | (1 << 29) | (cfg->ddr_cdr & 0xff));	/* MPLL, ce */
 	cpm_writel(regval, CPM_DDRCDR);
 	while (cpm_readl(CPM_DDRCDR) & (1 << 28))	/* busy = bit 28 */
 		;

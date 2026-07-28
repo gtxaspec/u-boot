@@ -32,84 +32,67 @@ int dram_init(void)
 
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 /*
- * USB PHY bring-up. Same XBurst1 USB PHY as T31/T23, so the host
- * path is the HW-proven T31 sequence (vendor isvp_t31 usb_init.c
- * board_usb_init): SRBC core reset, USBPCR1 word-IF / ref-clk,
- * clear USBVBFIL, USBRDT VBFIL-load, the vendor USBPCR host seed
- * then RMW, POR + UTMI_RST wrapped in an SRBC pulse with the exact
- * delays. board_init() runs the host path (for "usb start" /
- * USB-NIC); the dwc2_udc_otg gadget weak-hook otg_phy_init() runs
- * the device path (DFU/g_dnl): USB_MODE_ORG cleared, OTG disabled,
- * external VBUS-valid forced (no OTG VBUS sense on this board).
+ * USB PHY bring-up: the vendor T10 sequence, taken 1:1 from the 3.10
+ * kernel soc-t10/common/cpm_usb.c jz_otg_phy_init() (the 2013 vendor
+ * U-Boot board/ingenic/isvp_t10/usb_init.c is line-identical). The
+ * T10 PHY is NOT the T31/T23 one: dwc-otg select is USBPCR1 bits
+ * 29:28, the UTMI word interface is 16-bit/30M (bit 19 SET), and
+ * bits [25:23] carry a 3-bit tune field = 5. The T31-style
+ * REFCLKSEL/REFCLKDIV writes land on those bits and break the
+ * handshake (host-side descriptor-read EPROTO storms, full/high
+ * speed flapping; bench-verified on T10L). Mode tails per vendor:
+ * DEVICE clears USB_MODE_ORG/OTG_DISABLE/SIDDQ and keeps COMMONONN;
+ * HOST/OTG sets USB_MODE_ORG and clears the VBUS-ext/ID-pullup
+ * sensing bits.
  */
 static void t10_usb_phy_init(bool device)
 {
 	void __iomem *cpm = (void __iomem *)CPM_BASE;
 	u32 v;
 
-	if (device) {
-		v = readl(cpm + CPM_USBPCR1);
-		v &= ~(USBPCR1_REFCLKSEL_MASK | USBPCR1_REFCLKDIV_MASK);
-		v |= USBPCR1_REFCLKSEL_CORE | USBPCR1_WORD_IF0_16_30 |
-		     USBPCR1_REFCLKDIV_24M;
-		writel(v, cpm + CPM_USBPCR1);
-
-		v = readl(cpm + CPM_USBPCR);
-		v &= ~USBPCR_USB_MODE_ORG;
-		v |= USBPCR_VBUSVLDEXTSEL | USBPCR_VBUSVLDEXT |
-		     USBPCR_OTG_DISABLE;
-		writel(v, cpm + CPM_USBPCR);
-
-		setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
-		setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-		udelay(30);
-		clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-		udelay(300);
-		clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
-		return;
-	}
-
-	/* Host path: HW-proven T31 sequence (same USB PHY). */
 	clrbits_le32(cpm + CPM_CLKGR0, CPM_CLKGR0_OTG);
-	mdelay(100);
 
-	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
-	udelay(40);
-	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
-
+	/* select dwc otg, 16-bit/30M word interface, tune [25:23] = 5 */
 	setbits_le32(cpm + CPM_USBPCR1,
-		     BIT(8) | BIT(9) | BIT(28) | BIT(29) | BIT(30));
-	clrbits_le32(cpm + CPM_USBPCR1, BIT(19));	/* WORD_IF0 */
+		     BIT(29) | BIT(28) | USBPCR1_WORD_IF0_16_30);
 	v = readl(cpm + CPM_USBPCR1);
 	v &= ~(0x7u << 23);
-	v |= (5u << 23);
+	v |= 5u << 23;
 	writel(v, cpm + CPM_USBPCR1);
 
+	/* un-suspend the PHY, then drop SIDDQ */
+	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
+	udelay(45);
+	clrbits_le32(cpm + CPM_USBPCR, USBPCR_SIDDQ);
+
 	writel(0, cpm + CPM_USBVBFIL);
-	writel(0x96, cpm + CPM_USBRDT);
+
+	v = readl(cpm + CPM_USBRDT);
+	v &= ~(USBRDT_VBFIL_LD_EN | GENMASK(22, 0));
+	v |= 0x96;
+	writel(v, cpm + CPM_USBRDT);
 	setbits_le32(cpm + CPM_USBRDT, USBRDT_VBFIL_LD_EN);
 
-	writel(0x8380385a, cpm + CPM_USBPCR);
+	/* vendor USBPCR seed, then the mode tail */
+	writel(0x83803857, cpm + CPM_USBPCR);
 	v = readl(cpm + CPM_USBPCR);
-	v |= USBPCR_USB_MODE_ORG | USBPCR_COMMONONN;
-	v &= ~(USBPCR_OTG_DISABLE | USBPCR_SIDDQ | USBPCR_IDPULLUP_MASK |
-	       USBPCR_VBUSVLDEXT | USBPCR_VBUSVLDEXTSEL);
+	if (device) {
+		v &= ~(USBPCR_USB_MODE_ORG | USBPCR_OTG_DISABLE |
+		       USBPCR_SIDDQ);
+		v |= USBPCR_COMMONONN;
+	} else {
+		v |= USBPCR_USB_MODE_ORG | USBPCR_COMMONONN;
+		v &= ~(USBPCR_OTG_DISABLE | USBPCR_SIDDQ |
+		       USBPCR_IDPULLUP_MASK | USBPCR_VBUSVLDEXT |
+		       USBPCR_VBUSVLDEXTSEL);
+	}
 	writel(v, cpm + CPM_USBPCR);
 
+	/* POR pulse */
 	setbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	clrbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
-	setbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
-	udelay(10);
+	mdelay(1);
 	clrbits_le32(cpm + CPM_USBPCR, USBPCR_POR);
-	udelay(20);
-	setbits_le32(cpm + CPM_OPCR, OPCR_SPENDN0);
-	mdelay(50);
-
-	udelay(950);
-	setbits_le32(cpm + CPM_USBRDT, USBRDT_UTMI_RST);
-	udelay(20);
-	clrbits_le32(cpm + CPM_SRBC, SRBC_USB_SR);
-	mdelay(10);
+	mdelay(1);
 }
 
 struct dwc2_udc;
@@ -127,8 +110,7 @@ int board_init(void)
 	 * Only the host build (dr_mode="host", t10-isvp.dts) does the
 	 * host PHY bring-up here. The DFU loader (t10-isvp-dfu.dts,
 	 * dr_mode="peripheral") must NOT run the host sequence - its
-	 * SRBC core reset / UTMI_RST staging leaves the PHY mid-host
-	 * and the gadget then fails to enumerate; the dwc2_udc_otg
+	 * host mode tail is wrong for a gadget; the dwc2_udc_otg
 	 * weak hook otg_phy_init() does the device PHY init instead.
 	 */
 	if (ofnode_valid(otg) && usb_get_dr_mode(otg) == USB_DR_MODE_HOST)

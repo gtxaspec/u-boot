@@ -152,15 +152,40 @@ _start:
 	 * setup is done in C code (soc.c board_init_f) since it is
 	 * not pad-critical for the default UART pad routing.
 	 */
-#elif !defined(CONFIG_SOC_T33)
+#elif defined(CONFIG_SOC_T23)
 	/*
-	 * T10..T31 boot pin mux / drive-strength setup, required
-	 * before the console: the mask ROM does not mux the UART (and
-	 * other) pads, so without this the SPL runs but produces no
-	 * UART output on real silicon. Faithful transliteration of
-	 * the vendor T31 SPL start.S (isvp_t31x_sfcnor,
-	 * CONFIG_NET_GMAC path) - do not remove or "tidy"; order and
-	 * values are board-critical.
+	 * T23 pad drive strength - faithful to vendor t23/start.S:
+	 * clear both banks, then 8 mA (0b10) on every PA/PB pad,
+	 * unconditionally.
+	 */
+	la	t8, 0xffffffff
+	la	t9, 0xb0010138
+	sw	t8, 0(t9)
+	la	t8, 0xffffffff
+	la	t9, 0xb0010148
+	sw	t8, 0(t9)
+	la	t8, 0xaaaaaaaa
+	la	t9, 0xb0010134
+	sw	t8, 0(t9)
+	la	t8, 0xaaaaaaaa
+	la	t9, 0xb0010144
+	sw	t8, 0(t9)
+	la	t8, 0xffffffff
+	la	t9, 0xb0011138
+	sw	t8, 0(t9)
+	la	t8, 0xffffffff
+	la	t9, 0xb0011148
+	sw	t8, 0(t9)
+	la	t8, 0xaaaaaaaa
+	la	t9, 0xb0011134
+	sw	t8, 0(t9)
+	la	t8, 0xaaaaaaaa
+	la	t9, 0xb0011144
+	sw	t8, 0(t9)
+#elif defined(CONFIG_SOC_T31)
+	/*
+	 * T31 pad drive strength - faithful to vendor t31/start.S.
+	 * PA: clear both halves, then 4 mA everywhere.
 	 */
 	la	t8, 0xffffffff
 	la	t9, 0xb0010138
@@ -174,7 +199,13 @@ _start:
 	la	t8, 0x55555555
 	la	t9, 0xb0010144
 	sw	t8, 0(t9)
-	la	t8, 0xFCFFF000
+#if defined(CONFIG_T31_RMII_PAD_INIT)
+	/*
+	 * Vendor CONFIG_NET_GMAC path: controlled 4 mA on the RMII
+	 * pads (PB6..PB15) for signal integrity on boards with wired
+	 * ethernet.
+	 */
+	la	t8, 0xfcfff000
 	la	t9, 0xb0011138
 	sw	t8, 0(t9)
 	la	t8, 0x55559555
@@ -183,6 +214,26 @@ _start:
 	la	t8, 0x55555555
 	la	t9, 0xb0011144
 	sw	t8, 0(t9)
+#else
+	/*
+	 * Vendor non-GMAC path: set-only writes, which can only raise
+	 * drive over reset defaults. PB15/PB16 share package pins
+	 * 60/61 with PA25/PA26 (SFC WP#/HOLD#, T31ZX datasheet p20)
+	 * and are plain GPIOs here (IR LEDs, SD power), so they must
+	 * not get the weak RMII tuning.
+	 */
+	la	t8, 0x69aa5555
+	la	t9, 0xb0011134
+	sw	t8, 0(t9)
+	la	t8, 0x55555555
+	la	t9, 0xb0011144
+	sw	t8, 0(t9)
+#endif
+#else
+	/*
+	 * T10/T20/T21/T30/T33: the vendor SPLs do no pad
+	 * drive-strength setup; pads run at silicon reset defaults.
+	 */
 #endif
 
 	/*

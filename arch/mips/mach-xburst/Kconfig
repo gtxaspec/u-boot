@@ -328,6 +328,19 @@ config TARGET_ISVP_T41
 
 endchoice
 
+config T31_RMII_PAD_INIT
+	bool "T31: RMII pad drive tuning in SPL (vendor GMAC path)"
+	depends on SOC_T31
+	help
+	  Program the vendor CONFIG_NET_GMAC pad drive values in the SPL:
+	  controlled 4 mA on the RMII pads (PB6..PB15) for signal
+	  integrity on T31 boards with wired ethernet.
+
+	  Leave disabled on boards without ethernet: PB15/PB16 share
+	  package pins 60/61 with PA25/PA26 (SFC WP#/HOLD#) and are used
+	  as plain GPIOs (IR LEDs, SD power); the weak RMII drive leaves
+	  them unable to hold the shared pad low.
+
 source "board/ingenic/isvp-a1/Kconfig"
 source "board/ingenic/isvp-t10/Kconfig"
 source "board/ingenic/isvp-t20/Kconfig"

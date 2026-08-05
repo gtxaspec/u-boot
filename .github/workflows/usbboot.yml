@@ -1,5 +1,5 @@
 # Manually-triggered build of every Ingenic USB-boot loader, one SoC per
-# job, using the official thingino prebuilt GCC 15.2 (uClibc) cross
+# job, using the official thingino prebuilt GCC 16.1 (uClibc) cross
 # toolchains - xburst1 for T10-T33, xburst2 for T40/T41/A1 - so the CI
 # builds with the exact compiler thingino ships. Each job compiles one
 # isvp_*_usbboot defconfig and uploads u-boot-spl.bin + u-boot.bin (flat, no
@@ -88,7 +88,7 @@ jobs:
       # (the binutils are mipsel-linux-ld/ar/...); keep it a bare prefix so
       # ccache can wrap only gcc, not the binutils.
       CROSS_COMPILE: mipsel-linux-
-      TOOLCHAIN_TARBALL: thingino-toolchain-x86_64_${{ matrix.arch }}_uclibc_gcc15-linux-mipsel.tar.gz
+      TOOLCHAIN_TARBALL: thingino-toolchain-x86_64_${{ matrix.arch }}_uclibc_gcc16-linux-mipsel.tar.gz
     steps:
       - name: Install build deps and ccache
         run: |

@@ -107,9 +107,25 @@
 		};
 	};
 
+	uart0: serial@10030000 {
+		compatible = "ingenic,jz4780-uart";
+		reg = <0x10030000 0x100>;
+		reg-shift = <2>;
+		clock-frequency = <24000000>;
+		status = "disabled";
+	};
+
 	uart1: serial@10031000 {
 		compatible = "ingenic,jz4780-uart";
 		reg = <0x10031000 0x100>;
+		reg-shift = <2>;
+		clock-frequency = <24000000>;
+		status = "disabled";
+	};
+
+	uart2: serial@10032000 {
+		compatible = "ingenic,jz4780-uart";
+		reg = <0x10032000 0x100>;
 		reg-shift = <2>;
 		clock-frequency = <24000000>;
 		status = "disabled";

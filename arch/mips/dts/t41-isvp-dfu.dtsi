@@ -79,6 +79,11 @@
 			#gpio-cells = <2>;
 		};
 
+		pins_uart0: uart0 {
+			function = "uart0";
+			groups = "uart0-data";
+		};
+
 		pins_uart1: uart1 {
 			function = "uart1";
 			groups = "uart1-data";
@@ -105,6 +110,8 @@
 		reg = <0xb0030000 0x100>;
 		reg-shift = <2>;
 		clock-frequency = <24000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_uart0>;
 		status = "disabled";
 	};
 

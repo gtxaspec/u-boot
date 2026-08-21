@@ -98,8 +98,18 @@ static const int txx_mmc0_4bit[]  = { 0x23, 0x24, 0x25 };
  */
 static const int txx_mac_rmii[]	  = { 0x26, 0x27, 0x28, 0x29, 0x2a,
 				      0x2b, 0x2c, 0x2d, 0x2e };
-/* UART1 console = PB23/PB24, function 0 (T40/T41; A1 puts it elsewhere). */
+/*
+ * UART0 = PB19/PB22, function 0 (T10..T31 and T41). TX and RX are three pins
+ * apart, not adjacent: the vendor tables spell the mask 0x9 << 19, i.e. bits
+ * 19 and 22. T32/T33, T40 and A1 route UART0 elsewhere and have their own.
+ */
+static const int txx_uart0_data[] = { 0x33, 0x36 };
+/* UART1 console = PB23/PB24, function 0 (T10..T41; A1 puts it elsewhere). */
 static const int txx_uart1_data[] = { 0x37, 0x38 };
+/* T32/T33 UART0 = PC8/PC9, function 0. */
+static const int t32_uart0_data[] = { 0x48, 0x49 };
+/* T40 UART0 = PC2/PC5, function 0 (again the 0x9 split mask, 0x9 << 2). */
+static const int t40_uart0_data[] = { 0x42, 0x45 };
 /* SFC0 4-wire = PA23,24,27,28 function 1 - the classic XBurst1 parts. */
 static const int txx_sfc4_data[]  = { 0x17, 0x18, 0x1b, 0x1c };
 /*
@@ -111,6 +121,7 @@ static const int txx_sfc6_data[]  = { 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c };
 static const int t32_sfc1_data[]  = { 0x42, 0x43, 0x44, 0x45, 0x46, 0x47 };
 
 /* A1 (XBurst2, banks PA..PE) has its own map. */
+static const int a1_uart0_data[]  = { 0x52, 0x53 };		/* PC18, PC19 */
 static const int a1_uart1_data[]  = { 0x46, 0x47 };		/* PC6, PC7   */
 static const int a1_sfc_data[]	  = { 0x54, 0x55, 0x56,		/* PC20..PC25 */
 				      0x57, 0x58, 0x59 };
@@ -121,49 +132,74 @@ static const int a1_mac0_data[]	  = {				/* PA0..PA14  */
 
 /* ---- classic XBurst1: T10/T20/T21/T23/T30/T31 ---------------------- */
 static const struct ingenic_group txx_classic_groups[] = {
-	GRP("mmc0-1bit", txx_mmc0_1bit, 0),
-	GRP("mmc0-4bit", txx_mmc0_4bit, 0),
-	GRP("sfc-data",	 txx_sfc4_data, 1),
-	GRP("mac-rmii",	 txx_mac_rmii,	0),
+	GRP("mmc0-1bit",  txx_mmc0_1bit,  0),
+	GRP("mmc0-4bit",  txx_mmc0_4bit,  0),
+	GRP("sfc-data",	  txx_sfc4_data,  1),
+	GRP("uart0-data", txx_uart0_data, 0),
+	GRP("uart1-data", txx_uart1_data, 0),
+	GRP("mac-rmii",	  txx_mac_rmii,	  0),
 };
-static const char * const txx_g_mmc0[] = { "mmc0-1bit", "mmc0-4bit" };
-static const char * const txx_g_sfc[]  = { "sfc-data" };
-static const char * const txx_g_mac[]  = { "mac-rmii" };
+static const char * const txx_g_mmc0[]  = { "mmc0-1bit", "mmc0-4bit" };
+static const char * const txx_g_sfc[]   = { "sfc-data" };
+static const char * const txx_g_uart0[] = { "uart0-data" };
+static const char * const txx_g_uart1[] = { "uart1-data" };
+static const char * const txx_g_mac[]   = { "mac-rmii" };
 static const struct ingenic_function txx_classic_functions[] = {
-	FUNC("mmc0", txx_g_mmc0),
-	FUNC("sfc",  txx_g_sfc),
-	FUNC("mac",  txx_g_mac),
+	FUNC("mmc0",  txx_g_mmc0),
+	FUNC("sfc",   txx_g_sfc),
+	FUNC("uart0", txx_g_uart0),
+	FUNC("uart1", txx_g_uart1),
+	FUNC("mac",   txx_g_mac),
 };
 
 /* ---- T32/T33: 6-wire SFC0 (func 0) plus the SFC1 park group --------- */
 static const struct ingenic_group t32_groups[] = {
-	GRP("mmc0-1bit", txx_mmc0_1bit, 0),
-	GRP("mmc0-4bit", txx_mmc0_4bit, 0),
-	GRP("sfc-data",	 txx_sfc6_data, 0),
-	GRP("sfc1-data", t32_sfc1_data, 1),
-	GRP("mac-rmii",	 txx_mac_rmii,	0),
+	GRP("mmc0-1bit",  txx_mmc0_1bit,  0),
+	GRP("mmc0-4bit",  txx_mmc0_4bit,  0),
+	GRP("sfc-data",	  txx_sfc6_data,  0),
+	GRP("sfc1-data",  t32_sfc1_data,  1),
+	GRP("uart0-data", t32_uart0_data, 0),
+	GRP("uart1-data", txx_uart1_data, 0),
+	GRP("mac-rmii",	  txx_mac_rmii,	  0),
 };
-static const char * const t32_g_sfc1[] = { "sfc1-data" };
+static const char * const t32_g_sfc1[]  = { "sfc1-data" };
+static const char * const t32_g_uart0[] = { "uart0-data" };
 static const struct ingenic_function t32_functions[] = {
-	FUNC("mmc0", txx_g_mmc0),
-	FUNC("sfc",  txx_g_sfc),
-	FUNC("sfc1", t32_g_sfc1),
-	FUNC("mac",  txx_g_mac),
+	FUNC("mmc0",  txx_g_mmc0),
+	FUNC("sfc",   txx_g_sfc),
+	FUNC("sfc1",  t32_g_sfc1),
+	FUNC("uart0", t32_g_uart0),
+	FUNC("uart1", txx_g_uart1),
+	FUNC("mac",   txx_g_mac),
 };
 
-/* ---- T40/T41: 6-wire SFC0 (func 1), mac0, uart1 -------------------- */
+/*
+ * ---- T40/T41: 6-wire SFC0 (func 1), mac0, uart0/uart1 ---------------
+ * T40 and T41 agree on everything here except UART0, which T40 puts on
+ * PC2/PC5 and T41 on PB19/PB22, so they cannot share one group table.
+ */
 static const struct ingenic_group t40_groups[] = {
 	GRP("mmc0-1bit",  txx_mmc0_1bit,  0),
 	GRP("mmc0-4bit",  txx_mmc0_4bit,  0),
 	GRP("sfc-data",	  txx_sfc6_data,  1),
+	GRP("uart0-data", t40_uart0_data, 0),
 	GRP("uart1-data", txx_uart1_data, 0),
 	GRP("mac0-data",  txx_mac_rmii,	  0),
 };
-static const char * const txx_g_uart1[] = { "uart1-data" };
+static const struct ingenic_group t41_groups[] = {
+	GRP("mmc0-1bit",  txx_mmc0_1bit,  0),
+	GRP("mmc0-4bit",  txx_mmc0_4bit,  0),
+	GRP("sfc-data",	  txx_sfc6_data,  1),
+	GRP("uart0-data", txx_uart0_data, 0),
+	GRP("uart1-data", txx_uart1_data, 0),
+	GRP("mac0-data",  txx_mac_rmii,	  0),
+};
+static const char * const t40_g_uart0[] = { "uart0-data" };
 static const char * const t40_g_mac0[]  = { "mac0-data" };
 static const struct ingenic_function t40_functions[] = {
 	FUNC("mmc0",  txx_g_mmc0),
 	FUNC("sfc",   txx_g_sfc),
+	FUNC("uart0", t40_g_uart0),
 	FUNC("uart1", txx_g_uart1),
 	FUNC("mac0",  t40_g_mac0),
 };
@@ -171,14 +207,17 @@ static const struct ingenic_function t40_functions[] = {
 /* ---- A1 (XBurst2) ------------------------------------------------- */
 static const struct ingenic_group a1_groups[] = {
 	GRP("sfc-data",	  a1_sfc_data,	 0),
+	GRP("uart0-data", a1_uart0_data, 0),
 	GRP("uart1-data", a1_uart1_data, 0),
 	GRP("mac0-data",  a1_mac0_data,	 0),
 };
 static const char * const a1_g_sfc[]   = { "sfc-data" };
+static const char * const a1_g_uart0[] = { "uart0-data" };
 static const char * const a1_g_uart1[] = { "uart1-data" };
 static const char * const a1_g_mac0[]  = { "mac0-data" };
 static const struct ingenic_function a1_functions[] = {
 	FUNC("sfc",   a1_g_sfc),
+	FUNC("uart0", a1_g_uart0),
 	FUNC("uart1", a1_g_uart1),
 	FUNC("mac0",  a1_g_mac0),
 };
@@ -220,8 +259,13 @@ static const struct ingenic_chip_info t32_chip_info = {		/* T32/T33 */
 	.functions = t32_functions, .nfunctions = ARRAY_SIZE(t32_functions),
 	.bank_stride = BANK_STRIDE, .split_pull = true,
 };
-static const struct ingenic_chip_info t40_chip_info = {		/* T40/T41 */
+static const struct ingenic_chip_info t40_chip_info = {		/* T40 */
 	.groups = t40_groups, .ngroups = ARRAY_SIZE(t40_groups),
+	.functions = t40_functions, .nfunctions = ARRAY_SIZE(t40_functions),
+	.bank_stride = BANK_STRIDE, .split_pull = true,
+};
+static const struct ingenic_chip_info t41_chip_info = {		/* T41 */
+	.groups = t41_groups, .ngroups = ARRAY_SIZE(t41_groups),
 	.functions = t40_functions, .nfunctions = ARRAY_SIZE(t40_functions),
 	.bank_stride = BANK_STRIDE, .split_pull = true,
 };
@@ -332,7 +376,7 @@ static const struct udevice_id ingenic_pinctrl_ids[] = {
 	{ .compatible = "ingenic,t32-pinctrl", .data = (ulong)&t32_chip_info },
 	{ .compatible = "ingenic,t33-pinctrl", .data = (ulong)&t32_chip_info },
 	{ .compatible = "ingenic,t40-pinctrl", .data = (ulong)&t40_chip_info },
-	{ .compatible = "ingenic,t41-pinctrl", .data = (ulong)&t40_chip_info },
+	{ .compatible = "ingenic,t41-pinctrl", .data = (ulong)&t41_chip_info },
 	{ .compatible = "ingenic,a1-pinctrl",  .data = (ulong)&a1_chip_info },
 	{ }
 };

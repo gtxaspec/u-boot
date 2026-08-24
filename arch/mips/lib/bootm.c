@@ -273,7 +273,7 @@ static void boot_jump_linux(struct bootm_headers *images)
 	if (CONFIG_IS_ENABLED(RESTORE_EXCEPTION_VECTOR_BASE))
 		trap_restore();
 
-	if (CONFIG_IS_ENABLED(MIPS_BOOT_FDT) && images->ft_len)
+	if (images->ft_len)
 		kernel(-2, (ulong)images->ft_addr, 0, 0);
 	else
 		kernel(linux_argc, (ulong)linux_argv, (ulong)linux_env,

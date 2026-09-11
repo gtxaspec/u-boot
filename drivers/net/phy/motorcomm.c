@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Motorcomm YT8511/YT8531/YT8531S/YT8821/YT8521S PHY driver.
+ * Motorcomm YT8512/YT8511/YT8531/YT8531S/YT8821/YT8521S PHY driver.
  *
  * Copyright (C) 2023 StarFive Technology Co., Ltd.
  * Copyright (C) 2024 Motorcomm Electronic Technology Co., Ltd.
@@ -17,6 +17,30 @@
 #define PHY_ID_YT8531S				0x4f51e91a
 #define PHY_ID_YT8521S				0x0000011a
 #define PHY_ID_MASK				GENMASK(31, 0)
+
+/* YT8512 10/100 PHY: the 0x0118 ID is the YT8512B silicon revision */
+#define PHY_ID_YT8512				0x00000128
+#define PHY_ID_YT8512B				0x00000118
+
+/*
+ * YT8512 extended registers (datasheet "EXT 4000H: extended combo
+ * control1"). Rmii_en and Clk_sel power up from the RX_DV and
+ * RXD3/CLK_CTL straps: {Rmii_en, Clk_sel} = 00 MII, 01 ReMII,
+ * 10 RMII with the PHY driving the 50 MHz REF_CLK on TXC (RMII2),
+ * 11 RMII with REF_CLK supplied by the MAC (RMII1).
+ */
+#define YT8512_EXTREG_EXTEND_COMBO1		0x4000
+#define YT8512_COMBO1_RMII_RX_DV_SEL		BIT(4)	/* CRS_DV pad = RX_DV */
+#define YT8512_COMBO1_RMII_EN			BIT(1)
+#define YT8512_COMBO1_CLK_SEL			BIT(0)	/* 1: TXC/RXC are inputs */
+
+/*
+ * EXT 0x50 is undocumented apart from a note that RMII1 needs bit 6
+ * set. The vendor bring-up sets it for every mode, and with it clear
+ * the PHY never negotiates a link even in RMII2, so keep it set.
+ */
+#define YT8512_EXTREG_AFE_PLL			0x50
+#define YT8512_PLL_REFCLK_SEL_EN		BIT(6)
 
 /* Extended Register's Address Offset Register */
 #define YTPHY_PAGE_SELECT			0x1E
@@ -495,6 +519,66 @@ static void ytphy_dt_parse(struct phy_device *phydev)
 
 	if (ofnode_read_bool(phydev->node, "motorcomm,tx-clk-1000-inverted"))
 		priv->flag |= TX_CLK_1000_INVERTED;
+}
+
+/*
+ * The YT8512 has no fixed interface mode: it latches the RX_DV strap
+ * (weak internal pull-down = MII, external pull-up = RMII) when its
+ * reset releases and seeds the RW Rmii_en bit from it. A marginal
+ * pull-up samples MII on a random subset of power-ups, which leaves
+ * MDIO, auto-negotiation and the PHY's own clock alive while no frame
+ * crosses the RMII pins. Program the mode the MAC was described with
+ * instead of trusting the strap.
+ *
+ * The REF_CLK direction (Clk_sel, from the RXD3/CLK_CTL strap) stays
+ * as strapped: clear = the PHY drives 50 MHz on TXC from its crystal
+ * (RMII2), set = the MAC supplies REF_CLK (RMII1). CRS_DV is driven by
+ * RX_DV in RMII mode and the PLL reference select bit is set, as the
+ * vendor bring-up does.
+ */
+static int yt8512_config(struct phy_device *phydev)
+{
+	u16 mask, set;
+	int ret, val;
+
+	switch (phydev->interface) {
+	case PHY_INTERFACE_MODE_MII:
+		mask = YT8512_COMBO1_RMII_EN | YT8512_COMBO1_CLK_SEL;
+		set = 0;
+		break;
+	case PHY_INTERFACE_MODE_RMII:
+		mask = YT8512_COMBO1_RMII_EN | YT8512_COMBO1_RMII_RX_DV_SEL;
+		set = mask;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
+	val = ytphy_read_ext(phydev, YT8512_EXTREG_EXTEND_COMBO1);
+	if (val < 0)
+		return val;
+	debug("%s: combo control1 0x%04x -> 0x%04x\n", phydev->dev->name,
+	      val, (val & ~mask) | set);
+
+	ret = ytphy_modify_ext(phydev, YT8512_EXTREG_EXTEND_COMBO1, mask, set);
+	if (ret < 0)
+		return ret;
+
+	ret = ytphy_modify_ext(phydev, YT8512_EXTREG_AFE_PLL,
+			       YT8512_PLL_REFCLK_SEL_EN,
+			       YT8512_PLL_REFCLK_SEL_EN);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * The interface and PLL configuration only takes effect after a
+	 * soft reset; the extended registers survive it.
+	 */
+	ret = phy_reset(phydev);
+	if (ret < 0)
+		return ret;
+
+	return genphy_config(phydev);
 }
 
 static int yt8511_config(struct phy_device *phydev)
@@ -1272,6 +1356,26 @@ static int yt8531s_startup(struct phy_device *phydev)
 
 	return 0;
 }
+
+U_BOOT_PHY_DRIVER(motorcomm8512) = {
+	.name          = "YT8512 Fast Ethernet",
+	.uid           = PHY_ID_YT8512,
+	.mask          = PHY_ID_MASK,
+	.features      = PHY_BASIC_FEATURES,
+	.config        = &yt8512_config,
+	.startup       = &genphy_startup,
+	.shutdown      = &genphy_shutdown,
+};
+
+U_BOOT_PHY_DRIVER(motorcomm8512B) = {
+	.name          = "YT8512B Fast Ethernet",
+	.uid           = PHY_ID_YT8512B,
+	.mask          = PHY_ID_MASK,
+	.features      = PHY_BASIC_FEATURES,
+	.config        = &yt8512_config,
+	.startup       = &genphy_startup,
+	.shutdown      = &genphy_shutdown,
+};
 
 U_BOOT_PHY_DRIVER(motorcomm8511) = {
 	.name          = "YT8511 Gigabit Ethernet",

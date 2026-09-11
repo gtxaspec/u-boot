@@ -243,7 +243,8 @@ config PHY_MOTORCOMM
 	bool "Motorcomm PHYs"
 	help
 	  Enables support for Motorcomm network PHYs.
-	  Currently supports the YT8511 and YT8531 Gigabit Ethernet PHYs.
+	  Currently supports the YT8512 Fast Ethernet PHY and the YT8511
+	  and YT8531 Gigabit Ethernet PHYs.
 
 config PHY_MAXIO
 	bool "Maxio PHYs"

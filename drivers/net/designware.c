@@ -598,9 +598,13 @@ static int dw_adjust_link(struct dw_eth_dev *priv, struct eth_mac_regs *mac_p,
 			mdelay(1);
 		};
 	}
-	/* Pass all Multicast Frames */
-	setbits_le32(&mac_p->framefilt, BIT(4));
 #endif
+	/*
+	 * Pass all multicast frames: IPv6 neighbour discovery solicits our
+	 * addresses on their solicited-node groups, and the MAC drops those.
+	 */
+	if (IS_ENABLED(CONFIG_IPV6) || IS_ENABLED(CONFIG_ARCH_NPCM8XX))
+		setbits_le32(&mac_p->framefilt, BIT(4));
 
 	return 0;
 }

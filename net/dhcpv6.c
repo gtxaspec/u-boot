@@ -9,6 +9,7 @@
 
 #include <net6.h>
 #include <malloc.h>
+#include <asm/unaligned.h>
 #include <linux/delay.h>
 #include "net_rand.h"
 #include "dhcpv6.h"
@@ -282,7 +283,7 @@ static void dhcp6_parse_ia_options(struct dhcp6_option_hdr *ia_ptr, uchar *ia_op
 			break;
 		case DHCP6_OPTION_STATUS_CODE:
 			sm_params.rx_status.ia_status_code =
-				ntohs(*((u16 *)(ia_option_ptr + sizeof(struct dhcp6_hdr))));
+				get_unaligned_be16(ia_option_ptr + sizeof(struct dhcp6_hdr));
 			printf("ERROR : IA STATUS %d\n", sm_params.rx_status.ia_status_code);
 			break;
 		default:
@@ -354,9 +355,9 @@ static void dhcp6_parse_options(uchar *rx_pkt, unsigned int len)
 			}
 
 			/* check the IA_ID */
-			if (*((u32 *)option_ptr) !=  htonl(sm_params.ia_id)) {
+			if (get_unaligned_be32(option_ptr) != sm_params.ia_id) {
 				debug("IA_ID mismatch 0x%08x 0x%08x\n",
-				      *((u32 *)option_ptr), htonl(sm_params.ia_id));
+				      get_unaligned_be32(option_ptr), sm_params.ia_id);
 				break;
 			}
 
@@ -380,7 +381,7 @@ static void dhcp6_parse_options(uchar *rx_pkt, unsigned int len)
 				debug("Invalid status code option length\n");
 				break;
 			}
-			sm_params.rx_status.status_code = ntohs(*((u16 *)option_ptr));
+			sm_params.rx_status.status_code = get_unaligned_be16(option_ptr);
 			debug("DHCP6 top-level status code %d\n", sm_params.rx_status.status_code);
 			debug("DHCP6 status message: %.*s\n", len, option_ptr + 2);
 			break;
@@ -390,7 +391,7 @@ static void dhcp6_parse_options(uchar *rx_pkt, unsigned int len)
 				debug("Invalid SOL_MAX_RT option length\n");
 				break;
 			}
-			sol_max_rt_sec = ntohl(*((u32 *)option_ptr));
+			sol_max_rt_sec = get_unaligned_be32(option_ptr);
 
 			/* A DHCP client MUST ignore any SOL_MAX_RT option values that are less
 			 * than 60 or more than 86400
@@ -429,7 +430,7 @@ static void dhcp6_parse_options(uchar *rx_pkt, unsigned int len)
 				/* if CONFIG_DHCP6_PXE_DHCP_OPTION is set the PXE config file path
 				 * is contained in the first OPT_BOOTFILE_PARAM argument
 				 */
-				param_len_1 = ntohs(*((u16 *)option_ptr));
+				param_len_1 = get_unaligned_be16(option_ptr);
 				option_ptr += sizeof(u16);
 				if (param_len_1 + sizeof(u16) > option_len) {
 					debug("Invalid BOOTFILE_PARAM param_len_1. Skipping\n");

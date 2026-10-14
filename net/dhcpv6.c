@@ -266,32 +266,47 @@ static void dhcp6_send_request_packet(void)
 
 static void dhcp6_parse_ia_options(struct dhcp6_option_hdr *ia_ptr, uchar *ia_option_ptr)
 {
+	uchar *ia_end = ia_ptr->option_data + ntohs(ia_ptr->option_len);
 	struct dhcp6_option_hdr *ia_option_hdr;
-
-	ia_option_hdr = (struct dhcp6_option_hdr *)ia_option_ptr;
+	unsigned int ia_option_len;
 
 	/* Search for options encapsulated in IA_NA/IA_TA (DHCP6_OPTION_IAADDR
 	 * or DHCP6_OPTION_STATUS_CODE)
 	 */
-	while (ia_option_ptr < ((uchar *)ia_ptr + ntohs(ia_ptr->option_len))) {
+	while (ia_option_ptr + sizeof(struct dhcp6_option_hdr) <= ia_end) {
+		ia_option_hdr = (struct dhcp6_option_hdr *)ia_option_ptr;
+		ia_option_len = ntohs(ia_option_hdr->option_len);
+		if (ia_option_hdr->option_data + ia_option_len > ia_end) {
+			debug("Invalid IA option length\n");
+			break;
+		}
+
 		switch (ntohs(ia_option_hdr->option_id)) {
 		case DHCP6_OPTION_IAADDR:
+			/* An IA can carry several addresses; keep the first */
+			if (sm_params.rx_status.ia_addr_found ||
+			    ia_option_len < sizeof(struct in6_addr))
+				break;
 			sm_params.rx_status.ia_addr_found = true;
 			net_copy_ip6(&sm_params.rx_status.ia_addr_ipv6,
-				     (ia_option_ptr + sizeof(struct dhcp6_hdr)));
+				     ia_option_hdr->option_data);
 			debug("DHCP6_OPTION_IAADDR FOUND\n");
 			break;
 		case DHCP6_OPTION_STATUS_CODE:
+			if (ia_option_len < sizeof(u16))
+				break;
 			sm_params.rx_status.ia_status_code =
-				get_unaligned_be16(ia_option_ptr + sizeof(struct dhcp6_hdr));
-			printf("ERROR : IA STATUS %d\n", sm_params.rx_status.ia_status_code);
+				get_unaligned_be16(ia_option_hdr->option_data);
+			if (sm_params.rx_status.ia_status_code)
+				printf("ERROR : IA STATUS %d\n",
+				       sm_params.rx_status.ia_status_code);
 			break;
 		default:
 			debug("Unknown Option in IA, skipping\n");
 			break;
 		}
 
-		ia_option_ptr += ntohs(((struct dhcp6_option_hdr *)ia_option_ptr)->option_len);
+		ia_option_ptr = ia_option_hdr->option_data + ia_option_len;
 	}
 }
 

@@ -9,6 +9,7 @@
  */
 
 #include <dt-bindings/clock/ingenic,a1-cgu.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "ingenic,a1";
@@ -164,6 +165,12 @@
 		phy-handle = <&gmac0_phy>;
 		ingenic,mode-reg = <0xb00000c8>;
 		max-speed = <100>;
+		/*
+		 * DP83825I reset: PC18 here and on the vendor CALF board;
+		 * TUCANA and GORILLA use PC19. A USB-boot power-on leaves
+		 * the PHY unable to link until it is reset.
+		 */
+		ingenic,reset-gpio = <&gpc 18 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_mac0>;
 		status = "okay";

@@ -9,7 +9,7 @@
  *  - enable the GMAC CGU clock and set the RMII/RGMII reference rate;
  *  - program the SoC MAC PHY-interface mode register (RMII vs RGMII),
  *    whose address comes from the "ingenic,mode-reg" DT property;
- *  - pulse the external PHY out of reset via its reset GPIO.
+ *  - hard-reset the external PHY once at probe via its reset GPIO.
  */
 
 #include <clk.h>
@@ -103,6 +103,37 @@ static int xgmac_probe_resources_a1(struct udevice *dev)
 	return 0;
 }
 
+/*
+ * Hard-reset the PHY once, after its RMII reference clock starts. Not
+ * from xgmac_start(): that runs for every network command, but
+ * phy_config() only for the first. After a USB-boot power-on the
+ * DP83825I never links without this; a BMCR reset does not clear it.
+ */
+static int xgmac_reset_phy_a1(struct udevice *dev)
+{
+	struct gpio_desc phy_reset;
+	int ret;
+
+	ret = gpio_request_by_name(dev, "ingenic,reset-gpio", 0, &phy_reset,
+				   GPIOD_IS_OUT);
+	if (ret == -ENOENT)
+		return 0;	/* no PHY reset wired on this board */
+	if (ret) {
+		dev_err(dev, "request reset gpio failed: %d\n", ret);
+		return ret;
+	}
+
+	/* DT carries the line polarity, so 1 = held in reset. */
+	dm_gpio_set_value(&phy_reset, 1);
+	mdelay(15);
+	dm_gpio_set_value(&phy_reset, 0);
+	mdelay(80);
+
+	dm_gpio_free(dev, &phy_reset);
+
+	return 0;
+}
+
 static int xgmac_start_clks_a1(struct udevice *dev)
 {
 	struct xgmac_priv *xgmac = dev_get_priv(dev);
@@ -116,7 +147,7 @@ static int xgmac_start_clks_a1(struct udevice *dev)
 	clk_set_rate(&xgmac->clk_tx, A1_XGMAC_TX_CLK);
 	clk_set_rate(&xgmac->clk_ptp_ref, A1_XGMAC_PTP_CLK);
 
-	return 0;
+	return xgmac_reset_phy_a1(dev);
 }
 
 static int xgmac_stop_clks_a1(struct udevice *dev)
@@ -124,32 +155,6 @@ static int xgmac_stop_clks_a1(struct udevice *dev)
 	struct xgmac_priv *xgmac = dev_get_priv(dev);
 
 	clk_disable(&xgmac->clk_common);
-
-	return 0;
-}
-
-static int xgmac_start_resets_a1(struct udevice *dev)
-{
-	struct gpio_desc phy_reset;
-	int ret;
-
-	/*
-	 * Pulse the external PHY out of reset. The GPIO carries its own
-	 * active-low polarity in the DT, so logical 1 = asserted (held in
-	 * reset). The clock is already running (xgmac_start_clks_a1), so
-	 * the PHY has its reference clock for the post-reset boot.
-	 */
-	ret = gpio_request_by_name(dev, "snps,reset-gpio", 0, &phy_reset,
-				   GPIOD_IS_OUT);
-	if (ret)
-		return 0;	/* no PHY reset GPIO - nothing to do */
-
-	dm_gpio_set_value(&phy_reset, 1);
-	mdelay(15);
-	dm_gpio_set_value(&phy_reset, 0);
-	mdelay(80);
-
-	dm_gpio_free(dev, &phy_reset);
 
 	return 0;
 }
@@ -195,7 +200,7 @@ static struct xgmac_ops xgmac_a1_ops = {
 	.xgmac_probe_resources = xgmac_probe_resources_a1,
 	.xgmac_remove_resources = xgmac_remove_resources_a1,
 	.xgmac_stop_resets = xgmac_null_ops,
-	.xgmac_start_resets = xgmac_start_resets_a1,
+	.xgmac_start_resets = xgmac_null_ops,
 	.xgmac_stop_clks = xgmac_stop_clks_a1,
 	.xgmac_start_clks = xgmac_start_clks_a1,
 	.xgmac_calibrate_pads = xgmac_null_ops,

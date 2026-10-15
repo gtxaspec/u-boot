@@ -43,7 +43,7 @@
  * MPLL = 1200 MHz (the SSI source). The SFC read clock is kept
  * conservative at 40 MHz: the DM SFC driver reads at this rate and
  * U-Boot proper re-rates for its own faster reads. On the lower-MPLL
- * SKUs (T23X/DN, MPLL 1000) this just comes out slightly slower, never
+ * SKU (T23DL, MPLL 1000) this just comes out slightly slower, never
  * faster - safe. SSI source select = MPLL (index 1 of {APLL,MPLL,VPLL}).
  */
 #define T23_MPLL_RATE	1200000000U

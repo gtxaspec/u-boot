@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T30N, DFU/USB-boot loader variant (DDR2 64 MB, CPU 864 MHz).
+ * Ingenic ISVP-T30N, DFU/USB-boot loader variant (DDR2 64 MB, CPU 900 MHz).
  * Per-variant: brings up DDR with the T30N clocks/geometry so the loader
  * matches the target; do not reuse a loader across variants.
  */

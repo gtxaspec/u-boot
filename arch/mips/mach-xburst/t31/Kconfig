@@ -3,9 +3,9 @@ if SOC_T31
 # The T31 SKU (DDR geometry, type, clock setpoints) is selected at
 # runtime from the devicetree: the DDR node's compatible picks the
 # per-variant table in drivers/ram/ingenic/ddr_t31.c (of_match .data).
-# There is no compile-time T31 variant Kconfig. SYS_MIPS_TIMER_FREQ (the
-# CP0 timer = CPU/APLL clock) is set as a literal per defconfig, matching
-# the SKU's leaf devicetree.
+# There is no compile-time T31 variant Kconfig. SYS_MIPS_TIMER_FREQ is a
+# literal per defconfig: CP0 Count ticks at half the CPU clock that the
+# SKU's leaf devicetree programs (APLL or MPLL, per its CPCCR word).
 
 config SPL_T31_USB_BOOT
 	bool "T31 SPL: return to mask ROM for USB boot (dev loop)"

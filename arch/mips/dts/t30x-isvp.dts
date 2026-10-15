@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T30X (DDR2 128 MB M14D1G1664A, CPU 864 MHz), SFC-NOR.
+ * Ingenic ISVP-T30X (DDR2 128 MB M14D1G1664A, CPU 900 MHz), SFC-NOR.
  */
 
 /dts-v1/;

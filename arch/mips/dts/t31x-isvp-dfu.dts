@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T31X DFU/USB-boot loader (DDR2 128 MB, CPU 1392 MHz).
+ * Ingenic ISVP-T31X DFU/USB-boot loader (DDR2 128 MB, CPU 1200 MHz on MPLL).
  *
  * Per-variant loader: brings up DDR with the T31X clocks (MPLL 1200) so a
  * future ethernet-in-loader path gets the correct RMII reference. Do not

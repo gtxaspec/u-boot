@@ -4,8 +4,8 @@ if SOC_T32
 # is selected at runtime from the devicetree: the DDR node's compatible
 # picks the per-variant table in drivers/ram/ingenic/ddr_t32.c
 # (of_match .data). There is no compile-time T32 variant Kconfig.
-# SYS_MIPS_TIMER_FREQ (the CP0 timer = CPU/APLL clock) is set as a
-# literal per defconfig, matching the SKU's leaf devicetree.
+# SYS_MIPS_TIMER_FREQ is a literal per defconfig: CP0 Count ticks at half
+# the CPU clock that the SKU's leaf devicetree programs.
 
 config SPL_T32_USB_BOOT
 	bool "T32 SPL: return to mask ROM for USB boot (dev loop)"

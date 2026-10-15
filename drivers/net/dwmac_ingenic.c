@@ -353,6 +353,14 @@ static int t21_gmac_ephy_init(struct udevice *dev)
 	return 0;
 }
 
+static int dwmac_ingenic_bind(struct udevice *dev)
+{
+	if (IS_ENABLED(CONFIG_DM_MDIO))
+		return dw_dm_mdio_bind(dev);
+
+	return 0;
+}
+
 static int dwmac_ingenic_probe(struct udevice *dev)
 {
 	struct dwmac_ingenic_plat *pdata = dev_get_plat(dev);
@@ -443,6 +451,7 @@ U_BOOT_DRIVER(dwmac_ingenic) = {
 	.name		= "dwmac_ingenic",
 	.id		= UCLASS_ETH,
 	.of_match	= dwmac_ingenic_ids,
+	.bind		= dwmac_ingenic_bind,
 	.of_to_plat	= dwmac_ingenic_of_to_plat,
 	.probe		= dwmac_ingenic_probe,
 	.ops		= &designware_eth_ops,

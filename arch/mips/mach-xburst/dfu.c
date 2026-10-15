@@ -57,8 +57,8 @@
  * ("spi-nand0"/"spi-nand1"), or the probed SPI-NOR when there is no NAND.
  * Consumed by the "erase" DFU alt.
  */
-static char xburst_nand_mtd[16];
-static struct spi_flash *xburst_nor_flash;
+static char xburst_nand_mtd[16] __maybe_unused;
+static struct spi_flash *xburst_nor_flash __maybe_unused;
 
 void set_dfu_alt_info(char *interface, char *devstr)
 {

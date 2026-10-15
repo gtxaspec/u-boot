@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Ingenic ISVP-T23DL DFU/USB-boot loader (DDR2 32 MB, CPU 1188 MHz).
+ * Ingenic ISVP-T23DL DFU/USB-boot loader (DDR2 32 MB, CPU 1400 MHz).
  * Per-variant loader: its own clocks/DDR; do not reuse across variants.
  */
 
@@ -13,16 +13,19 @@
 };
 
 &ddr {
-	/* T23DL: DDR2 32 MB M14D2561616A (4-bank), CPU 1188 / DDR 600 MHz. */
+	/*
+	 * T23DL: DDR2 32 MB M14D2561616ACR21 (4-bank), CPU 1400 / DDR 500 MHz:
+	 * the T23 SDK 1.3.0 isvp_t23dl plan, its ddr_params_creator values.
+	 */
 	ingenic,sdram-params = <
-		0x1290d100 0x06405100 0x9a0b5510	/* APLL1188 MPLL1200 CPCCR */
+		0x15e0d100 0x07d05900 0x9a073310	/* APLL1400 MPLL1000 CPCCR */
 		0 0					/* ddr_cdr (MPLL/2); DDR2 */
 		13 9 0 1 0 0				/* row col bank8 cs0 cs1 dw32 */
 		0x02000000				/* 32 MB */
-		0x09288940 0x0000d91e			/* DDRC_CFG DDRC_CTRL */
-		0x000020fe 0x00002200 0x00910003	/* MMAP0 MMAP1 REFCNT */
-		0x050f0a06 0x021c0807 0x20080523	/* TIMING1..3 */
-		0x16240031 0xff060405 0x321c0505	/* TIMING4..6 */
+		0x0a288940 0x0000d91e			/* DDRC_CFG DDRC_CTRL */
+		0x000020fe 0x00002200 0x00f20001	/* MMAP0 MMAP1 REFCNT */
+		0x040e0806 0x02170707 0x2007051e	/* TIMING1..3 */
+		0x1a240031 0xff060405 0x32170505	/* TIMING4..6 */
 		0x00000f73				/* MR0 */
 	>;
 };

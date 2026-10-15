@@ -94,8 +94,6 @@ static const struct spl_nand_param *curr_device;
  */
 #define SPI_NAND_PPB		64
 
-#define THRESHOLD		31
-
 /* Local register helpers, hardcoded for the T41 SFC at SFC_BASE. */
 static inline void sfc_writel(u32 v, u32 off)
 {

@@ -71,7 +71,7 @@ struct jz_sfc {
 
 /*
  * Per-chip parameters mirrored from the vendor host tool output
- * (tools/ingenic-tools/nand_device/*.c -> sfc_nand_params.h):
+ * (tools/ingenic-tools/nand_device/<chip>.c -> sfc_nand_params.h):
  *
  *   pagesize        : 2048 for current Micron/Winbond chips
  *   id_manufactory  : SPI-NAND vendor byte

@@ -62,8 +62,8 @@ static u8 u_rb(unsigned int off)
 /*
  * Mux UART1 (PB23 TX, PB24 RX) to device function 0. T32 silicon
  * REQUIRES the shadow-register protocol from vendor jz_gpio_common.c
- * gpio_set_func(): PXSHDS=1 enables shadow mode, writes to PXINT/
- * MSK/PAT1/PAT0 *S/*C go to a holding latch, PXUPD=1 commits the
+ * gpio_set_func(): PXSHDS=1 enables shadow mode, writes to the
+ * PXINT/MSK/PAT1/PAT0 S/C regs go to a holding latch, PXUPD=1 commits the
  * latch atomically, PXSHDC=1 releases shadow mode. Direct writes
  * to PXINTC/PXMSKC/PXPAT1C/PXPAT0C without the shadow handshake
  * leave the pad in its reset state (GPIO input) on real T32 - the

@@ -25,8 +25,9 @@ const struct xburst_tpl_soc xburst_tpl_soc = {
 	.banner		= "\nT32 TPL\n",
 	.usb_boot	= IS_ENABLED(CONFIG_SPL_T32_USB_BOOT),
 #if IS_ENABLED(CONFIG_SPL_MMC)
-	.msc_read	= xburst_tpl_msc_read,
-	.msc_base	= 0xb3060000,	/* T32 MSC0 (vs 0xb3450000 on the T31-class) */
+	.msc_read	= xburst_tpl_sdhci_read,
+	.msc_base	= MSC0_BASE,	/* SDHCI, vs the legacy MSC on T10-T31 */
+	.msc_clk_src	= 3,		/* MSC0CDR[31:30]: 3 = ext (EXCLK) */
 	.spl_msc_skip	= 0x10000,	/* SD byte offset of the SPL image */
 #endif
 };

@@ -46,8 +46,8 @@
 #define NEMC_BASE	0xb3410000
 #define PDMA_BASE	0xb3420000
 #define SFC_BASE	0xb3440000
-#define MSC0_BASE	0xb3450000
-#define MSC1_BASE	0xb3460000
+#define MSC0_BASE	0xb3060000	/* SDHCI, not the legacy MSC interface */
+#define MSC1_BASE	0xb3070000
 #define DDRC_BASE	0xb34f0000
 #define OTG_BASE	0xb3500000
 #define EFUSE_BASE	0xb3540000

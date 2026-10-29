@@ -40,7 +40,8 @@ struct xburst_tpl_soc {
 	unsigned int console_uart;	/* clk_ungate_uart() index */
 	unsigned int spl_nor_offs;	/* NOR offset of the DRAM-resident SPL */
 	unsigned int spl_msc_skip;	/* SD byte offset of that SPL (MSC) */
-	unsigned int msc_base;		/* MSC0 base; 0 => 0xb3450000 (T32 = 0xb3060000) */
+	unsigned int msc_base;		/* MSC0 base; 0 => 0xb3450000 (legacy MSC) */
+	unsigned int msc_clk_src;	/* MSC0CDR[31:30] for EXCLK (SDHCI reader) */
 	const char *banner;		/* e.g. "\nT20 TPL\n" */
 
 	/*
@@ -65,8 +66,14 @@ extern const struct xburst_tpl_soc xburst_tpl_soc;
 /* Common across every XBurst1 SoC's pll.c. */
 void clk_ungate_uart(unsigned int idx);
 
-/* Shared bare-metal SD reader (mach-xburst/msc.c) - the MSC TPL's msc_read hook. */
+/*
+ * Shared bare-metal SD readers - the MSC TPL's msc_read hook. One per MSC
+ * flavour: the legacy Ingenic interface (mach-xburst/msc.c, T10-T31) and the
+ * SDHCI blocks the T32 and T33 carry instead (mach-xburst/msc-sdhci.c).
+ */
 void xburst_tpl_msc_read(unsigned int skip, unsigned int *dst,
 			 unsigned int bytes);
+void xburst_tpl_sdhci_read(unsigned int skip, unsigned int *dst,
+			   unsigned int bytes);
 
 #endif /* __XBURST_TPL_H__ */

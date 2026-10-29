@@ -15,10 +15,11 @@
  *
  * The read is hand-rolled rather than going through DM MMC because the full MMC
  * stack does not fit the bootrom's cache-as-RAM lock window in the TPL - the
- * same reason the NOR path uses a bare-metal SFC read. Every XBurst1 SoC has
- * the same MSC0 controller (ingenic,t31-mmc) and CPM clock layout, so one
- * reader serves them all: each SoC's t<soc>/tpl.c just points its msc_read hook
- * here. Built only for the MSC TPL (CONFIG_SPL_MMC).
+ * same reason the NOR path uses a bare-metal SFC read. T10 through T31 share
+ * this MSC0 controller (ingenic,t31-mmc) and CPM clock layout, so one reader
+ * serves them all: each SoC's t<soc>/tpl.c points its msc_read hook here. The
+ * T32 and T33 carry standard SDHCI blocks instead and use msc-sdhci.c. Built
+ * only for the MSC TPL (CONFIG_SPL_MMC).
  */
 
 #include <config.h>
@@ -28,10 +29,10 @@
 #include <mach/xburst-tpl.h>
 
 /*
- * MSC0 controller base, KSEG1 (uncached - the TPL runs cache-as-RAM). Most
- * XBurst1 SoCs place MSC0 at 0xb3450000, but T32's is at 0xb3060000, so the
- * base is taken from the SoC hook (msc_base); 0 keeps the 0xb3450000 default.
- * The CPM MSC0CDR clock divider (below) is shared across all of them.
+ * MSC0 controller base, KSEG1 (uncached - the TPL runs cache-as-RAM). Every
+ * SoC with this register interface places MSC0 at 0xb3450000; the base still
+ * comes from the SoC hook (msc_base), where 0 keeps that default. The CPM
+ * MSC0CDR clock divider (below) is shared across all of them.
  */
 #define MSC_BASE	(xburst_tpl_soc.msc_base ? xburst_tpl_soc.msc_base : 0xb3450000)
 #define MSC_STAT		0x004

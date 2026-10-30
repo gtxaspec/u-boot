@@ -85,7 +85,7 @@ struct ingenic_function {
 
 /* Pin number = bank * 32 + offset (PA=0x00.., PB=0x20.., PC=0x40..). */
 
-/* MSC0/SD = PB0..PB5, device function 0 (every SoC except A1). */
+/* MSC0/SD = PB0..PB5, device function 0 (every SoC, A1 included). */
 static const int txx_mmc0_1bit[]  = { 0x20, 0x21, 0x22 };
 static const int txx_mmc0_4bit[]  = { 0x23, 0x24, 0x25 };
 /*
@@ -210,6 +210,8 @@ static const struct ingenic_group a1_groups[] = {
 	GRP("uart0-data", a1_uart0_data, 0),
 	GRP("uart1-data", a1_uart1_data, 0),
 	GRP("mac0-data",  a1_mac0_data,	 0),
+	GRP("mmc0-1bit",  txx_mmc0_1bit, 0),
+	GRP("mmc0-4bit",  txx_mmc0_4bit, 0),
 };
 static const char * const a1_g_sfc[]   = { "sfc-data" };
 static const char * const a1_g_uart0[] = { "uart0-data" };
@@ -220,6 +222,7 @@ static const struct ingenic_function a1_functions[] = {
 	FUNC("uart0", a1_g_uart0),
 	FUNC("uart1", a1_g_uart1),
 	FUNC("mac0",  a1_g_mac0),
+	FUNC("mmc0",  txx_g_mmc0),
 };
 
 /*

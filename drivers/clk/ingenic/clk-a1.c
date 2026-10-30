@@ -33,6 +33,8 @@
 #define CPM_CLKGR0		0x30
 #define CPM_CLKGR1		0x38
 #define CPM_SFC0CDR		0x90
+#define CPM_MSC0CDR		0x98
+#define CPM_MSC1CDR		0x9c
 #define CPM_MAC0CDR		0xc0
 #define CPM_MAC0TXCDR		0xc4
 #define CPM_MAC0PTPCDR		0xcc
@@ -46,6 +48,17 @@
 #define CDR_SRC_MASK		(3u << CDR_SRC_SHIFT)
 #define CDR_DIV_MASK		0xffu
 
+/*
+ * MSC0/MSC1 CDR, as on the T40 (see clk-t40.c): the card clock is the
+ * divider output / 4, so set_rate() takes the card clock and programs the
+ * divider at 4x. Their mux is sclka, MPLL, EPLL, EXT rather than the other
+ * CDRs' sclka, MPLL, VPLL, EPLL. The vendor A1 kernel runs the card from
+ * MPLL with H_FREQ set and selects EXT (EXT_SEL) only below 400 kHz; the
+ * bootrom leaves EXT selected with EXT_SEL set.
+ */
+#define MSC_CDR_EXT_SEL		BIT(21)
+#define MSC_CDR_H_FREQ		BIT(20)
+
 struct a1_clk_desc {
 	u16 cdr;	/* CPM CDR register offset, 0 = no divider */
 	u8 ce;		/* clock-change-enable bit in cdr */
@@ -55,21 +68,22 @@ struct a1_clk_desc {
 	u8 gate_bit;	/* gate bit (set = clock disabled) */
 	u8 src;		/* CDR source select [31:30]: 1=MPLL, 3=EPLL */
 	u8 exact;	/* rate must divide the fixed source exactly */
+	u8 msc;		/* MSC-type CDR: card clock /4, the MSC mux */
 };
 
 #define NO_GATE 0xffff
 
 /*
  * Leaf clocks U-Boot's drivers reference by the canonical binding ID.
- * SFC folds the SFC0 divider (SFC0CDR) and the SFC0 gate. The rest are
- * gate-only for now - their dividers are added as the consuming
- * drivers (MMC, GMAC) are ported.
+ * SFC folds the SFC0 divider (SFC0CDR) and the SFC0 gate, the MSCs and
+ * GMACs theirs. The rest are gate-only for now - their dividers are
+ * added as the consuming drivers are ported.
  */
 static const struct a1_clk_desc a1_clks[A1_CLK_COUNT] = {
 	[A1_CLK_SFC]   = { CPM_SFC0CDR, 29, 28, 27, CPM_CLKGR0, 24, 1 },
 	[A1_CLK_SFC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 25 },
-	[A1_CLK_MSC0]  = { 0, 0, 0, 0, CPM_CLKGR0, 14 },
-	[A1_CLK_MSC1]  = { 0, 0, 0, 0, CPM_CLKGR0, 15 },
+	[A1_CLK_MSC0]  = { CPM_MSC0CDR, 29, 28, 27, CPM_CLKGR0, 14, 1, 0, 1 },
+	[A1_CLK_MSC1]  = { CPM_MSC1CDR, 29, 28, 27, CPM_CLKGR0, 15, 1, 0, 1 },
 	[A1_CLK_UART0] = { 0, 0, 0, 0, CPM_CLKGR0, 8 },
 	[A1_CLK_UART1] = { 0, 0, 0, 0, CPM_CLKGR0, 9 },
 	[A1_CLK_UART2] = { 0, 0, 0, 0, CPM_CLKGR0, 10 },
@@ -126,15 +140,15 @@ static ulong pll_rate(struct a1_cgu_priv *p, u32 reg)
 	return (ulong)(rate / n / od1 / od0);
 }
 
-static ulong a1_parent_rate(struct a1_cgu_priv *p, u32 cdr)
+static ulong a1_parent_rate(struct a1_cgu_priv *p, u32 cdr, bool msc)
 {
 	switch ((cpm_r(p, cdr) & CDR_SRC_MASK) >> CDR_SRC_SHIFT) {
 	case 1:
 		return pll_rate(p, CPM_CPMPCR);	/* MPLL */
 	case 2:
-		return pll_rate(p, CPM_CPVPCR);	/* VPLL */
+		return pll_rate(p, msc ? CPM_CPEPCR : CPM_CPVPCR);
 	case 3:
-		return pll_rate(p, CPM_CPEPCR);	/* EPLL */
+		return msc ? EXT_RATE : pll_rate(p, CPM_CPEPCR);
 	default:
 		return pll_rate(p, CPM_CPAPCR);	/* sclka ~ APLL */
 	}
@@ -171,8 +185,8 @@ static ulong a1_clk_get_rate(struct clk *clk)
 	if (!d->cdr)
 		return EXT_RATE;
 
-	return a1_parent_rate(p, d->cdr) /
-	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1);
+	return a1_parent_rate(p, d->cdr, d->msc) /
+	       ((cpm_r(p, d->cdr) & CDR_DIV_MASK) + 1) / (d->msc ? 4 : 1);
 }
 
 static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
@@ -205,7 +219,8 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 		break;
 	}
 
-	div = DIV_ROUND_CLOSEST(parent, rate);
+	/* MSC: rate is the card clock - run the module at 4x (see above). */
+	div = DIV_ROUND_CLOSEST(parent, d->msc ? rate * 4 : rate);
 	if (!div)
 		div = 1;
 	if (div > 256)
@@ -217,13 +232,17 @@ static ulong a1_clk_set_rate(struct clk *clk, ulong rate)
 
 	v = cpm_r(p, d->cdr);
 	v &= ~(CDR_SRC_MASK | BIT(d->stop) | BIT(d->busy) | CDR_DIV_MASK);
+	if (d->msc) {
+		v &= ~MSC_CDR_EXT_SEL;
+		v |= MSC_CDR_H_FREQ;
+	}
 	v |= ((u32)d->src << CDR_SRC_SHIFT) | BIT(d->ce) | (div - 1);
 	cpm_w(p, d->cdr, v);
 
 	while (cpm_r(p, d->cdr) & BIT(d->busy))
 		;
 
-	return parent / div;
+	return parent / div / (d->msc ? 4 : 1);
 }
 
 static int a1_clk_gate(struct clk *clk, bool enable)

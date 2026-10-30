@@ -109,11 +109,11 @@ void board_init_f(ulong dummy)
 	return;
 #else
 	/*
-	 * SFC NOR cold-boot: hand off to the standard SPL framework
-	 * board_init_r(), which loads u-boot-lzma.img from
-	 * CONFIG_SYS_SPI_U_BOOT_OFFS via the SPI flash uclass
-	 * (spl_boot_device() == BOOT_DEVICE_SPI), LZMA-decompresses it and
-	 * jumps. Does not return.
+	 * SFC NOR or SD cold-boot: hand off to the standard SPL framework
+	 * board_init_r(), which loads u-boot-lzma.img from the device
+	 * spl_boot_device() names (NOR at CONFIG_SYS_SPI_U_BOOT_OFFS, or
+	 * the SD at CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR),
+	 * LZMA-decompresses it and jumps. Does not return.
 	 */
 	board_init_r(NULL, 0);
 	__builtin_unreachable();
@@ -122,5 +122,9 @@ void board_init_f(ulong dummy)
 
 u32 spl_boot_device(void)
 {
+	/* MSC/SD cold-boot loads U-Boot from the SD via the SPL MMC path. */
+	if (IS_ENABLED(CONFIG_SPL_MMC))
+		return BOOT_DEVICE_MMC1;
+
 	return BOOT_DEVICE_SPI;
 }

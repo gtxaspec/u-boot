@@ -100,6 +100,11 @@
 			function = "mac0";
 			groups = "mac0-data";
 		};
+
+		pins_mmc0: mmc0 {
+			function = "mmc0";
+			groups = "mmc0-1bit", "mmc0-4bit";
+		};
 	};
 
 	uart0: serial@b0030000 {
@@ -203,6 +208,18 @@
 			reg = <0>;
 			spi-max-frequency = <50000000>;
 		};
+	};
+
+	msc0: mmc@b3060000 {
+		compatible = "ingenic,a1-mmc";
+		reg = <0xb3060000 0x10000>;
+		clocks = <&cgu A1_CLK_MSC0>;
+		clock-names = "mmc";
+		bus-width = <4>;
+		broken-cd;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pins_mmc0>;
+		status = "okay";
 	};
 
 	gmac0: ethernet@b30b0000 {

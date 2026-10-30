@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Binman image description for the Ingenic ISVP-A1 SFC-NOR boot.
+ * Binman image descriptions for the Ingenic ISVP-A1 SFC-NOR and SD-card boot.
  *
  * The A1 mask ROM boots from SPI-NOR by reading a headered SPL at
  * flash offset 0, which then loads U-Boot proper from a fixed offset.
@@ -26,6 +26,30 @@
 };
 
 &binman {
+#if defined(CONFIG_SPL_MMC)
+	/*
+	 * MSC/SD-card boot image (isvp_a1n_msc0), as on the T40: the SPL
+	 * carries the bootrom's "MSPL" magic from start.S and goes at SD
+	 * sector 34 (0x4400), where the A1 bootrom reads it; U-Boot from
+	 * SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR (0x100 = byte 0x20000).
+	 */
+	mmc {
+		filename = "u-boot-with-spl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		spl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "spl/u-boot-spl.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x20000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	/*
 	 * Standalone headered SPL: take the freshly built
 	 * spl/u-boot-spl.bin through the SFC-NOR boot-header finalizer.
@@ -61,6 +85,7 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };
 
 /*
@@ -79,7 +104,9 @@
 &gpe { bootph-all; };
 &pins_uart1 { bootph-all; };
 &pins_sfc { bootph-all; };
+&pins_mmc0 { bootph-all; };
 &uart1 { bootph-all; };
+&msc0 { bootph-all; };
 &sfc {
 	bootph-all;
 	flash@0 { bootph-all; };

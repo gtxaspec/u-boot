@@ -154,8 +154,12 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 		udelay(5);
 		ddr_writel(p, MR_DDR2(v->mr3), DDRC_LMR);
 		udelay(5);
-		ddr_writel(p, (MR_DDR2(v->mr1) & ~0x46000) | (kgd_rtt_dic << 12),
-			   DDRC_LMR);
+		/* T40: as generated; patching from the all-zero par[] disables ODT. */
+		if (v->family == INGENIC_DDR_FAMILY_T40)
+			ddr_writel(p, MR_DDR2(v->mr1), DDRC_LMR);
+		else
+			ddr_writel(p, (MR_DDR2(v->mr1) & ~0x46000) |
+				   (kgd_rtt_dic << 12), DDRC_LMR);
 		udelay(5);
 		ddr_writel(p, MR_DDR2(v->mr0), DDRC_LMR);
 
@@ -201,15 +205,18 @@ static void ddrc_dfi_init(struct ingenic_ddr_priv *p)
 		udelay(5);
 		ddr_writel(p, 0, DDRC_LMR); udelay(5);
 		/*
-		 * A1 pre-bakes the kgd ODT/DS patch into mr1 at transcription
-		 * (vendor patches MR1 bits A9/A6/A2 + A5/A1 from kgd_odt/kgd_ds);
-		 * emit it verbatim. T40/T41 patch RTT_DIC at runtime instead.
+		 * A1 pre-bakes the kgd ODT/DS patch into mr1 and the T40 vendor
+		 * writes the generated MR1 as is; only T41 patches RTT_DIC from
+		 * the eFuse. T40 par[] is all zero, so patching would disable
+		 * the DRAM ODT and output drive.
 		 */
+		if (v->family == INGENIC_DDR_FAMILY_T40
 #ifdef CONFIG_SOC_A1
-		if (v->family == INGENIC_DDR_FAMILY_A1)
+		    || v->family == INGENIC_DDR_FAMILY_A1
+#endif
+		   )
 			ddr_writel(p, MR_DDR3(v->mr1), DDRC_LMR);
 		else
-#endif
 			ddr_writel(p, (MR_DDR3(v->mr1) & ~0x266000) |
 				   (kgd_rtt_dic << 12), DDRC_LMR);
 		udelay(5);

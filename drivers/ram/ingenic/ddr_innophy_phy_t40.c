@@ -181,29 +181,29 @@ static void t40_ddr2_baseline_seed(struct ingenic_ddr_priv *p)
 
 	/* cmd TX delay 0x100..0x11e */
 	for (i = 0; i <= 0x1e; i++)
-		phy_writel(p, 5, (0x100 + i) * 4);
+		phy_writel(p, 5, DDRP_RAW_BASE + (0x100 + i) * 4);
 	/* DQ TX delay, low half [0..8] both channels */
 	for (i = 0; i <= 0x8; i++) {
-		phy_writel(p, 5, (chA + i) * 4);
-		phy_writel(p, 5, (chB + i) * 4);
+		phy_writel(p, 5, DDRP_RAW_BASE + (chA + i) * 4);
+		phy_writel(p, 5, DDRP_RAW_BASE + (chB + i) * 4);
 	}
 	/* DQ TX delay, high half [0xb..0x13] both channels */
 	for (i = 0xb; i <= 0x13; i++) {
-		phy_writel(p, 5, (chA + i) * 4);
-		phy_writel(p, 5, (chB + i) * 4);
+		phy_writel(p, 5, DDRP_RAW_BASE + (chA + i) * 4);
+		phy_writel(p, 5, DDRP_RAW_BASE + (chB + i) * 4);
 	}
 	/* DQS / DQSb TX delay (per-channel, byte 0 + byte 1) = 2 */
-	phy_writel(p, 2, (chA + 0x09) * 4);
-	phy_writel(p, 2, (chB + 0x09) * 4);
-	phy_writel(p, 2, (chA + 0x0a) * 4);
-	phy_writel(p, 2, (chB + 0x0a) * 4);
-	phy_writel(p, 2, (chA + 0x14) * 4);
-	phy_writel(p, 2, (chB + 0x14) * 4);
-	phy_writel(p, 2, (chA + 0x15) * 4);
-	phy_writel(p, 2, (chB + 0x15) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chA + 0x09) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chB + 0x09) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chA + 0x0a) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chB + 0x0a) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chA + 0x14) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chB + 0x14) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chA + 0x15) * 4);
+	phy_writel(p, 2, DDRP_RAW_BASE + (chB + 0x15) * 4);
 
 	/* PHY REG-02 bit 3 = "open manual per-bit de-skew" enable */
-	phy_writel(p, phy_readl(p, 0x02 * 4) | 0x8, 0x02 * 4);
+	phy_set_range(p, 0x02, 3, 1, 1);
 }
 
 /*
@@ -223,20 +223,20 @@ static void t40_ddr3_baseline_seed(struct ingenic_ddr_priv *p)
 
 	/* cmd TX delay 0x100..0x11e */
 	for (i = 0; i <= 0x1e; i++)
-		phy_writel(p, 8, (0x100 + i) * 4);
+		phy_writel(p, 8, DDRP_RAW_BASE + (0x100 + i) * 4);
 	/* DQ TX delay, low half [0..8] both channels */
 	for (i = 0; i <= 0x8; i++) {
-		phy_writel(p, 8, (chA + i) * 4);
-		phy_writel(p, 8, (chB + i) * 4);
+		phy_writel(p, 8, DDRP_RAW_BASE + (chA + i) * 4);
+		phy_writel(p, 8, DDRP_RAW_BASE + (chB + i) * 4);
 	}
 	/* DQ TX delay, high half [0xb..0x13] both channels */
 	for (i = 0xb; i <= 0x13; i++) {
-		phy_writel(p, 8, (chA + i) * 4);
-		phy_writel(p, 8, (chB + i) * 4);
+		phy_writel(p, 8, DDRP_RAW_BASE + (chA + i) * 4);
+		phy_writel(p, 8, DDRP_RAW_BASE + (chB + i) * 4);
 	}
 
 	/* PHY REG-02 bit 3 = "open manual per-bit de-skew" enable */
-	phy_writel(p, phy_readl(p, 0x02 * 4) | 0x8, 0x02 * 4);
+	phy_set_range(p, 0x02, 3, 1, 1);
 }
 
 /*
@@ -272,16 +272,16 @@ int ingenic_ddr_t40_phy_init(struct ingenic_ddr_priv *p)
 		t40n_phy_driver_odt(p);
 
 	/* DLL bypass values - vendor order: cmd/ck DLL first, then byte DLLs */
-	phy_writel(p, 0xc, 0x15 * 4);	/* cmd dll */
-	phy_writel(p, 0x1, 0x16 * 4);	/* ck dll */
-	phy_writel(p, 0xc, 0x54 * 4);	/* byte0 dq dll */
-	phy_writel(p, 0xc, 0x64 * 4);	/* byte1 dq dll */
-	phy_writel(p, 0xc, 0x84 * 4);	/* byte2 dq dll */
-	phy_writel(p, 0xc, 0x94 * 4);	/* byte3 dq dll */
-	phy_writel(p, 0x1, 0x55 * 4);	/* byte0 dqs dll */
-	phy_writel(p, 0x1, 0x65 * 4);	/* byte1 dqs dll */
-	phy_writel(p, 0x1, 0x85 * 4);	/* byte2 dqs dll */
-	phy_writel(p, 0x1, 0x95 * 4);	/* byte3 dqs dll */
+	phy_writel(p, 0xc, DDRP_RAW_BASE + 0x15 * 4);	/* cmd dll */
+	phy_writel(p, 0x1, DDRP_RAW_BASE + 0x16 * 4);	/* ck dll */
+	phy_writel(p, 0xc, DDRP_RAW_BASE + 0x54 * 4);	/* byte0 dq dll */
+	phy_writel(p, 0xc, DDRP_RAW_BASE + 0x64 * 4);	/* byte1 dq dll */
+	phy_writel(p, 0xc, DDRP_RAW_BASE + 0x84 * 4);	/* byte2 dq dll */
+	phy_writel(p, 0xc, DDRP_RAW_BASE + 0x94 * 4);	/* byte3 dq dll */
+	phy_writel(p, 0x1, DDRP_RAW_BASE + 0x55 * 4);	/* byte0 dqs dll */
+	phy_writel(p, 0x1, DDRP_RAW_BASE + 0x65 * 4);	/* byte1 dqs dll */
+	phy_writel(p, 0x1, DDRP_RAW_BASE + 0x85 * 4);	/* byte2 dqs dll */
+	phy_writel(p, 0x1, DDRP_RAW_BASE + 0x95 * 4);	/* byte3 dqs dll */
 
 	if (v->type == INGENIC_DDR_TYPE_DDR2)
 		t40_ddr2_baseline_seed(p);
@@ -430,38 +430,38 @@ void ingenic_ddr_t40_phy_set_skew(struct ingenic_ddr_priv *p)
 		return;
 
 	/* vref - channels A and B */
-	phy_writel(p, vref, 0xd7 * 4);
-	phy_writel(p, vref, 0xd8 * 4);
-	phy_writel(p, vref, 0xf7 * 4);
-	phy_writel(p, vref, 0xf8 * 4);
+	phy_writel(p, vref, DDRP_RAW_BASE + 0xd7 * 4);
+	phy_writel(p, vref, DDRP_RAW_BASE + 0xd8 * 4);
+	phy_writel(p, vref, DDRP_RAW_BASE + 0xf7 * 4);
+	phy_writel(p, vref, DDRP_RAW_BASE + 0xf8 * 4);
 
 	/* RX: DQS and DQ per channel */
-	phy_writel(p, dqs_rx, (chA + 0x29) * 4);
-	phy_writel(p, dqs_rx, (chA + 0x34) * 4);
-	phy_writel(p, dqs_rx, (chB + 0x29) * 4);
-	phy_writel(p, dqs_rx, (chB + 0x34) * 4);
+	phy_writel(p, dqs_rx, DDRP_RAW_BASE + (chA + 0x29) * 4);
+	phy_writel(p, dqs_rx, DDRP_RAW_BASE + (chA + 0x34) * 4);
+	phy_writel(p, dqs_rx, DDRP_RAW_BASE + (chB + 0x29) * 4);
+	phy_writel(p, dqs_rx, DDRP_RAW_BASE + (chB + 0x34) * 4);
 	for (i = 0; i < 16; i++) {
-		phy_writel(p, dqx_rx_v, (chA + dqx_rx[i]) * 4);
-		phy_writel(p, dqx_rx_v, (chB + dqx_rx[i]) * 4);
+		phy_writel(p, dqx_rx_v, DDRP_RAW_BASE + (chA + dqx_rx[i]) * 4);
+		phy_writel(p, dqx_rx_v, DDRP_RAW_BASE + (chB + dqx_rx[i]) * 4);
 	}
 
 	/* TX: cmd (0x100..0x11e), then DM/DQS/DQSb per channel, then DQ */
 	for (i = 0; i <= 0x1e; i++)
-		phy_writel(p, dqs_tx, (0x100 + i) * 4);
-	phy_writel(p, dqs_tx, (chA + 0x00) * 4);	/* dm0 */
-	phy_writel(p, dqs_tx, (chA + 0x09) * 4);	/* dqs0 */
-	phy_writel(p, dqs_tx, (chA + 0x0a) * 4);	/* dqsb0 */
-	phy_writel(p, dqs_tx, (chA + 0x0b) * 4);	/* dm1 */
-	phy_writel(p, dqs_tx, (chA + 0x14) * 4);	/* dqs1 */
-	phy_writel(p, dqs_tx, (chA + 0x15) * 4);	/* dqsb1 */
-	phy_writel(p, dqs_tx, (chB + 0x00) * 4);
-	phy_writel(p, dqs_tx, (chB + 0x09) * 4);
-	phy_writel(p, dqs_tx, (chB + 0x0a) * 4);
-	phy_writel(p, dqs_tx, (chB + 0x0b) * 4);
-	phy_writel(p, dqs_tx, (chB + 0x14) * 4);
-	phy_writel(p, dqs_tx, (chB + 0x15) * 4);
+		phy_writel(p, dqs_tx, DDRP_RAW_BASE + (0x100 + i) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x00) * 4);	/* dm0 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x09) * 4);	/* dqs0 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x0a) * 4);	/* dqsb0 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x0b) * 4);	/* dm1 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x14) * 4);	/* dqs1 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chA + 0x15) * 4);	/* dqsb1 */
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x00) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x09) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x0a) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x0b) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x14) * 4);
+	phy_writel(p, dqs_tx, DDRP_RAW_BASE + (chB + 0x15) * 4);
 	for (i = 0; i < 16; i++) {
-		phy_writel(p, dqx_tx_v, (chA + dqx_tx[i]) * 4);
-		phy_writel(p, dqx_tx_v, (chB + dqx_tx[i]) * 4);
+		phy_writel(p, dqx_tx_v, DDRP_RAW_BASE + (chA + dqx_tx[i]) * 4);
+		phy_writel(p, dqx_tx_v, DDRP_RAW_BASE + (chB + dqx_tx[i]) * 4);
 	}
 }

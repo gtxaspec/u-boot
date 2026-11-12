@@ -93,15 +93,17 @@ static inline void sdhci_writew(u16 val, u32 reg)
 /*
  * Read @bytes into @dst from the card, where the wanted data begins @skip
  * bytes into the image (block-0-relative). One CMD18 streams the whole range
- * and the buffer port is drained 16 words (64 bytes) at a time, re-anchoring
- * @dst until @skip bytes have passed so the leading region is overwritten in
- * place and discarded. @dst should be a KSEG1 (uncached) pointer so the fill
- * does not allocate cache lines over the cache-as-RAM window.
+ * in whole blocks and the buffer port is drained 16 words (64 bytes) at a
+ * time, dropping the first @skip bytes and storing the next @bytes (rounded
+ * up to 64) at @dst. @skip must be a multiple of 64. @dst should be a KSEG1
+ * (uncached) pointer so the fill does not allocate cache lines over the
+ * cache-as-RAM window.
  */
 void xburst_tpl_sdhci_read(u32 skip, u32 *dst, u32 bytes)
 {
 	u32 total = skip + bytes;
-	u32 total_iters = (total + 63) >> 6;		/* 64-byte chunks */
+	u32 total_iters = ((total + 0x1ff) >> 9) << 3;	/* 64-byte chunks */
+	u32 skip_iters = skip >> 6;
 	u32 store_iters = (bytes + 63) >> 6;
 	u32 *p = dst;
 	u32 it, w, st, cdr;
@@ -142,18 +144,24 @@ void xburst_tpl_sdhci_read(u32 skip, u32 *dst, u32 bytes)
 	} while (!(st & INT_CMD_COMPLETE));
 	sdhci_writel(INT_CMD_COMPLETE, SDHCI_INT_STATUS);
 
-	for (it = total_iters; it != 0; it--) {
+	/*
+	 * Drain every block the controller was asked for, or the transfer never
+	 * completes; only the chunks after @skip are stored, the rest are read
+	 * and dropped.
+	 */
+	for (it = 0; it < total_iters; it++) {
 		do {
 			st = sdhci_readl(SDHCI_PRESENT_STATE);
 			if (sdhci_readl(SDHCI_INT_STATUS) & INT_ERROR)
 				return;
 		} while (!(st & STATE_BUF_READ_ENABLE));
 
-		if (store_iters <= it)
-			p = dst;	/* still skipping: discard in place */
+		for (w = 0; w < 16; w++) {
+			u32 v = sdhci_readl(SDHCI_BUFFER);
 
-		for (w = 0; w < 16; w++)
-			*p++ = sdhci_readl(SDHCI_BUFFER);
+			if (it >= skip_iters && it < skip_iters + store_iters)
+				*p++ = v;
+		}
 	}
 
 	/*

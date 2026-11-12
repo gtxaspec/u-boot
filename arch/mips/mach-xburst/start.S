@@ -38,7 +38,7 @@ _start:
 	 * TODO: validate header/entry offset against the T31 bootrom
 	 * decompilation and on real hardware during board bring-up.
 	 */
-#if defined(CONFIG_SPL_MMC)
+#if defined(CONFIG_SPL_MMC) || defined(CONFIG_SPL_T33_MSC_BOOT)
 	/*
 	 * MMC/SD boot header. The XBurst2 mask ROM (msc_sd_boot) matches
 	 * "MSPL" (0x4d53504c) at offset 0, enters the SPL at +0x800, and

@@ -83,6 +83,15 @@ config T33_DDR3
 	  branches + DDR3 drive/ODT defaults + the W631GU6NG pin
 	  MAP in t33/sdram.c. DDR2 builds use the soft-train path.
 
+config SPL_T33_MSC_BOOT
+	bool "T33 SPL: load U-Boot proper from the SD card"
+	depends on SPL
+	help
+	  Boot from SD through the bootrom instead of SPI-NOR: the ROM
+	  reads the SPL from SD offset 0x4400 and the SPL reads U-Boot
+	  proper from SD offset 0x10000 with a bare-metal SDHCI reader,
+	  with no driver model in the SPL.
+
 config SPL_T33_USB_BOOT
 	bool "T33 SPL: return to mask ROM for USB boot (dev loop)"
 	depends on SPL

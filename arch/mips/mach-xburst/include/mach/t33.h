@@ -33,8 +33,8 @@
 #define NEMC_BASE	0xb3410000
 #define PDMA_BASE	0xb3420000
 #define SFC_BASE	0xb3440000
-#define MSC0_BASE	0xb3450000
-#define MSC1_BASE	0xb3460000
+#define MSC0_BASE	0xb3060000	/* SDHCI, as on T32 */
+#define MSC1_BASE	0xb3070000
 #define DDRC_BASE	0xb34f0000
 #define OTG_BASE	0xb3500000
 #define EFUSE_BASE	0xb3540000
@@ -121,5 +121,12 @@
 #define GPIO_PXMSKC(n)	(0x28 + (n) * 0x100)
 #define GPIO_PXPAT1C(n)	(0x38 + (n) * 0x100)
 #define GPIO_PXPAT0C(n)	(0x48 + (n) * 0x100)
+
+#ifndef __ASSEMBLY__
+#include <linux/types.h>
+
+/* Load, decompress and jump to U-Boot proper through a boot-medium reader. */
+void t33_spl_load_image(int (*rd)(u32 off, u32 len, u8 *dst));
+#endif
 
 #endif /* __T33_H__ */

@@ -135,7 +135,7 @@ void board_init_f(ulong dummy)
 	t33_spl_puts("T33 SPL: returning to mask ROM (USB boot)\n");
 	return;
 #else
-	/* Load U-Boot proper from SPI-NOR into DRAM and jump. */
+	/* Load U-Boot proper from SPI-NOR (or SD) into DRAM and jump. */
 	t33_spl_puts("T33 SPL: loading U-Boot...\n");
 	t33_spl_load_uboot();
 	for (;;)

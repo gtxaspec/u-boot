@@ -116,12 +116,17 @@
 		status = "disabled";
 	};
 
-	msc0: mmc@13450000 {
-		compatible = "ingenic,t31-mmc";
-		reg = <0x13450000 0x1000>;
+	/*
+	 * MSC0: a standard SDHCI block, as on T32 (not the legacy
+	 * Ingenic MSC of T10-T31). The SD-boot build enables it.
+	 */
+	msc0: mmc@13060000 {
+		compatible = "ingenic,t33-mmc";
+		reg = <0x13060000 0x10000>;
 		clocks = <&cgu T33_CLK_MSC0>;
 		clock-names = "mmc";
-		cap-sd-highspeed;
+		bus-width = <4>;
+		broken-cd;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pins_mmc0>;
 		status = "disabled";

@@ -18,6 +18,11 @@ ifeq ($(CONFIG_TPL_BUILD),y)
 obj-$(CONFIG_SPL_MMC)		+= msc.o msc-sdhci.o
 endif
 
+# The single-stage T33 SPL reads U-Boot proper off the SD with the same reader.
+ifeq ($(CONFIG_SPL_T33_MSC_BOOT),y)
+obj-$(CONFIG_XPL_BUILD)		+= msc-sdhci.o
+endif
+
 # U-Boot proper only (these hook misc_init_r / board_late_init, not the SPL).
 ifndef CONFIG_XPL_BUILD
 obj-y				+= efuse.o

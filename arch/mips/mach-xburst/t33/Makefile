@@ -5,4 +5,9 @@
 # the vendor U-Boot 2022.10 PRJ template (PRJ008 = T33). XBurst1-
 # generic pieces are shared from arch/mips/mach-xburst/.
 
-obj-y	+= soc.o pll.o serial.o sdram.o sfc.o
+obj-y	+= soc.o pll.o serial.o sdram.o load.o
+ifeq ($(CONFIG_SPL_T33_MSC_BOOT),y)
+obj-$(CONFIG_XPL_BUILD)	+= msc.o
+else
+obj-y	+= sfc.o
+endif

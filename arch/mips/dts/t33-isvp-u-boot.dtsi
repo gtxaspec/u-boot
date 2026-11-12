@@ -16,6 +16,16 @@
  *   u-boot-t33-min.bin : same layout, trimmed to the last entry.
  */
 
+#if defined(CONFIG_SPL_T33_MSC_BOOT)
+/ {
+	model = "Ingenic ISVP-T33 (MMC0)";
+};
+
+&msc0 {
+	status = "okay";
+};
+#endif
+
 / {
 	binman: binman {
 		multiple-images;
@@ -32,6 +42,29 @@
 		};
 	};
 
+#if defined(CONFIG_SPL_T33_MSC_BOOT)
+	/*
+	 * SD card image, written at card offset 0. The T33 bootrom reads
+	 * the headered SPL from SD offset 0x4400 (sector 34, as T31/T32) and
+	 * the SPL reads U-Boot proper from 0x10000.
+	 */
+	mmc {
+		filename = "u-boot-with-spl-mmc-lzma.bin";
+		pad-byte = <0x00>;
+
+		spl {
+			type = "blob";
+			offset = <0x4400>;
+			filename = "u-boot-spl-t33.bin";
+		};
+
+		u-boot {
+			type = "blob";
+			offset = <0x10000>;
+			filename = "u-boot-lzma.img";
+		};
+	};
+#else
 	flash {
 		filename = "u-boot-with-spl-lzma.bin";
 		pad-byte = <0xff>;
@@ -48,4 +81,5 @@
 			filename = "u-boot-lzma.img";
 		};
 	};
+#endif
 };

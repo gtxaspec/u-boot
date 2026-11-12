@@ -14,6 +14,7 @@
 #include <asm/io.h>
 #include <linux/bitops.h>
 #include <mach/t30.h>
+#include <mach/gpio-pull.h>
 
 /* jz_uart byte registers, 4-byte stride (see vendor asm/jz_uart.h) */
 #define U_THR_DLL	0x00
@@ -59,8 +60,6 @@ static u8 u_rb(unsigned int off)
 #define G_PXMSKC	0x28
 #define G_PXPAT1C	0x38
 #define G_PXPAT0C	0x48
-#define G_PXPUENC	0x118
-#define G_PXPDENC	0x128
 #define UART1_PINS	(0x3u << 23)	/* PB23 + PB24 */
 
 static void t30_uart1_pinmux(void)
@@ -71,8 +70,7 @@ static void t30_uart1_pinmux(void)
 	writel(UART1_PINS, b + G_PXMSKC);
 	writel(UART1_PINS, b + G_PXPAT1C);
 	writel(UART1_PINS, b + G_PXPAT0C);
-	writel(UART1_PINS, b + G_PXPUENC);
-	writel(UART1_PINS, b + G_PXPDENC);
+	xburst_gpio_pull_off_field(b, UART1_PINS);
 }
 
 void t30_spl_serial_init(void)

@@ -32,6 +32,7 @@
 #include <linux/delay.h>
 #include <wait_bit.h>
 #include <asm-generic/gpio.h>
+#include <mach/gpio-pull.h>
 
 /* CPM GMAC-PHY-control (CPM_GMACPHYC, our DT ingenic,mode-reg):
  * the vendor T31 net driver only selects the PHY interface here
@@ -81,8 +82,6 @@
 #define G_PXPAT1S			0x34
 #define G_PXPAT1C			0x38
 #define G_PXPAT0C			0x48
-#define G_PXPUENC			0x118
-#define G_PXPDENC			0x128
 #define T31_GMAC_PB_PINS		0x1EFC0
 /* Inner-ePHY path: vendor OMNI muxes only PB7+PB15 to device FUNC_2
  * (PAT1=1,PAT0=0), not the external-RMII pin set. */
@@ -90,6 +89,7 @@
 
 struct dwmac_ingenic_data {
 	bool inner_phy;		/* T21 embedded ePHY (no ext PHY/reset) */
+	bool pull_field;	/* 2-bit pull fields (T30) */
 };
 
 struct dwmac_ingenic_plat {
@@ -149,7 +149,7 @@ static int macphy_clk_init_cgu(struct udevice *dev, unsigned long rate)
 }
 
 /* Mux the GMAC RMII pins to device function 0 on GPIO port B. */
-static void t31_gmac_pinmux(void)
+static void t31_gmac_pinmux(bool pull_field)
 {
 	void __iomem *gpb = (void __iomem *)T31_GPIO_PORTB_BASE;
 
@@ -157,8 +157,10 @@ static void t31_gmac_pinmux(void)
 	writel(T31_GMAC_PB_PINS, gpb + G_PXMSKC);
 	writel(T31_GMAC_PB_PINS, gpb + G_PXPAT1C);
 	writel(T31_GMAC_PB_PINS, gpb + G_PXPAT0C);
-	writel(T31_GMAC_PB_PINS, gpb + G_PXPUENC);
-	writel(T31_GMAC_PB_PINS, gpb + G_PXPDENC);
+	if (pull_field)
+		xburst_gpio_pull_off_field(gpb, T31_GMAC_PB_PINS);
+	else
+		xburst_gpio_pull_off_split(gpb, T31_GMAC_PB_PINS);
 }
 
 static int t31_gmac_rmii_init(struct udevice *dev)
@@ -184,7 +186,7 @@ static int t31_gmac_rmii_init(struct udevice *dev)
 	}
 	udelay(50000);
 
-	t31_gmac_pinmux();
+	t31_gmac_pinmux(pdata->socdata->pull_field);
 
 	v = readl(pdata->cpm_phyc_reg);
 	v &= ~INGENIC_ETH_SEL_MASK;
@@ -424,6 +426,7 @@ static const struct dwmac_ingenic_data t21_gmac_data = {
 };
 
 static const struct dwmac_ingenic_data t30_gmac_data = {
+	.pull_field = true,
 };
 
 static const struct dwmac_ingenic_data t40_gmac_data = {

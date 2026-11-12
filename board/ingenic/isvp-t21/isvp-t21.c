@@ -20,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/bitops.h>
 #include <mach/t21.h>
+#include <mach/gpio-pull.h>
 
 #if defined(CONFIG_USB) || defined(CONFIG_USB_GADGET)
 #include <dm/ofnode.h>
@@ -64,8 +65,6 @@ int dram_init(void)
 #define G_PXMSKC		0x28
 #define G_PXPAT1C		0x38
 #define G_PXPAT0C		0x48
-#define G_PXPUENC		0x118
-#define G_PXPDENC		0x128
 #define MSC0_PINS		((0x3u << 4) | (0xfu << 0))	/* PB0..PB5 */
 #define MSC0_CDR		17	/* ((APLL 864 / 24) / 2) - 1 */
 
@@ -80,8 +79,7 @@ static void t21_msc0_init(void)
 	writel(MSC0_PINS, gpb + G_PXMSKC);
 	writel(MSC0_PINS, gpb + G_PXPAT1C);
 	writel(MSC0_PINS, gpb + G_PXPAT0C);
-	writel(MSC0_PINS, gpb + G_PXPUENC);
-	writel(MSC0_PINS, gpb + G_PXPDENC);
+	xburst_gpio_pull_off_field(gpb, MSC0_PINS);
 
 	/* Ungate the MSC0 functional clock. */
 	writel(readl(cpm + CPM_CLKGR0) & ~CPM_CLKGR0_MSC0, cpm + CPM_CLKGR0);

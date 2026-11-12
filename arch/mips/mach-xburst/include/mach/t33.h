@@ -72,9 +72,9 @@
 #define CPM_CPVPCR	0xe0	/* VPLL (unused on T33/PRJ008) */
 
 /* CLKGR0 gate bits */
-#define CPM_CLKGR0_UART2	BIT(16)
-#define CPM_CLKGR0_UART1	BIT(15)
-#define CPM_CLKGR0_UART0	BIT(14)
+#define CPM_CLKGR0_UART2	BIT(13)
+#define CPM_CLKGR0_UART1	BIT(12)
+#define CPM_CLKGR0_UART0	BIT(11)
 
 /* OST gate lives in CLKGR1 bit 7 (vendor CPM_CLKGR1_OST) */
 #define CPM_CLKGR1_OST		BIT(7)

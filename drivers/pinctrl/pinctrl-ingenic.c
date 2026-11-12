@@ -46,16 +46,31 @@
 #define GPIO_PXPAT0S	0x44
 #define GPIO_PXPAT0C	0x48
 /*
- * Bias on the modern XBurst SoCs (T23, T31, T32/T33, T40/T41, A1) is two
- * separate 1-bit-per-pin enables: pull-up (PUEN) and pull-down (PDEN), each
- * with set/clear aliases at +4/+8. The older T10/T20/T21/T30 instead have a
- * single legacy PXPE at 0x60, so bias is only wired for the split-pull SoCs
- * (chip_info.split_pull).
+ * Bias comes in three layouts (chip_info.pull):
+ *
+ * SPLIT (T23, T31, T32/T33, T40/T41, A1): two 1-bit-per-pin enables, pull-up
+ * (PUEN) and pull-down (PDEN), each with set/clear aliases at +4/+8.
+ *
+ * FIELD (T21, T30): the same offsets hold 2-bit fields instead, PXPEL for pins
+ * 0-15 at 0x110 and PXPEH for pins 16-31 at 0x120 ("driver disabled state",
+ * field n at bits 2n+1:2n): 0 = Hi-Z, 1 = pull-up, 2 = pull-down, 3 = repeater.
+ * A 1-bit write through the set/clear aliases hits half a field.
+ *
+ * NONE (T10, T20): a single PXPEN at 0x60, whose polarity the vendor kernels
+ * contradict, so bias is left alone. It must not be written as if it were the
+ * 0x110 block: with the 0x100 bank stride 0x118 is the next bank's PXINTC.
  */
 #define GPIO_PXPUENS	0x114	/* pull-up enable, set   */
 #define GPIO_PXPUENC	0x118	/* pull-up enable, clear */
 #define GPIO_PXPDENS	0x124	/* pull-down enable, set   */
 #define GPIO_PXPDENC	0x128	/* pull-down enable, clear */
+#define GPIO_PXPEL	0x110	/* FIELD: pins 0-15 */
+#define GPIO_PXPEH	0x120	/* FIELD: pins 16-31 */
+#define GPIO_PXPE_SET	0x04
+#define GPIO_PXPE_CLR	0x08
+#define PXPE_HIZ	0
+#define PXPE_PULL_UP	1
+#define PXPE_PULL_DOWN	2
 
 /*
  * GPIO bank stride. The first-generation XBurst1 parts (T10/T20) space their
@@ -66,6 +81,18 @@
 #define BANK_STRIDE		0x1000	/* T21/T23/T30 and newer */
 #define BANK_STRIDE_LEGACY	0x100	/* T10/T20 first-gen XBurst1 */
 #define PINS_PER_BANK	32
+
+enum ingenic_pull {
+	INGENIC_PULL_NONE,
+	INGENIC_PULL_FIELD,
+	INGENIC_PULL_SPLIT,
+};
+
+enum ingenic_bias {
+	INGENIC_BIAS_DISABLE,
+	INGENIC_BIAS_PULL_UP,
+	INGENIC_BIAS_PULL_DOWN,
+};
 
 struct ingenic_group {
 	const char *name;
@@ -228,7 +255,7 @@ static const struct ingenic_function a1_functions[] = {
 /*
  * Per-SoC chip info, selected from the of_match .data. Identical SoCs share
  * a chip_info; the classic XBurst1 parts share txx_classic_*, differing only
- * in bank stride (T10/T20) and bias style (T10/T20/T21/T30 lack split pull).
+ * in bank stride (T10/T20) and pull layout.
  */
 struct ingenic_chip_info {
 	const struct ingenic_group	*groups;
@@ -236,52 +263,52 @@ struct ingenic_chip_info {
 	const struct ingenic_function	*functions;
 	unsigned int			 nfunctions;
 	u32				 bank_stride;
-	bool				 split_pull;
+	enum ingenic_pull		 pull;
 };
 
 static const struct ingenic_chip_info t10_chip_info = {		/* T10/T20 */
 	.groups = txx_classic_groups, .ngroups = ARRAY_SIZE(txx_classic_groups),
 	.functions = txx_classic_functions,
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
-	.bank_stride = BANK_STRIDE_LEGACY, .split_pull = false,
+	.bank_stride = BANK_STRIDE_LEGACY, .pull = INGENIC_PULL_NONE,
 };
 static const struct ingenic_chip_info t21_chip_info = {		/* T21/T30 */
 	.groups = txx_classic_groups, .ngroups = ARRAY_SIZE(txx_classic_groups),
 	.functions = txx_classic_functions,
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = false,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_FIELD,
 };
 static const struct ingenic_chip_info t31_chip_info = {		/* T23/T31 */
 	.groups = txx_classic_groups, .ngroups = ARRAY_SIZE(txx_classic_groups),
 	.functions = txx_classic_functions,
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = true,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 };
 static const struct ingenic_chip_info t32_chip_info = {		/* T32/T33 */
 	.groups = t32_groups, .ngroups = ARRAY_SIZE(t32_groups),
 	.functions = t32_functions, .nfunctions = ARRAY_SIZE(t32_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = true,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 };
 static const struct ingenic_chip_info t40_chip_info = {		/* T40 */
 	.groups = t40_groups, .ngroups = ARRAY_SIZE(t40_groups),
 	.functions = t40_functions, .nfunctions = ARRAY_SIZE(t40_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = true,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 };
 static const struct ingenic_chip_info t41_chip_info = {		/* T41 */
 	.groups = t41_groups, .ngroups = ARRAY_SIZE(t41_groups),
 	.functions = t40_functions, .nfunctions = ARRAY_SIZE(t40_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = true,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 };
 static const struct ingenic_chip_info a1_chip_info = {		/* A1 */
 	.groups = a1_groups, .ngroups = ARRAY_SIZE(a1_groups),
 	.functions = a1_functions, .nfunctions = ARRAY_SIZE(a1_functions),
-	.bank_stride = BANK_STRIDE, .split_pull = true,
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 };
 
 struct ingenic_pinctrl_priv {
 	void __iomem			*base;
 	u32				 bank_stride;
-	bool				 split_pull;
+	enum ingenic_pull		 pull;
 	const struct ingenic_group	*groups;
 	unsigned int			 ngroups;
 	const struct ingenic_function	*functions;
@@ -309,6 +336,46 @@ static const char *ingenic_get_function_name(struct udevice *dev,
 	return ((struct ingenic_pinctrl_priv *)dev_get_priv(dev))->functions[sel].name;
 }
 
+static void ingenic_set_bias(void __iomem *r, enum ingenic_pull pull,
+			     unsigned int off, enum ingenic_bias bias)
+{
+	u32 bit = BIT(off);
+
+	if (pull == INGENIC_PULL_SPLIT) {
+		if (bias != INGENIC_BIAS_PULL_DOWN)
+			writel(bit, r + GPIO_PXPDENC);
+		if (bias != INGENIC_BIAS_PULL_UP)
+			writel(bit, r + GPIO_PXPUENC);
+		if (bias == INGENIC_BIAS_PULL_UP)
+			writel(bit, r + GPIO_PXPUENS);
+		else if (bias == INGENIC_BIAS_PULL_DOWN)
+			writel(bit, r + GPIO_PXPDENS);
+	} else if (pull == INGENIC_PULL_FIELD) {
+		void __iomem *pe = r + (off < 16 ? GPIO_PXPEL : GPIO_PXPEH);
+		unsigned int shift = 2 * (off % 16);
+
+		writel(3 << shift, pe + GPIO_PXPE_CLR);
+		if (bias == INGENIC_BIAS_PULL_UP)
+			writel(PXPE_PULL_UP << shift, pe + GPIO_PXPE_SET);
+		else if (bias == INGENIC_BIAS_PULL_DOWN)
+			writel(PXPE_PULL_DOWN << shift, pe + GPIO_PXPE_SET);
+	}
+}
+
+/* Mux default: drop a pull-up, leave a pull-down alone (as the vendor does). */
+static void ingenic_pull_up_off(void __iomem *r, enum ingenic_pull pull,
+				unsigned int off)
+{
+	if (pull == INGENIC_PULL_SPLIT) {
+		writel(BIT(off), r + GPIO_PXPUENC);
+	} else if (pull == INGENIC_PULL_FIELD) {
+		u32 pe = readl(r + (off < 16 ? GPIO_PXPEL : GPIO_PXPEH));
+
+		if (((pe >> (2 * (off % 16))) & 3) == PXPE_PULL_UP)
+			ingenic_set_bias(r, pull, off, INGENIC_BIAS_DISABLE);
+	}
+}
+
 static void ingenic_set_pin_fn(struct ingenic_pinctrl_priv *p, int pin, u8 func)
 {
 	void __iomem *r = p->base + (pin / PINS_PER_BANK) * p->bank_stride;
@@ -318,7 +385,7 @@ static void ingenic_set_pin_fn(struct ingenic_pinctrl_priv *p, int pin, u8 func)
 	writel(bit, r + GPIO_PXMSKC);				/* device fn */
 	writel(bit, r + ((func & 2) ? GPIO_PXPAT1S : GPIO_PXPAT1C));
 	writel(bit, r + ((func & 1) ? GPIO_PXPAT0S : GPIO_PXPAT0C));
-	writel(bit, r + GPIO_PXPUENC);				/* pull-up off */
+	ingenic_pull_up_off(r, p->pull, pin % PINS_PER_BANK);
 }
 
 static int ingenic_pinmux_group_set(struct udevice *dev, unsigned int group,
@@ -334,12 +401,52 @@ static int ingenic_pinmux_group_set(struct udevice *dev, unsigned int group,
 	return 0;
 }
 
+static const struct pinconf_param ingenic_pinconf_params[] = {
+	{ "bias-disable",	PIN_CONFIG_BIAS_DISABLE,	0 },
+	{ "bias-pull-up",	PIN_CONFIG_BIAS_PULL_UP,	1 },
+	{ "bias-pull-down",	PIN_CONFIG_BIAS_PULL_DOWN,	1 },
+};
+
+/* Bias is applied in property order: bias-* must follow function/groups. */
+static int ingenic_pinconf_group_set(struct udevice *dev, unsigned int group,
+				     unsigned int param, unsigned int arg)
+{
+	struct ingenic_pinctrl_priv *p = dev_get_priv(dev);
+	const struct ingenic_group *g = &p->groups[group];
+	enum ingenic_bias bias;
+	unsigned int i;
+
+	switch (param) {
+	case PIN_CONFIG_BIAS_DISABLE:
+		bias = INGENIC_BIAS_DISABLE;
+		break;
+	case PIN_CONFIG_BIAS_PULL_UP:
+		bias = INGENIC_BIAS_PULL_UP;
+		break;
+	case PIN_CONFIG_BIAS_PULL_DOWN:
+		bias = INGENIC_BIAS_PULL_DOWN;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	for (i = 0; i < g->npins; i++)
+		ingenic_set_bias(p->base + (g->pins[i] / PINS_PER_BANK) *
+				 p->bank_stride, p->pull,
+				 g->pins[i] % PINS_PER_BANK, bias);
+
+	return 0;
+}
+
 static const struct pinctrl_ops ingenic_pinctrl_ops = {
 	.get_groups_count	= ingenic_get_groups_count,
 	.get_group_name		= ingenic_get_group_name,
 	.get_functions_count	= ingenic_get_functions_count,
 	.get_function_name	= ingenic_get_function_name,
 	.pinmux_group_set	= ingenic_pinmux_group_set,
+	.pinconf_num_params	= ARRAY_SIZE(ingenic_pinconf_params),
+	.pinconf_params		= ingenic_pinconf_params,
+	.pinconf_group_set	= ingenic_pinconf_group_set,
 	.set_state		= pinctrl_generic_set_state,
 };
 
@@ -364,7 +471,7 @@ static int ingenic_pinctrl_probe(struct udevice *dev)
 	p->functions	= c->functions;
 	p->nfunctions	= c->nfunctions;
 	p->bank_stride	= c->bank_stride;
-	p->split_pull	= c->split_pull;
+	p->pull		= c->pull;
 
 	return 0;
 }
@@ -399,7 +506,7 @@ U_BOOT_DRIVER(ingenic_pinctrl) = {
 struct ingenic_gpio_priv {
 	void __iomem	*regs;
 	char		bank_name[4];
-	bool		split_pull;	/* PUEN/PDEN bias available */
+	enum ingenic_pull pull;
 };
 
 static int ingenic_gpio_direction_input(struct udevice *dev, unsigned int off)
@@ -458,10 +565,10 @@ static int ingenic_gpio_get_function(struct udevice *dev, unsigned int off)
 /*
  * Apply consumer/DT GPIOD_ flags in one shot: direction (mirrors the
  * direction_* ops) plus bias. The uclass folds active-low into
- * GPIOD_IS_OUT_ACTIVE, so the output level is read straight from it. Bias maps
- * to the split PUEN/PDEN enables and is only touched on SoCs that have them; a
- * request carrying neither pull flag leaves the bias untouched, so a plain
- * "gpio input" keeps its power-on bias.
+ * GPIOD_IS_OUT_ACTIVE, so the output level is read straight from it. Bias is
+ * only touched on SoCs with a wired pull layout; a request carrying neither
+ * pull flag leaves the bias untouched, so a plain "gpio input" keeps its
+ * power-on bias.
  */
 static int ingenic_gpio_set_flags(struct udevice *dev, unsigned int off,
 				  ulong flags)
@@ -481,15 +588,12 @@ static int ingenic_gpio_set_flags(struct udevice *dev, unsigned int off,
 		writel(bit, priv->regs + GPIO_PXPAT1S);
 	}
 
-	if (priv->split_pull) {
-		if (flags & GPIOD_PULL_UP) {
-			writel(bit, priv->regs + GPIO_PXPDENC); /* pull-down off */
-			writel(bit, priv->regs + GPIO_PXPUENS); /* pull-up on    */
-		} else if (flags & GPIOD_PULL_DOWN) {
-			writel(bit, priv->regs + GPIO_PXPUENC); /* pull-up off    */
-			writel(bit, priv->regs + GPIO_PXPDENS); /* pull-down on   */
-		}
-	}
+	if (flags & GPIOD_PULL_UP)
+		ingenic_set_bias(priv->regs, priv->pull, off,
+				 INGENIC_BIAS_PULL_UP);
+	else if (flags & GPIOD_PULL_DOWN)
+		ingenic_set_bias(priv->regs, priv->pull, off,
+				 INGENIC_BIAS_PULL_DOWN);
 
 	return 0;
 }
@@ -511,7 +615,7 @@ static int ingenic_gpio_probe(struct udevice *dev)
 	u32 bank = dev_read_addr(dev);
 
 	priv->regs = pc->base + bank * pc->bank_stride;
-	priv->split_pull = pc->split_pull;
+	priv->pull = pc->pull;
 	priv->bank_name[0] = 'P';
 	priv->bank_name[1] = 'A' + bank;
 	priv->bank_name[2] = '\0';

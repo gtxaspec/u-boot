@@ -23,6 +23,10 @@ ifeq ($(CONFIG_SPL_T33_MSC_BOOT),y)
 obj-$(CONFIG_XPL_BUILD)		+= msc-sdhci.o
 endif
 
+ifeq ($(CONFIG_SPL_BUILD),y)
+obj-$(CONFIG_XBURST2_L2_128K)	+= l2.o
+endif
+
 # U-Boot proper only (these hook misc_init_r / board_late_init, not the SPL).
 ifndef CONFIG_XPL_BUILD
 obj-y				+= efuse.o

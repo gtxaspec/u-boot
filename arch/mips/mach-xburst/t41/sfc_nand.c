@@ -21,6 +21,7 @@
 #include <mach/t41.h>
 #include <mach/t31-sfc.h>
 #include <mach/t40-sfc-nand.h>
+#include <mach/xburst2.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -571,6 +572,8 @@ static u32 hdr_be32(const u8 *p)
 static void __noreturn t41_jump_to_uboot(unsigned long target)
 {
 	unsigned long kseg1 = (target & 0x1fffffff) | 0xa0000000;
+
+	xburst2_set_l2_128k();
 
 	asm volatile(
 		".set push\n"

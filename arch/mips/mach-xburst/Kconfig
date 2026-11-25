@@ -252,6 +252,21 @@ config XBURST_MAC_FROM_EFUSE
 	  the bootloader and the running system present the same MAC address.
 	  An unfused part falls back to a random MAC.
 
+config XBURST2_L2_128K
+	bool "Give the L2 cache 128 KiB of the on-chip SRAM before U-Boot"
+	depends on SOC_T40 || SOC_T41 || SOC_A1
+	default y if SOC_T40 || SOC_T41
+	help
+	  The XBurst2 on-chip SRAM is split between the L2 cache and the
+	  NNA's ORAM. Ingenic's SPL shrinks the L2 to 128 KiB before it
+	  starts U-Boot, and the vendor NNA stack (soc-nna, libvenus)
+	  expects that layout, with the ORAM at 0x12620000. Out of reset
+	  the L2 holds 512 KiB (T40) or 256 KiB (T41), where the NNA
+	  writes into live L2 lines and the kernel crashes or hangs.
+
+	  The SPL writes every cache line back and changes the split
+	  just before it jumps to U-Boot proper.
+
 choice
 	prompt "Board select"
 	default TARGET_ISVP_T31

@@ -588,10 +588,11 @@ static int ingenic_gpio_direction_output(struct udevice *dev, unsigned int off,
 	struct ingenic_gpio_priv *priv = dev_get_priv(dev);
 	u32 bit = BIT(off);
 
+	/* Level first, so the pin never drives the old one as an output. */
+	writel(bit, priv->regs + (value ? GPIO_PXPAT0S : GPIO_PXPAT0C));
 	writel(bit, priv->regs + GPIO_PXINTC);
 	writel(bit, priv->regs + GPIO_PXMSKS);
 	writel(bit, priv->regs + GPIO_PXPAT1C);
-	writel(bit, priv->regs + (value ? GPIO_PXPAT0S : GPIO_PXPAT0C));
 	return 0;
 }
 
@@ -639,11 +640,11 @@ static int ingenic_gpio_set_flags(struct udevice *dev, unsigned int off,
 	u32 bit = BIT(off);
 
 	if (flags & GPIOD_IS_OUT) {
+		writel(bit, priv->regs + ((flags & GPIOD_IS_OUT_ACTIVE) ?
+					  GPIO_PXPAT0S : GPIO_PXPAT0C));
 		writel(bit, priv->regs + GPIO_PXINTC);
 		writel(bit, priv->regs + GPIO_PXMSKS);
 		writel(bit, priv->regs + GPIO_PXPAT1C);
-		writel(bit, priv->regs + ((flags & GPIOD_IS_OUT_ACTIVE) ?
-					  GPIO_PXPAT0S : GPIO_PXPAT0C));
 	} else if (flags & GPIOD_IS_IN) {
 		writel(bit, priv->regs + GPIO_PXINTC);
 		writel(bit, priv->regs + GPIO_PXMSKS);

@@ -253,6 +253,23 @@ static const struct ingenic_function a1_functions[] = {
 };
 
 /*
+ * Package balls that carry two GPIO lines. Both lines drive the ball, so the
+ * datasheet requires the unused one to be a GPIO input. The bootrom leaves
+ * the PA25/PA26 side in its SFC function, which holds the ball against
+ * PB16/PB15 once a board drives those as GPIOs.
+ */
+struct ingenic_shared_pin {
+	u8 pin;		/* the line the board uses as a GPIO */
+	u8 partner;	/* the line released to GPIO input in its favour */
+};
+
+/* T31ZX/ZL package pin 60 = PB15 + PA26, pin 61 = PB16 + PA25. */
+static const struct ingenic_shared_pin t31_shared_pins[] = {
+	{ .pin = 0x2f, .partner = 0x1a },
+	{ .pin = 0x30, .partner = 0x19 },
+};
+
+/*
  * Per-SoC chip info, selected from the of_match .data. Identical SoCs share
  * a chip_info; the classic XBurst1 parts share txx_classic_*, differing only
  * in bank stride (T10/T20) and pull layout.
@@ -264,6 +281,8 @@ struct ingenic_chip_info {
 	unsigned int			 nfunctions;
 	u32				 bank_stride;
 	enum ingenic_pull		 pull;
+	const struct ingenic_shared_pin	*shared;
+	unsigned int			 nshared;
 };
 
 static const struct ingenic_chip_info t10_chip_info = {		/* T10/T20 */
@@ -278,11 +297,18 @@ static const struct ingenic_chip_info t21_chip_info = {		/* T21/T30 */
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
 	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_FIELD,
 };
-static const struct ingenic_chip_info t31_chip_info = {		/* T23/T31 */
+static const struct ingenic_chip_info t23_chip_info = {		/* T23 */
 	.groups = txx_classic_groups, .ngroups = ARRAY_SIZE(txx_classic_groups),
 	.functions = txx_classic_functions,
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
 	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
+};
+static const struct ingenic_chip_info t31_chip_info = {		/* T31 */
+	.groups = txx_classic_groups, .ngroups = ARRAY_SIZE(txx_classic_groups),
+	.functions = txx_classic_functions,
+	.nfunctions = ARRAY_SIZE(txx_classic_functions),
+	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
+	.shared = t31_shared_pins, .nshared = ARRAY_SIZE(t31_shared_pins),
 };
 static const struct ingenic_chip_info t32_chip_info = {		/* T32/T33 */
 	.groups = t32_groups, .ngroups = ARRAY_SIZE(t32_groups),
@@ -313,6 +339,8 @@ struct ingenic_pinctrl_priv {
 	unsigned int			 ngroups;
 	const struct ingenic_function	*functions;
 	unsigned int			 nfunctions;
+	const struct ingenic_shared_pin	*shared;
+	unsigned int			 nshared;
 };
 
 static int ingenic_get_groups_count(struct udevice *dev)
@@ -472,6 +500,8 @@ static int ingenic_pinctrl_probe(struct udevice *dev)
 	p->nfunctions	= c->nfunctions;
 	p->bank_stride	= c->bank_stride;
 	p->pull		= c->pull;
+	p->shared	= c->shared;
+	p->nshared	= c->nshared;
 
 	return 0;
 }
@@ -481,7 +511,7 @@ static const struct udevice_id ingenic_pinctrl_ids[] = {
 	{ .compatible = "ingenic,t20-pinctrl", .data = (ulong)&t10_chip_info },
 	{ .compatible = "ingenic,t21-pinctrl", .data = (ulong)&t21_chip_info },
 	{ .compatible = "ingenic,t30-pinctrl", .data = (ulong)&t21_chip_info },
-	{ .compatible = "ingenic,t23-pinctrl", .data = (ulong)&t31_chip_info },
+	{ .compatible = "ingenic,t23-pinctrl", .data = (ulong)&t23_chip_info },
 	{ .compatible = "ingenic,t31-pinctrl", .data = (ulong)&t31_chip_info },
 	{ .compatible = "ingenic,t32-pinctrl", .data = (ulong)&t32_chip_info },
 	{ .compatible = "ingenic,t33-pinctrl", .data = (ulong)&t32_chip_info },
@@ -507,7 +537,35 @@ struct ingenic_gpio_priv {
 	void __iomem	*regs;
 	char		bank_name[4];
 	enum ingenic_pull pull;
+	unsigned int	bank;
+	struct ingenic_pinctrl_priv *pc;
 };
+
+/* Release the other line of a shared ball when a board takes this one. */
+static void ingenic_gpio_release_partner(struct ingenic_gpio_priv *priv,
+					 unsigned int off)
+{
+	struct ingenic_pinctrl_priv *pc = priv->pc;
+	unsigned int pin = priv->bank * PINS_PER_BANK + off;
+	unsigned int i;
+
+	for (i = 0; i < pc->nshared; i++) {
+		unsigned int partner = pc->shared[i].partner;
+		void __iomem *r;
+		u32 bit;
+
+		if (pc->shared[i].pin != pin)
+			continue;
+
+		r = pc->base + (partner / PINS_PER_BANK) * pc->bank_stride;
+		bit = BIT(partner % PINS_PER_BANK);
+		writel(bit, r + GPIO_PXINTC);
+		writel(bit, r + GPIO_PXMSKS);
+		writel(bit, r + GPIO_PXPAT1S);
+		ingenic_set_bias(r, pc->pull, partner % PINS_PER_BANK,
+				 INGENIC_BIAS_DISABLE);
+	}
+}
 
 static int ingenic_gpio_direction_input(struct udevice *dev, unsigned int off)
 {
@@ -517,6 +575,7 @@ static int ingenic_gpio_direction_input(struct udevice *dev, unsigned int off)
 	writel(bit, priv->regs + GPIO_PXINTC);
 	writel(bit, priv->regs + GPIO_PXMSKS);
 	writel(bit, priv->regs + GPIO_PXPAT1S);
+	ingenic_gpio_release_partner(priv, off);
 	return 0;
 }
 
@@ -530,6 +589,7 @@ static int ingenic_gpio_direction_output(struct udevice *dev, unsigned int off,
 	writel(bit, priv->regs + GPIO_PXMSKS);
 	writel(bit, priv->regs + GPIO_PXPAT1C);
 	writel(bit, priv->regs + (value ? GPIO_PXPAT0S : GPIO_PXPAT0C));
+	ingenic_gpio_release_partner(priv, off);
 	return 0;
 }
 
@@ -587,6 +647,8 @@ static int ingenic_gpio_set_flags(struct udevice *dev, unsigned int off,
 		writel(bit, priv->regs + GPIO_PXMSKS);
 		writel(bit, priv->regs + GPIO_PXPAT1S);
 	}
+	if (flags & (GPIOD_IS_OUT | GPIOD_IS_IN))
+		ingenic_gpio_release_partner(priv, off);
 
 	if (flags & GPIOD_PULL_UP)
 		ingenic_set_bias(priv->regs, priv->pull, off,
@@ -616,6 +678,8 @@ static int ingenic_gpio_probe(struct udevice *dev)
 
 	priv->regs = pc->base + bank * pc->bank_stride;
 	priv->pull = pc->pull;
+	priv->bank = bank;
+	priv->pc = pc;
 	priv->bank_name[0] = 'P';
 	priv->bank_name[1] = 'A' + bank;
 	priv->bank_name[2] = '\0';

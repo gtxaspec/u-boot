@@ -253,14 +253,13 @@ static const struct ingenic_function a1_functions[] = {
 };
 
 /*
- * Package balls that carry two GPIO lines. Both lines drive the ball, so the
- * datasheet requires the unused one to be a GPIO input. The bootrom leaves
- * the PA25/PA26 side in its SFC function, which holds the ball against
- * PB16/PB15 once a board drives those as GPIOs.
+ * Package balls that carry two GPIO lines: both lines drive the ball, so
+ * the datasheet requires the one a board does not use to be a GPIO input.
+ * Only some packages of a SoC share them; chip_info.shared_balls tells.
  */
 struct ingenic_shared_pin {
-	u8 pin;		/* the line the board uses as a GPIO */
-	u8 partner;	/* the line released to GPIO input in its favour */
+	u8 pin;		/* the board's GPIO line */
+	u8 partner;	/* the SFC line released in its favour */
 };
 
 /* T31ZX/ZL package pin 60 = PB15 + PA26, pin 61 = PB16 + PA25. */
@@ -268,6 +267,16 @@ static const struct ingenic_shared_pin t31_shared_pins[] = {
 	{ .pin = 0x2f, .partner = 0x1a },
 	{ .pin = 0x30, .partner = 0x19 },
 };
+
+/* eFUSE SoC sub-type, upper half: 0x5555 = T31ZL, 0x6666 = T31ZX. */
+#define T31_SUBTYPE_REG		0xb3540238
+
+static bool t31_shared_balls(void)
+{
+	u32 type = readl((void __iomem *)T31_SUBTYPE_REG) >> 16;
+
+	return type == 0x5555 || type == 0x6666;
+}
 
 /*
  * Per-SoC chip info, selected from the of_match .data. Identical SoCs share
@@ -283,6 +292,7 @@ struct ingenic_chip_info {
 	enum ingenic_pull		 pull;
 	const struct ingenic_shared_pin	*shared;
 	unsigned int			 nshared;
+	bool				(*shared_balls)(void);
 };
 
 static const struct ingenic_chip_info t10_chip_info = {		/* T10/T20 */
@@ -309,6 +319,7 @@ static const struct ingenic_chip_info t31_chip_info = {		/* T31 */
 	.nfunctions = ARRAY_SIZE(txx_classic_functions),
 	.bank_stride = BANK_STRIDE, .pull = INGENIC_PULL_SPLIT,
 	.shared = t31_shared_pins, .nshared = ARRAY_SIZE(t31_shared_pins),
+	.shared_balls = t31_shared_balls,
 };
 static const struct ingenic_chip_info t32_chip_info = {		/* T32/T33 */
 	.groups = t32_groups, .ngroups = ARRAY_SIZE(t32_groups),
@@ -339,8 +350,6 @@ struct ingenic_pinctrl_priv {
 	unsigned int			 ngroups;
 	const struct ingenic_function	*functions;
 	unsigned int			 nfunctions;
-	const struct ingenic_shared_pin	*shared;
-	unsigned int			 nshared;
 };
 
 static int ingenic_get_groups_count(struct udevice *dev)
@@ -414,6 +423,18 @@ static void ingenic_set_pin_fn(struct ingenic_pinctrl_priv *p, int pin, u8 func)
 	writel(bit, r + ((func & 2) ? GPIO_PXPAT1S : GPIO_PXPAT1C));
 	writel(bit, r + ((func & 1) ? GPIO_PXPAT0S : GPIO_PXPAT0C));
 	ingenic_pull_up_off(r, p->pull, pin % PINS_PER_BANK);
+}
+
+/* GPIO input with the pulls off. */
+static void ingenic_release_pin(struct ingenic_pinctrl_priv *p, int pin)
+{
+	void __iomem *r = p->base + (pin / PINS_PER_BANK) * p->bank_stride;
+	u32 bit = BIT(pin % PINS_PER_BANK);
+
+	writel(bit, r + GPIO_PXINTC);
+	writel(bit, r + GPIO_PXMSKS);
+	writel(bit, r + GPIO_PXPAT1S);
+	ingenic_set_bias(r, p->pull, pin % PINS_PER_BANK, INGENIC_BIAS_DISABLE);
 }
 
 static int ingenic_pinmux_group_set(struct udevice *dev, unsigned int group,
@@ -500,8 +521,19 @@ static int ingenic_pinctrl_probe(struct udevice *dev)
 	p->nfunctions	= c->nfunctions;
 	p->bank_stride	= c->bank_stride;
 	p->pull		= c->pull;
-	p->shared	= c->shared;
-	p->nshared	= c->nshared;
+
+	/*
+	 * The bootrom leaves the SFC side of a shared ball in its SFC
+	 * function, which holds the ball against the board's GPIO. The SPL
+	 * and U-Boot drive the SFC 4-wire and never need it; Linux re-muxes
+	 * it if it runs the flash wider.
+	 */
+	if (c->shared_balls && c->shared_balls()) {
+		unsigned int i;
+
+		for (i = 0; i < c->nshared; i++)
+			ingenic_release_pin(p, c->shared[i].partner);
+	}
 
 	return 0;
 }
@@ -537,35 +569,7 @@ struct ingenic_gpio_priv {
 	void __iomem	*regs;
 	char		bank_name[4];
 	enum ingenic_pull pull;
-	unsigned int	bank;
-	struct ingenic_pinctrl_priv *pc;
 };
-
-/* Release the other line of a shared ball when a board takes this one. */
-static void ingenic_gpio_release_partner(struct ingenic_gpio_priv *priv,
-					 unsigned int off)
-{
-	struct ingenic_pinctrl_priv *pc = priv->pc;
-	unsigned int pin = priv->bank * PINS_PER_BANK + off;
-	unsigned int i;
-
-	for (i = 0; i < pc->nshared; i++) {
-		unsigned int partner = pc->shared[i].partner;
-		void __iomem *r;
-		u32 bit;
-
-		if (pc->shared[i].pin != pin)
-			continue;
-
-		r = pc->base + (partner / PINS_PER_BANK) * pc->bank_stride;
-		bit = BIT(partner % PINS_PER_BANK);
-		writel(bit, r + GPIO_PXINTC);
-		writel(bit, r + GPIO_PXMSKS);
-		writel(bit, r + GPIO_PXPAT1S);
-		ingenic_set_bias(r, pc->pull, partner % PINS_PER_BANK,
-				 INGENIC_BIAS_DISABLE);
-	}
-}
 
 static int ingenic_gpio_direction_input(struct udevice *dev, unsigned int off)
 {
@@ -575,7 +579,6 @@ static int ingenic_gpio_direction_input(struct udevice *dev, unsigned int off)
 	writel(bit, priv->regs + GPIO_PXINTC);
 	writel(bit, priv->regs + GPIO_PXMSKS);
 	writel(bit, priv->regs + GPIO_PXPAT1S);
-	ingenic_gpio_release_partner(priv, off);
 	return 0;
 }
 
@@ -589,7 +592,6 @@ static int ingenic_gpio_direction_output(struct udevice *dev, unsigned int off,
 	writel(bit, priv->regs + GPIO_PXMSKS);
 	writel(bit, priv->regs + GPIO_PXPAT1C);
 	writel(bit, priv->regs + (value ? GPIO_PXPAT0S : GPIO_PXPAT0C));
-	ingenic_gpio_release_partner(priv, off);
 	return 0;
 }
 
@@ -647,8 +649,6 @@ static int ingenic_gpio_set_flags(struct udevice *dev, unsigned int off,
 		writel(bit, priv->regs + GPIO_PXMSKS);
 		writel(bit, priv->regs + GPIO_PXPAT1S);
 	}
-	if (flags & (GPIOD_IS_OUT | GPIOD_IS_IN))
-		ingenic_gpio_release_partner(priv, off);
 
 	if (flags & GPIOD_PULL_UP)
 		ingenic_set_bias(priv->regs, priv->pull, off,
@@ -678,8 +678,6 @@ static int ingenic_gpio_probe(struct udevice *dev)
 
 	priv->regs = pc->base + bank * pc->bank_stride;
 	priv->pull = pc->pull;
-	priv->bank = bank;
-	priv->pc = pc;
 	priv->bank_name[0] = 'P';
 	priv->bank_name[1] = 'A' + bank;
 	priv->bank_name[2] = '\0';

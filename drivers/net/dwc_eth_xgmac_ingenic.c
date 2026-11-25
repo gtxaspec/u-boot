@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <log.h>
 #include <net.h>
+#include <phy.h>
 #include <reset.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
@@ -111,27 +112,7 @@ static int xgmac_probe_resources_a1(struct udevice *dev)
  */
 static int xgmac_reset_phy_a1(struct udevice *dev)
 {
-	struct gpio_desc phy_reset;
-	int ret;
-
-	ret = gpio_request_by_name(dev, "ingenic,reset-gpio", 0, &phy_reset,
-				   GPIOD_IS_OUT);
-	if (ret == -ENOENT)
-		return 0;	/* no PHY reset wired on this board */
-	if (ret) {
-		dev_err(dev, "request reset gpio failed: %d\n", ret);
-		return ret;
-	}
-
-	/* DT carries the line polarity, so 1 = held in reset. */
-	dm_gpio_set_value(&phy_reset, 1);
-	mdelay(15);
-	dm_gpio_set_value(&phy_reset, 0);
-	mdelay(80);
-
-	dm_gpio_free(dev, &phy_reset);
-
-	return 0;
+	return phy_gpio_reset(dev);
 }
 
 static int xgmac_start_clks_a1(struct udevice *dev)

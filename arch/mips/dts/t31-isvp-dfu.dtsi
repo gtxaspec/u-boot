@@ -68,6 +68,18 @@
  */
 &gmac {
 	status = "okay";
-	/* IP101G PHY reset (ISVP reference default = GPIO PB28). */
-	ingenic,reset-gpio = <&gpb 28 GPIO_ACTIVE_LOW>;
+	phy-handle = <&gmac_phy>;
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* IP101G; boards with another reset pin override this node. */
+		gmac_phy: ethernet-phy@0 {
+			reg = <0>;
+			reset-gpios = <&gpb 28 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <50000>;
+			reset-deassert-us = <10000>;
+		};
+	};
 };

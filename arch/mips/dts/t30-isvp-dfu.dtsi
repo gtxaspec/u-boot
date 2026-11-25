@@ -63,7 +63,7 @@
  * per-variant loader carries its own MPLL plan and the MAC-PHY clock
  * derives from it via the CGU clk driver. No PHY reset GPIO here: it
  * is board-specific (PB28 is taken on some T30 boards - EBUSY), so a
- * wired-ethernet board DT declares its own ingenic,reset-gpio.
+ * wired-ethernet board DT gives its PHY node a reset-gpios property.
  */
 &gmac {
 	status = "okay";

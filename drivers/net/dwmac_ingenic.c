@@ -98,7 +98,6 @@ struct dwmac_ingenic_plat {
 	unsigned int max_speed;
 	void __iomem *cpm_phyc_reg;
 	void __iomem *mac_base;
-	struct gpio_desc reset_gpio;
 };
 
 static int dwmac_ingenic_of_to_plat(struct udevice *dev)
@@ -198,30 +197,8 @@ static int t31_gmac_rmii_init(struct udevice *dev)
 
 static int t31_gmac_setphy(struct udevice *dev)
 {
-	struct dwmac_ingenic_plat *pdata = dev_get_plat(dev);
-	int ret;
-
-	ret = gpio_request_by_name(dev, "ingenic,reset-gpio", 0,
-				   &pdata->reset_gpio, GPIOD_IS_OUT);
-	if (ret == -ENOENT)
-		return 0;	/* no PHY reset wired on this board */
-	if (ret) {
-		dev_err(dev, "request reset gpio failed: %d\n", ret);
-		return ret;
-	}
-
-	/*
-	 * Vendor IP101G reset: deassert, then assert for 50 ms, then
-	 * deassert and wait 10 ms. DT carries the line polarity, so
-	 * value 1 = asserted (in reset), 0 = released.
-	 */
-	dm_gpio_set_value(&pdata->reset_gpio, 0);
-	mdelay(10);
-	dm_gpio_set_value(&pdata->reset_gpio, 1);
-	mdelay(50);
-	dm_gpio_set_value(&pdata->reset_gpio, 0);
-	mdelay(10);
-	return 0;
+	/* Pulse the PHY node's reset-gpios, if the board describes one. */
+	return phy_gpio_reset(dev);
 }
 
 /*
